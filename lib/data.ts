@@ -239,10 +239,21 @@ export type Assignment = {
     | "Complete"
     | "Overdue";
   visibility: Visibility;
-  responseType: "checkbox" | "text";
+  responseType: "checkbox" | "text" | "file";
   responseText: string;
+  resourceId: string | null;
+  files: AssignmentFile[];
   guardianShare: "client_default" | "share" | "private";
   guardianLogisticsShared: boolean;
+};
+
+export type AssignmentFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  byteSize: number;
+  storagePath: string;
+  createdAt: string;
 };
 
 export const assignments: Assignment[] = [
@@ -260,6 +271,8 @@ export const assignments: Assignment[] = [
     visibility: "Coach + Client" as Visibility,
     responseType: "text",
     responseText: "",
+    resourceId: null,
+    files: [],
     guardianShare: "private",
     guardianLogisticsShared: false,
   },
@@ -277,6 +290,8 @@ export const assignments: Assignment[] = [
     visibility: "Coach + Client" as Visibility,
     responseType: "text",
     responseText: "",
+    resourceId: null,
+    files: [],
     guardianShare: "client_default",
     guardianLogisticsShared: true,
   },
@@ -294,6 +309,8 @@ export const assignments: Assignment[] = [
     visibility: "Coach + Client" as Visibility,
     responseType: "checkbox",
     responseText: "",
+    resourceId: null,
+    files: [],
     guardianShare: "private",
     guardianLogisticsShared: false,
   },
@@ -388,48 +405,105 @@ export const sharedNotes: SharedNote[] = [
   },
 ];
 
-export const resources = [
+export type Resource = {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  size: string;
+  byteSize: number;
+  assigned: number;
+  color: string;
+  storagePath: string | null;
+  externalUrl: string | null;
+  mimeType: string | null;
+  createdAt: string;
+};
+
+export const resources: Resource[] = [
   {
+    id: "resource-energy-audit",
     title: "Weekly Energy Audit",
+    description: "A simple weekly reflection worksheet.",
     type: "Worksheet",
     size: "2 pages",
     assigned: 12,
     color: "lavender",
+    byteSize: 164000,
+    storagePath: null,
+    externalUrl: "https://example.com/weekly-energy-audit",
+    mimeType: "application/pdf",
+    createdAt: "2026-08-08T16:00:00Z",
   },
   {
+    id: "resource-values-guide",
     title: "Values Clarification Guide",
+    description: "Prompts for identifying and ranking personal values.",
     type: "Workbook",
     size: "14 pages",
     assigned: 8,
     color: "peach",
+    byteSize: 820000,
+    storagePath: null,
+    externalUrl: "https://example.com/values-guide",
+    mimeType: "application/pdf",
+    createdAt: "2026-08-06T16:00:00Z",
   },
   {
+    id: "resource-boundaries",
     title: "Boundary-Setting Prompts",
+    description: "Conversation starters for practicing clear boundaries.",
     type: "PDF",
     size: "6 pages",
     assigned: 17,
     color: "sage",
+    byteSize: 410000,
+    storagePath: null,
+    externalUrl: "https://example.com/boundary-prompts",
+    mimeType: "application/pdf",
+    createdAt: "2026-08-03T16:00:00Z",
   },
   {
+    id: "resource-future-self",
     title: "Future Self Visualization",
+    description: "A guided audio visualization exercise.",
     type: "Audio",
     size: "8 min",
     assigned: 6,
     color: "blue",
+    byteSize: 4200000,
+    storagePath: null,
+    externalUrl: "https://example.com/future-self",
+    mimeType: "audio/mpeg",
+    createdAt: "2026-07-28T16:00:00Z",
   },
   {
+    id: "resource-wheel-of-life",
     title: "The Wheel of Life",
+    description: "A one-page life balance assessment.",
     type: "Worksheet",
     size: "1 page",
     assigned: 22,
     color: "yellow",
+    byteSize: 112000,
+    storagePath: null,
+    externalUrl: "https://example.com/wheel-of-life",
+    mimeType: "application/pdf",
+    createdAt: "2026-07-20T16:00:00Z",
   },
   {
+    id: "resource-career-matrix",
     title: "Career Decision Matrix",
+    description: "A structured worksheet for comparing opportunities.",
     type: "Template",
     size: "4 pages",
     assigned: 9,
     color: "rose",
+    byteSize: 260000,
+    storagePath: null,
+    externalUrl: "https://example.com/career-matrix",
+    mimeType: "application/pdf",
+    createdAt: "2026-07-11T16:00:00Z",
   },
 ];
 

@@ -9,7 +9,9 @@ async function render() {
 
   return worker.fetch(
     new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    {
+      ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) },
+    },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
@@ -20,24 +22,75 @@ test("server-renders the Soli coaching workspace", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Soli — Your coaching practice, beautifully organized<\/title>/i);
+  assert.match(
+    html,
+    /<title>Soli — Your coaching practice, beautifully organized<\/title>/i,
+  );
   assert.match(html, /Good morning, Alex|Securing your workspace…/);
   assert.match(html, /Sessions today|auth-spinner/);
   assert.match(html, /Client homework|auth-loading/);
-  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
+  assert.doesNotMatch(
+    html,
+    /codex-preview|react-loading-skeleton|Your site is taking shape/i,
+  );
 });
 
 test("ships the privacy-aware MVP foundation", async () => {
-  const [app, data, layout, packageJson, migration, authMigration, workflowMigration, portalMigration, repository] = await Promise.all([
+  const [
+    app,
+    data,
+    layout,
+    packageJson,
+    migration,
+    authMigration,
+    workflowMigration,
+    portalMigration,
+    storageMigration,
+    repository,
+  ] = await Promise.all([
     readFile(new URL("../app/coach-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readFile(new URL("../supabase/migrations/20260813000000_initial.sql", import.meta.url), "utf8"),
-    readFile(new URL("../supabase/migrations/20260813010000_auth_bootstrap_and_storage.sql", import.meta.url), "utf8"),
-    readFile(new URL("../supabase/migrations/20260813020000_core_coaching_workflows.sql", import.meta.url), "utf8"),
-    readFile(new URL("../supabase/migrations/20260813030000_portal_accounts_and_invitations.sql", import.meta.url), "utf8"),
-    readFile(new URL("../lib/supabase/practice-data.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260813000000_initial.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260813010000_auth_bootstrap_and_storage.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260813020000_core_coaching_workflows.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260813030000_portal_accounts_and_invitations.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260813040000_secure_resources_and_homework_files.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("../lib/supabase/practice-data.ts", import.meta.url),
+      "utf8",
+    ),
   ]);
 
   assert.match(app, /Minor privacy controls are active/);
@@ -49,10 +102,19 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.match(migration, /create type public\.visibility_level/);
   assert.match(migration, /guardians read explicitly shared notes/);
-  assert.match(migration, /check \(not ai_generated or note_type = 'meeting_summary'\)/);
-  assert.match(authMigration, /create or replace function public\.handle_new_user/);
+  assert.match(
+    migration,
+    /check \(not ai_generated or note_type = 'meeting_summary'\)/,
+  );
+  assert.match(
+    authMigration,
+    /create or replace function public\.handle_new_user/,
+  );
   assert.match(authMigration, /soli-resources/);
-  assert.match(workflowMigration, /create table if not exists public\.assignment_responses/);
+  assert.match(
+    workflowMigration,
+    /create table if not exists public\.assignment_responses/,
+  );
   assert.match(workflowMigration, /automatic_assignment_updates/);
   assert.match(workflowMigration, /guardian_can_read_assignment_logistics/);
   assert.match(workflowMigration, /Never shares response content/);
@@ -63,10 +125,21 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(portalMigration, /claim_portal_invitation/);
   assert.match(portalMigration, /submit_portal_assignment/);
   assert.match(portalMigration, /portal_audit_events/);
+  assert.match(storageMigration, /file_size_limit = 10485760/);
+  assert.match(
+    storageMigration,
+    /create table if not exists public\.assignment_files/,
+  );
+  assert.match(storageMigration, /clients read assigned resource files/);
+  assert.match(storageMigration, /clients upload homework files/);
+  assert.match(storageMigration, /Guardian access is intentionally excluded/);
   assert.match(repository, /supabase\s*\.from\("clients"\)/);
   assert.match(repository, /createSession/);
   assert.match(repository, /completeSession/);
   assert.match(repository, /submitAssignmentResponse/);
+  assert.match(repository, /uploadResource/);
+  assert.match(repository, /assignResourceAsHomework/);
+  assert.match(repository, /uploadAssignmentFile/);
   assert.match(repository, /saveCoachNote/);
   assert.match(repository, /resetPasswordForEmail/);
   assert.match(repository, /signInWithOAuth/);
@@ -81,12 +154,17 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(app, /ScheduleSessionModal/);
   assert.match(app, /AssignmentComposer/);
   assert.match(app, /Guardian assignment updates/);
-  assert.match(app, /The assignment response is never\s+automatically visible to a guardian/);
+  assert.match(
+    app,
+    /The assignment response is never\s+automatically visible to a guardian/,
+  );
   assert.match(app, /Guardian portal/);
   assert.match(app, /Join Zoom/);
   assert.match(app, /Portal access for/);
   assert.match(app, /Create portal account/);
   assert.match(app, /Zoom is the primary meeting provider/);
 
-  await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
+  await assert.rejects(
+    access(new URL("../app/_sites-preview", import.meta.url)),
+  );
 });

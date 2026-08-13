@@ -13,14 +13,33 @@ import {
   type Client,
   type PracticeSession,
   type PortalInvitation,
+  type Resource,
   type SharedNote,
   type Visibility,
 } from "@/lib/data";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "./client";
 import type { Database, Json, VisibilityLevel } from "./database.types";
 
-type Resource = (typeof demoResources)[number];
 type Template = (typeof demoTemplates)[number];
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const RESOURCE_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "video/mp4",
+  "audio/mpeg",
+  "text/plain",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+const HOMEWORK_MIME_TYPES = new Set(
+  [...RESOURCE_MIME_TYPES].filter(
+    (mime) => mime !== "video/mp4" && mime !== "audio/mpeg",
+  ),
+);
 
 export type DataMode = "demo" | "supabase";
 export type ConnectionState =
@@ -86,6 +105,45 @@ type RelationshipRow =
 type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
 type AssignmentResponseRow =
   Database["public"]["Tables"]["assignment_responses"]["Row"];
+type AssignmentFileRow =
+  Database["public"]["Tables"]["assignment_files"]["Row"];
+
+function fileSizeLabel(bytes: number | null) {
+  if (!bytes) return "Link";
+  if (bytes >= 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function validateFile(file: File, allowed: Set<string>) {
+  if (!file.size) throw new Error("Choose a file that is not empty.");
+  if (file.size > MAX_FILE_BYTES)
+    throw new Error("Files must be 10 MB or smaller.");
+  if (!allowed.has(file.type))
+    throw new Error("That file type is not supported yet.");
+}
+
+function resourceType(file: File) {
+  if (file.type === "application/pdf") return "PDF";
+  if (file.type.startsWith("image/")) return "Image";
+  if (file.type.startsWith("video/")) return "Video";
+  if (file.type.startsWith("audio/")) return "Audio";
+  if (file.type.includes("word")) return "Document";
+  if (file.type.includes("excel") || file.type.includes("spreadsheet"))
+    return "Spreadsheet";
+  return "File";
+}
+
+function mapAssignmentFile(file: AssignmentFileRow) {
+  return {
+    id: file.id,
+    name: file.original_filename,
+    mimeType: file.mime_type,
+    byteSize: file.byte_size,
+    storagePath: file.storage_path,
+    createdAt: file.created_at,
+  };
+}
 
 function initials(name: string) {
   return (
@@ -344,6 +402,7 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
     notesResult,
     assignmentsResult,
     responsesResult,
+    assignmentFilesResult,
     resourcesResult,
   ] = await Promise.all([
     supabase
@@ -377,6 +436,11 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
       .eq("client_id", clientRow.id)
       .order("updated_at", { ascending: false }),
     supabase
+      .from("assignment_files")
+      .select("*")
+      .eq("client_id", clientRow.id)
+      .order("created_at", { ascending: false }),
+    supabase
       .from("resources")
       .select("*")
       .eq("organization_id", organizationId)
@@ -389,6 +453,7 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
     notesResult,
     assignmentsResult,
     responsesResult,
+    assignmentFilesResult,
     resourcesResult,
   ].find((result) => result.error)?.error;
   if (portalError) throw portalError;
@@ -409,6 +474,12 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
       response,
     ]),
   );
+  const filesByAssignment = new Map<string, AssignmentFileRow[]>();
+  for (const file of assignmentFilesResult.data || []) {
+    const current = filesByAssignment.get(file.assignment_id) || [];
+    current.push(file);
+    filesByAssignment.set(file.assignment_id, current);
+  }
   const autoGuardian = relatedRows.some(
     (item) => item.role === "guardian" && item.automatic_assignment_updates,
   );
@@ -435,6 +506,10 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
       visibility: visibilityToUi(assignment.visibility),
       responseType: assignment.response_type,
       responseText: responseMap.get(assignment.id)?.response_text || "",
+      resourceId: assignment.resource_id,
+      files: (filesByAssignment.get(assignment.id) || []).map(
+        mapAssignmentFile,
+      ),
       guardianShare: assignment.guardian_share_setting,
       guardianLogisticsShared:
         assignment.guardian_share_setting === "share" ||
@@ -462,15 +537,18 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
     })),
     invitations: [],
     resources: (resourcesResult.data || []).map((resource, index) => ({
+      id: resource.id,
       title: resource.title,
+      description: resource.description || "",
       type: resource.resource_type,
-      size: resource.byte_size
-        ? `${Math.max(1, Math.round(resource.byte_size / 1024))} KB`
-        : resource.external_url
-          ? "Link"
-          : "File",
+      size: fileSizeLabel(resource.byte_size),
+      byteSize: resource.byte_size || 0,
       assigned: 1,
       color: ["lavender", "peach", "sage", "blue"][index % 4],
+      storagePath: resource.storage_path,
+      externalUrl: resource.external_url,
+      mimeType: resource.mime_type,
+      createdAt: resource.created_at,
     })),
     templates: [],
     mode: "supabase",
@@ -513,7 +591,9 @@ async function loadForUser(user: User): Promise<PracticeData> {
     notesResult,
     assignmentsResult,
     assignmentResponsesResult,
+    assignmentFilesResult,
     resourcesResult,
+    resourceAssignmentsResult,
     templatesResult,
     invitationsResult,
   ] = await Promise.all([
@@ -558,10 +638,16 @@ async function loadForUser(user: User): Promise<PracticeData> {
       .eq("organization_id", organizationId)
       .order("updated_at", { ascending: false }),
     supabase
+      .from("assignment_files")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false }),
+    supabase
       .from("resources")
       .select("*")
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false }),
+    supabase.from("resource_assignments").select("resource_id, client_id"),
     supabase
       .from("templates")
       .select("*")
@@ -583,7 +669,9 @@ async function loadForUser(user: User): Promise<PracticeData> {
     notesResult,
     assignmentsResult,
     assignmentResponsesResult,
+    assignmentFilesResult,
     resourcesResult,
+    resourceAssignmentsResult,
     templatesResult,
     invitationsResult,
   ].find((result) => result.error)?.error;
@@ -612,6 +700,18 @@ async function loadForUser(user: User): Promise<PracticeData> {
       (response: AssignmentResponseRow) => [response.assignment_id, response],
     ),
   );
+  const filesByAssignment = new Map<string, AssignmentFileRow[]>();
+  for (const file of assignmentFilesResult.data || []) {
+    const current = filesByAssignment.get(file.assignment_id) || [];
+    current.push(file);
+    filesByAssignment.set(file.assignment_id, current);
+  }
+  const resourceAssignmentCounts = new Map<string, number>();
+  for (const assignment of resourceAssignmentsResult.data || [])
+    resourceAssignmentCounts.set(
+      assignment.resource_id,
+      (resourceAssignmentCounts.get(assignment.resource_id) || 0) + 1,
+    );
   const autoGuardianClients = new Set(
     (relationshipsResult.data || [])
       .filter(
@@ -637,6 +737,10 @@ async function loadForUser(user: User): Promise<PracticeData> {
       visibility: visibilityToUi(assignment.visibility),
       responseType: assignment.response_type,
       responseText: responses.get(assignment.id)?.response_text || "",
+      resourceId: assignment.resource_id,
+      files: (filesByAssignment.get(assignment.id) || []).map(
+        mapAssignmentFile,
+      ),
       guardianShare: assignment.guardian_share_setting,
       guardianLogisticsShared:
         assignment.guardian_share_setting === "share" ||
@@ -675,15 +779,18 @@ async function loadForUser(user: User): Promise<PracticeData> {
       revokedAt: invitation.revoked_at,
     })),
     resources: (resourcesResult.data || []).map((resource, index) => ({
+      id: resource.id,
       title: resource.title,
+      description: resource.description || "",
       type: resource.resource_type,
-      size: resource.byte_size
-        ? `${Math.max(1, Math.round(resource.byte_size / 1024))} KB`
-        : resource.external_url
-          ? "Link"
-          : "File",
-      assigned: 0,
+      size: fileSizeLabel(resource.byte_size),
+      byteSize: resource.byte_size || 0,
+      assigned: resourceAssignmentCounts.get(resource.id) || 0,
       color: ["lavender", "peach", "sage", "blue", "yellow", "rose"][index % 6],
+      storagePath: resource.storage_path,
+      externalUrl: resource.external_url,
+      mimeType: resource.mime_type,
+      createdAt: resource.created_at,
     })),
     templates: (templatesResult.data || []).map((template) => {
       const definition =
@@ -913,16 +1020,14 @@ export function usePracticeData() {
       const endsAt = new Date(
         startsAt.getTime() + input.durationMinutes * 60_000,
       );
-      const { error } = await supabase
-        .from("sessions")
-        .insert({
-          organization_id: data.organizationId,
-          client_id: input.clientId,
-          coach_id: data.userId,
-          starts_at: startsAt.toISOString(),
-          ends_at: endsAt.toISOString(),
-          meeting_provider: input.meetingProvider,
-        });
+      const { error } = await supabase.from("sessions").insert({
+        organization_id: data.organizationId,
+        client_id: input.clientId,
+        coach_id: data.userId,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        meeting_provider: input.meetingProvider,
+      });
       if (error) throw error;
       await refresh();
     },
@@ -934,36 +1039,179 @@ export function usePracticeData() {
       clientId: string;
       title: string;
       instructions: string;
-      responseType: "checkbox" | "text";
+      responseType: "checkbox" | "text" | "file";
       required: boolean;
       dueAt: string | null;
       guardianShare: "client_default" | "share" | "private";
+      resourceId?: string | null;
     }) => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase || !data.organizationId || !data.userId)
         throw new Error("Sign in to create an assignment.");
-      const { error } = await supabase
-        .from("assignments")
-        .insert({
-          organization_id: data.organizationId,
-          client_id: input.clientId,
-          assigned_by: data.userId,
-          title: input.title,
-          instructions: input.instructions || null,
-          response_type: input.responseType,
-          assignment_type:
-            input.responseType === "text" ? "reflection" : "task",
-          is_required: input.required,
-          due_at: input.dueAt,
-          status: "not_started",
-          visibility: "coach_client",
-          guardian_share_setting: input.guardianShare,
-        });
+      const { error } = await supabase.from("assignments").insert({
+        organization_id: data.organizationId,
+        client_id: input.clientId,
+        assigned_by: data.userId,
+        title: input.title,
+        instructions: input.instructions || null,
+        response_type: input.responseType,
+        assignment_type:
+          input.responseType === "text"
+            ? "reflection"
+            : input.responseType === "file"
+              ? "upload"
+              : "task",
+        resource_id: input.resourceId || null,
+        is_required: input.required,
+        due_at: input.dueAt,
+        status: "not_started",
+        visibility: "coach_client",
+        guardian_share_setting: input.guardianShare,
+      });
       if (error) throw error;
       await refresh();
     },
     [data.organizationId, data.userId, refresh],
   );
+
+  const uploadResource = useCallback(
+    async (input: { file: File; title: string; description: string }) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.organizationId || !data.userId)
+        throw new Error("Sign in to upload a resource.");
+      validateFile(input.file, RESOURCE_MIME_TYPES);
+      const storagePath = `${data.organizationId}/library/${crypto.randomUUID()}`;
+      const { error: uploadError } = await supabase.storage
+        .from("soli-resources")
+        .upload(storagePath, input.file, {
+          contentType: input.file.type,
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+      const { error } = await supabase.from("resources").insert({
+        organization_id: data.organizationId,
+        created_by: data.userId,
+        title: input.title.trim() || input.file.name,
+        description: input.description.trim() || null,
+        resource_type: resourceType(input.file),
+        storage_path: storagePath,
+        mime_type: input.file.type,
+        byte_size: input.file.size,
+      });
+      if (error) {
+        await supabase.storage.from("soli-resources").remove([storagePath]);
+        throw error;
+      }
+      await refresh();
+    },
+    [data.organizationId, data.userId, refresh],
+  );
+
+  const getResourceUrl = useCallback(async (resource: Resource) => {
+    if (resource.externalUrl) return resource.externalUrl;
+    if (!resource.storagePath) throw new Error("This resource has no file.");
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { data: signed, error } = await supabase.storage
+      .from("soli-resources")
+      .createSignedUrl(resource.storagePath, 60);
+    if (error) throw error;
+    return signed.signedUrl;
+  }, []);
+
+  const assignResourceAsHomework = useCallback(
+    async (input: {
+      resource: Resource;
+      clientId: string;
+      dueAt: string | null;
+      required: boolean;
+      responseType: "checkbox" | "file";
+      instructions: string;
+      guardianShare: "client_default" | "share" | "private";
+    }) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.organizationId || !data.userId)
+        throw new Error("Sign in to assign a resource.");
+      const { error: shareError } = await supabase
+        .from("resource_assignments")
+        .upsert(
+          {
+            resource_id: input.resource.id,
+            client_id: input.clientId,
+            assigned_by: data.userId,
+            visibility: "coach_client",
+          },
+          { onConflict: "resource_id,client_id" },
+        );
+      if (shareError) throw shareError;
+      await createAssignment({
+        clientId: input.clientId,
+        title: input.resource.title,
+        instructions:
+          input.instructions.trim() ||
+          `Review ${input.resource.title} and complete the requested follow-up.`,
+        responseType: input.responseType,
+        required: input.required,
+        dueAt: input.dueAt,
+        guardianShare: input.guardianShare,
+        resourceId: input.resource.id,
+      });
+    },
+    [createAssignment, data.organizationId, data.userId],
+  );
+
+  const uploadAssignmentFile = useCallback(
+    async (assignment: Assignment, file: File) => {
+      const supabase = getSupabaseBrowserClient();
+      if (
+        !supabase ||
+        !data.organizationId ||
+        !data.userId ||
+        data.accountRole !== "client"
+      )
+        throw new Error("Only the client can upload homework from the portal.");
+      validateFile(file, HOMEWORK_MIME_TYPES);
+      const storagePath = `${data.organizationId}/${assignment.clientId}/${assignment.id}/${crypto.randomUUID()}`;
+      const { error: uploadError } = await supabase.storage
+        .from("soli-homework")
+        .upload(storagePath, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { error: recordError } = await supabase
+        .from("assignment_files")
+        .insert({
+          organization_id: data.organizationId,
+          assignment_id: assignment.id,
+          client_id: assignment.clientId,
+          uploaded_by: data.userId,
+          storage_path: storagePath,
+          original_filename: file.name,
+          mime_type: file.type,
+          byte_size: file.size,
+        });
+      if (recordError) {
+        await supabase.storage.from("soli-homework").remove([storagePath]);
+        throw recordError;
+      }
+      const { error } = await supabase.rpc("submit_portal_assignment", {
+        target_assignment: assignment.id,
+        response_value: "",
+        is_completed: true,
+      });
+      if (error) throw error;
+      await refresh();
+    },
+    [data.accountRole, data.organizationId, data.userId, refresh],
+  );
+
+  const getAssignmentFileUrl = useCallback(async (storagePath: string) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { data: signed, error } = await supabase.storage
+      .from("soli-homework")
+      .createSignedUrl(storagePath, 60);
+    if (error) throw error;
+    return signed.signedUrl;
+  }, []);
 
   const completeSession = useCallback(
     async (input: {
@@ -1031,20 +1279,18 @@ export function usePracticeData() {
           visibility: "coach_client",
           note_type: "shared_note",
         });
-      const { error: noteError } = await supabase
-        .from("notes")
-        .insert(
-          notes.map((note) => ({
-            organization_id: data.organizationId!,
-            client_id: input.clientId,
-            session_id: sessionId,
-            author_id: data.userId!,
-            body: note.body,
-            visibility: note.visibility as VisibilityLevel,
-            note_type: note.note_type,
-            ai_generated: false,
-          })),
-        );
+      const { error: noteError } = await supabase.from("notes").insert(
+        notes.map((note) => ({
+          organization_id: data.organizationId!,
+          client_id: input.clientId,
+          session_id: sessionId,
+          author_id: data.userId!,
+          body: note.body,
+          visibility: note.visibility as VisibilityLevel,
+          note_type: note.note_type,
+          ai_generated: false,
+        })),
+      );
       if (noteError) throw noteError;
       if (input.assignment?.title.trim())
         await createAssignment({
@@ -1148,19 +1394,17 @@ export function usePracticeData() {
         throw new Error("Sign in as a coach to create an invitation.");
       const token = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
-      const { error } = await supabase
-        .from("portal_invitations")
-        .insert({
-          organization_id: data.organizationId,
-          client_id: input.clientId,
-          relationship_id: input.relationshipId,
-          email: input.email.trim().toLowerCase(),
-          full_name: input.fullName.trim(),
-          role: input.role,
-          token,
-          created_by: data.userId,
-          expires_at: expiresAt,
-        });
+      const { error } = await supabase.from("portal_invitations").insert({
+        organization_id: data.organizationId,
+        client_id: input.clientId,
+        relationship_id: input.relationshipId,
+        email: input.email.trim().toLowerCase(),
+        full_name: input.fullName.trim(),
+        role: input.role,
+        token,
+        created_by: data.userId,
+        expires_at: expiresAt,
+      });
       if (error) throw error;
       await refresh();
       return `${window.location.origin}/?invite=${token}`;
@@ -1208,17 +1452,15 @@ export function usePracticeData() {
         throw new Error(
           "Your portal account is not ready for scheduling requests.",
         );
-      const { error } = await supabase
-        .from("scheduling_requests")
-        .insert({
-          organization_id: data.organizationId,
-          client_id: data.portalClientId,
-          session_id: input.sessionId,
-          requested_by: data.userId,
-          request_type: input.requestType,
-          requested_starts_at: input.requestedStartsAt,
-          message: input.message || null,
-        });
+      const { error } = await supabase.from("scheduling_requests").insert({
+        organization_id: data.organizationId,
+        client_id: data.portalClientId,
+        session_id: input.sessionId,
+        requested_by: data.userId,
+        request_type: input.requestType,
+        requested_starts_at: input.requestedStartsAt,
+        message: input.message || null,
+      });
       if (error) throw error;
     },
     [data.organizationId, data.portalClientId, data.userId],
@@ -1238,6 +1480,11 @@ export function usePracticeData() {
     updatePassword,
     createSession,
     createAssignment,
+    uploadResource,
+    getResourceUrl,
+    assignResourceAsHomework,
+    uploadAssignmentFile,
+    getAssignmentFileUrl,
     completeSession,
     updateGuardianAssignmentSharing,
     submitAssignmentResponse,

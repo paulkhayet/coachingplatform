@@ -257,7 +257,8 @@ export type Database = {
           title: string;
           instructions: string | null;
           assignment_type: string;
-          response_type: "checkbox" | "text";
+          response_type: "checkbox" | "text" | "file";
+          resource_id: string | null;
           is_required: boolean;
           due_at: string | null;
           status: AssignmentStatus;
@@ -277,7 +278,8 @@ export type Database = {
           title: string;
           instructions?: string | null;
           assignment_type?: string;
-          response_type?: "checkbox" | "text";
+          response_type?: "checkbox" | "text" | "file";
+          resource_id?: string | null;
           is_required?: boolean;
           due_at?: string | null;
           status?: AssignmentStatus;
@@ -319,6 +321,36 @@ export type Database = {
         };
         Update: Partial<
           Database["public"]["Tables"]["assignment_responses"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      assignment_files: {
+        Row: {
+          id: string;
+          organization_id: string;
+          assignment_id: string;
+          client_id: string;
+          uploaded_by: string;
+          storage_path: string;
+          original_filename: string;
+          mime_type: string;
+          byte_size: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          assignment_id: string;
+          client_id: string;
+          uploaded_by: string;
+          storage_path: string;
+          original_filename: string;
+          mime_type: string;
+          byte_size: number;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["assignment_files"]["Insert"]
         >;
         Relationships: [];
       };

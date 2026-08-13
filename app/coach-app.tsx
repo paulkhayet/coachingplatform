@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
-  BookOpen,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -16,12 +15,17 @@ import {
   Command,
   Copy,
   FileCheck2,
+  FileDown,
   FileText,
+  FileUp,
   FolderOpen,
+  Grid2X2,
+  HardDrive,
   Home,
   KeyRound,
   LayoutTemplate,
   Link2,
+  List,
   ListChecks,
   LockKeyhole,
   LogIn,
@@ -55,13 +59,13 @@ import { Button } from "@/components/ui/button";
 import {
   assignments,
   clients,
-  resources,
   sessions,
   templates,
   type Assignment,
   type Client,
   type PracticeSession,
   type PortalInvitation,
+  type Resource,
   type Visibility,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
@@ -542,6 +546,13 @@ export function CoachApp() {
           ) : view === "Resources" ? (
             <ResourcesView
               resourcesData={practiceResources}
+              clients={practiceClients}
+              onUpload={practice.uploadResource}
+              onOpen={async (resource) => {
+                const url = await practice.getResourceUrl(resource);
+                window.open(url, "_blank", "noopener,noreferrer");
+              }}
+              onAssign={practice.assignResourceAsHomework}
               onToast={setToast}
             />
           ) : (
@@ -664,6 +675,10 @@ export function CoachApp() {
             await practice.reviewAssignment(assignmentDetail.id);
             setAssignmentDetail(null);
             setToast("Assignment marked reviewed");
+          }}
+          onOpenFile={async (storagePath) => {
+            const url = await practice.getAssignmentFileUrl(storagePath);
+            window.open(url, "_blank", "noopener,noreferrer");
           }}
         />
       )}
@@ -1489,6 +1504,8 @@ function ClientProfile({
                     <span className="assignment-type-icon">
                       {item.responseType === "text" ? (
                         <TextCursorInput size={16} />
+                      ) : item.responseType === "file" ? (
+                        <FileUp size={16} />
                       ) : (
                         <ListChecks size={16} />
                       )}
@@ -1940,6 +1957,8 @@ function ClientAssignments({
       <span>
         {item.responseType === "text" ? (
           <TextCursorInput size={16} />
+        ) : item.responseType === "file" ? (
+          <FileUp size={16} />
         ) : item.status === "Complete" || item.status === "Reviewed" ? (
           <Check size={15} />
         ) : (
@@ -2216,15 +2235,52 @@ function CalendarView({
 
 function ResourcesView({
   resourcesData,
+  clients,
+  onUpload,
+  onOpen,
+  onAssign,
   onToast,
 }: {
-  resourcesData: typeof resources;
+  resourcesData: Resource[];
+  clients: Client[];
+  onUpload: (input: {
+    file: File;
+    title: string;
+    description: string;
+  }) => Promise<void>;
+  onOpen: (resource: Resource) => Promise<void>;
+  onAssign: (input: {
+    resource: Resource;
+    clientId: string;
+    dueAt: string | null;
+    required: boolean;
+    responseType: "checkbox" | "file";
+    instructions: string;
+    guardianShare: "client_default" | "share" | "private";
+  }) => Promise<void>;
   onToast: (message: string) => void;
 }) {
   const [resourceSearch, setResourceSearch] = useState("");
-  const visible = resourcesData.filter((item) =>
-    item.title.toLowerCase().includes(resourceSearch.toLowerCase()),
+  const [filter, setFilter] = useState<"all" | "recent" | "assigned">("all");
+  const [layout, setLayout] = useState<"list" | "grid">("list");
+  const [recentCutoff] = useState(() => Date.now() - 30 * 86_400_000);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [assigning, setAssigning] = useState<Resource | null>(null);
+  const visible = resourcesData.filter(
+    (item) =>
+      item.title.toLowerCase().includes(resourceSearch.toLowerCase()) &&
+      (filter !== "assigned" || item.assigned > 0) &&
+      (filter !== "recent" ||
+        new Date(item.createdAt).getTime() >= recentCutoff),
   );
+  const usedBytes = resourcesData.reduce((sum, item) => sum + item.byteSize, 0);
+  const openResource = async (resource: Resource) => {
+    try {
+      await onOpen(resource);
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "Resource unavailable");
+    }
+  };
   return (
     <div className="resources-page page-enter">
       <div className="page-heading compact-heading">
@@ -2234,68 +2290,502 @@ function ResourcesView({
             Your reusable library of tools, prompts, and learning materials.
           </p>
         </div>
-        <Button
-          variant="accent"
-          onClick={() => onToast("Secure resource upload opened")}
-        >
+        <Button variant="accent" onClick={() => setUploadOpen(true)}>
           <Plus size={15} />
-          Add resource
+          New
         </Button>
       </div>
-      <div className="resource-toolbar">
-        <div className="inline-search">
-          <Search size={15} />
-          <input
-            value={resourceSearch}
-            onChange={(e) => setResourceSearch(e.target.value)}
-            placeholder="Search your library"
-          />
-        </div>
-        <div className="resource-filters">
-          <button className="active">All</button>
-          <button>Worksheets</button>
-          <button>Guides</button>
-          <button>Media</button>
-        </div>
-      </div>
-      {visible.length ? (
-        <div className="resource-grid">
-          {visible.map((resource) => (
+      <div className="drive-shell panel">
+        <aside className="drive-sidebar">
+          <Button variant="accent" onClick={() => setUploadOpen(true)}>
+            <Plus size={16} /> Upload resource
+          </Button>
+          <nav aria-label="Resource filters">
             <button
-              className="resource-card panel"
-              key={resource.title}
-              onClick={() => onToast(`${resource.title} opened`)}
+              className={cn(filter === "all" && "active")}
+              onClick={() => setFilter("all")}
             >
-              <div className={cn("resource-cover", resource.color)}>
-                <span className="resource-brand">SOLI / TOOLS</span>
-                <FileText size={28} strokeWidth={1.3} />
-                <strong>{resource.title}</strong>
-                <i />
-              </div>
-              <div className="resource-card-copy">
-                <div>
-                  <Badge>{resource.type}</Badge>
-                  <span className="icon-button">
-                    <MoreHorizontal size={15} />
-                  </span>
-                </div>
-                <h3>{resource.title}</h3>
-                <p>
-                  {resource.size} · Assigned to {resource.assigned} clients
-                </p>
-              </div>
+              <FolderOpen size={16} /> My library
+              <span>{resourcesData.length}</span>
             </button>
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state panel">
-          <span>
-            <BookOpen size={22} />
-          </span>
-          <h3>No resources found</h3>
-          <p>Try a broader search.</p>
-        </div>
+            <button
+              className={cn(filter === "recent" && "active")}
+              onClick={() => setFilter("recent")}
+            >
+              <Clock3 size={16} /> Recent
+            </button>
+            <button
+              className={cn(filter === "assigned" && "active")}
+              onClick={() => setFilter("assigned")}
+            >
+              <Users size={16} /> Assigned
+            </button>
+          </nav>
+          <div className="drive-storage">
+            <HardDrive size={16} />
+            <div>
+              <strong>Secure storage</strong>
+              <span>{fileSizeLabel(usedBytes)} used</span>
+              <i>
+                <i
+                  style={{
+                    width: `${Math.min(100, (usedBytes / 1024 ** 3) * 100)}%`,
+                  }}
+                />
+              </i>
+              <small>10 MB maximum per file</small>
+            </div>
+          </div>
+        </aside>
+        <section className="drive-main">
+          <header className="drive-toolbar">
+            <div>
+              <p className="eyebrow">RESOURCES /</p>
+              <h2>
+                {filter === "recent"
+                  ? "Recent"
+                  : filter === "assigned"
+                    ? "Assigned"
+                    : "My library"}
+              </h2>
+            </div>
+            <div className="drive-actions">
+              <label className="inline-search">
+                <Search size={15} />
+                <input
+                  value={resourceSearch}
+                  onChange={(event) => setResourceSearch(event.target.value)}
+                  placeholder="Search resources"
+                />
+              </label>
+              <div className="layout-toggle" aria-label="Resource layout">
+                <button
+                  aria-label="List view"
+                  className={cn(layout === "list" && "active")}
+                  onClick={() => setLayout("list")}
+                >
+                  <List size={15} />
+                </button>
+                <button
+                  aria-label="Grid view"
+                  className={cn(layout === "grid" && "active")}
+                  onClick={() => setLayout("grid")}
+                >
+                  <Grid2X2 size={14} />
+                </button>
+              </div>
+            </div>
+          </header>
+          {visible.length ? (
+            layout === "list" ? (
+              <div className="drive-table">
+                <div className="drive-table-head">
+                  <span>Name</span>
+                  <span>Assigned</span>
+                  <span>Modified</span>
+                  <span>Size</span>
+                  <span />
+                </div>
+                {visible.map((resource) => (
+                  <div className="drive-row" key={resource.id}>
+                    <button
+                      className="drive-name"
+                      onClick={() => void openResource(resource)}
+                    >
+                      <span className={cn("drive-file-icon", resource.color)}>
+                        <FileText size={18} />
+                      </span>
+                      <span>
+                        <strong>{resource.title}</strong>
+                        <small>{resource.type}</small>
+                      </span>
+                    </button>
+                    <span>{resource.assigned || "—"}</span>
+                    <span>
+                      {new Date(resource.createdAt).toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          day: "numeric",
+                        },
+                      )}
+                    </span>
+                    <span>{resource.size}</span>
+                    <span className="drive-row-actions">
+                      <button
+                        onClick={() => setAssigning(resource)}
+                        aria-label={`Assign ${resource.title}`}
+                        title="Assign as homework"
+                      >
+                        <Send size={14} />
+                      </button>
+                      <button
+                        onClick={() => void openResource(resource)}
+                        aria-label={`Open ${resource.title}`}
+                        title="Open file"
+                      >
+                        <FileDown size={14} />
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="drive-grid">
+                {visible.map((resource) => (
+                  <article className="drive-card" key={resource.id}>
+                    <header>
+                      <FileText size={16} />
+                      <strong>{resource.title}</strong>
+                      <button
+                        onClick={() => setAssigning(resource)}
+                        aria-label={`Assign ${resource.title}`}
+                      >
+                        <Send size={14} />
+                      </button>
+                    </header>
+                    <button
+                      className={cn("drive-preview", resource.color)}
+                      onClick={() => void openResource(resource)}
+                    >
+                      <FileText size={32} strokeWidth={1.3} />
+                      <span>{resource.type}</span>
+                    </button>
+                    <footer>
+                      <span>{resource.size}</span>
+                      <span>{resource.assigned} assigned</span>
+                    </footer>
+                  </article>
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="drive-empty">
+              <span>
+                <FolderOpen size={23} />
+              </span>
+              <h3>
+                {resourceSearch
+                  ? "No matching resources"
+                  : "Your library is ready"}
+              </h3>
+              <p>
+                {resourceSearch
+                  ? "Try a different name or filter."
+                  : "Upload a worksheet, guide, video, or link to get started."}
+              </p>
+              {!resourceSearch && (
+                <Button variant="soft" onClick={() => setUploadOpen(true)}>
+                  <FileUp size={14} /> Upload your first resource
+                </Button>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+      {uploadOpen && (
+        <ResourceUploadModal
+          onClose={() => setUploadOpen(false)}
+          onSave={async (input) => {
+            await onUpload(input);
+            setUploadOpen(false);
+            onToast("Resource uploaded securely");
+          }}
+        />
       )}
+      {assigning && (
+        <AssignResourceModal
+          resource={assigning}
+          clients={clients}
+          onClose={() => setAssigning(null)}
+          onSave={async (input) => {
+            await onAssign({ resource: assigning, ...input });
+            setAssigning(null);
+            onToast("Resource assigned as homework");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function fileSizeLabel(bytes: number) {
+  if (!bytes) return "0 KB";
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function ResourceUploadModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (input: {
+    file: File;
+    title: string;
+    description: string;
+  }) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const chooseFile = (selected: File | null) => {
+    setError(null);
+    if (selected && selected.size > 10 * 1024 * 1024) {
+      setError("That file is over the 10 MB limit.");
+      return;
+    }
+    setFile(selected);
+    if (selected && !title) setTitle(selected.name.replace(/\.[^.]+$/, ""));
+  };
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!file) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({ file, title, description });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Upload failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <form className="workflow-modal resource-upload-modal" onSubmit={submit}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">SECURE LIBRARY</p>
+            <h2>Upload a resource</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close upload">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="modal-copy">
+          Files stay private until you assign them to a client.
+        </p>
+        <label className={cn("resource-dropzone", file && "selected")}>
+          <input
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.mp4,.mp3,.txt,.doc,.docx,.xls,.xlsx"
+            onChange={(event) => chooseFile(event.target.files?.[0] || null)}
+          />
+          <span>
+            <FileUp size={22} />
+          </span>
+          <strong>{file ? file.name : "Choose a file"}</strong>
+          <small>
+            {file
+              ? `${fileSizeLabel(file.size)} · Ready to upload`
+              : "PDF, document, image, audio, or video · 10 MB max"}
+          </small>
+        </label>
+        <div className="form-stack">
+          <label>
+            Resource name
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Description <span className="optional">Optional</span>
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="How might a client use this?"
+            />
+          </label>
+        </div>
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal-actions">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="accent"
+            disabled={!file || !title.trim() || saving}
+          >
+            {saving ? "Uploading…" : "Upload resource"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AssignResourceModal({
+  resource,
+  clients,
+  onClose,
+  onSave,
+}: {
+  resource: Resource;
+  clients: Client[];
+  onClose: () => void;
+  onSave: (input: {
+    clientId: string;
+    dueAt: string | null;
+    required: boolean;
+    responseType: "checkbox" | "file";
+    instructions: string;
+    guardianShare: "client_default" | "share" | "private";
+  }) => Promise<void>;
+}) {
+  const [clientId, setClientId] = useState(clients[0]?.id || "");
+  const client = clients.find((item) => item.id === clientId);
+  const [dueAt, setDueAt] = useState(localDateTime(72));
+  const [required, setRequired] = useState(true);
+  const [responseType, setResponseType] = useState<"checkbox" | "file">(
+    "checkbox",
+  );
+  const [instructions, setInstructions] = useState("");
+  const [guardianShare, setGuardianShare] = useState<
+    "client_default" | "share" | "private"
+  >(clients[0]?.type === "Teen" ? "client_default" : "private");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        clientId,
+        dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+        required,
+        responseType,
+        instructions,
+        guardianShare,
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Assignment failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <form className="workflow-modal" onSubmit={submit}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">ASSIGN RESOURCE</p>
+            <h2>{resource.title}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close assignment">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="assigned-resource-chip">
+          <FileText size={17} />
+          <span>
+            <strong>{resource.title}</strong>
+            <small>
+              {resource.type} · {resource.size}
+            </small>
+          </span>
+        </div>
+        <div className="form-stack">
+          <label>
+            Client
+            <select
+              value={clientId}
+              onChange={(event) => {
+                const nextId = event.target.value;
+                setClientId(nextId);
+                setGuardianShare(
+                  clients.find((item) => item.id === nextId)?.type === "Teen"
+                    ? "client_default"
+                    : "private",
+                );
+              }}
+            >
+              {clients.map((item) => (
+                <option value={item.id} key={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Instructions <span className="optional">Optional</span>
+            <textarea
+              value={instructions}
+              onChange={(event) => setInstructions(event.target.value)}
+              placeholder={`How should the client use ${resource.title}?`}
+            />
+          </label>
+          <div className="response-choice compact">
+            <button
+              type="button"
+              className={cn(responseType === "checkbox" && "active")}
+              onClick={() => setResponseType("checkbox")}
+            >
+              <ListChecks size={17} />
+              <span>
+                <strong>Mark complete</strong>
+                <small>Confirm they finished it</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={cn(responseType === "file" && "active")}
+              onClick={() => setResponseType("file")}
+            >
+              <FileUp size={17} />
+              <span>
+                <strong>Upload a file</strong>
+                <small>Submit completed work</small>
+              </span>
+            </button>
+          </div>
+          <label>
+            Due date
+            <input
+              type="datetime-local"
+              value={dueAt}
+              onChange={(event) => setDueAt(event.target.value)}
+            />
+          </label>
+          <label className="check-control">
+            <input
+              type="checkbox"
+              checked={required}
+              onChange={(event) => setRequired(event.target.checked)}
+            />
+            Make this mandatory
+          </label>
+          {client?.type === "Teen" && (
+            <GuardianShareSelect
+              value={guardianShare}
+              onChange={setGuardianShare}
+            />
+          )}
+        </div>
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal-actions">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="accent" disabled={!clientId || saving}>
+            {saving ? "Assigning…" : "Assign as homework"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -2762,6 +3252,8 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
                         <Check size={15} />
                       ) : assignment.responseType === "text" ? (
                         <TextCursorInput size={15} />
+                      ) : assignment.responseType === "file" ? (
+                        <FileUp size={15} />
                       ) : (
                         <ListChecks size={15} />
                       )}
@@ -2843,7 +3335,22 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
                 <SectionTitle>Resources</SectionTitle>
                 {practice.resources.length ? (
                   practice.resources.slice(0, 4).map((resource) => (
-                    <button className="member-resource" key={resource.title}>
+                    <button
+                      className="member-resource"
+                      key={resource.id}
+                      onClick={async () => {
+                        try {
+                          const url = await practice.getResourceUrl(resource);
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        } catch (error) {
+                          setToast(
+                            error instanceof Error
+                              ? error.message
+                              : "Resource unavailable",
+                          );
+                        }
+                      }}
+                    >
                       <FileText size={16} />
                       <span>
                         <strong>{resource.title}</strong>
@@ -2883,6 +3390,13 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
             setToast("Your response was saved");
           }}
           onReview={async () => {}}
+          onUploadFile={(file) =>
+            practice.uploadAssignmentFile(assignmentDetail, file)
+          }
+          onOpenFile={async (storagePath) => {
+            const url = await practice.getAssignmentFileUrl(storagePath);
+            window.open(url, "_blank", "noopener,noreferrer");
+          }}
         />
       )}
       {scheduleRequest && (
@@ -4123,10 +4637,7 @@ function ScheduleSessionModal({
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <form
-        className="workflow-modal"
-        onSubmit={submit}
-      >
+      <form className="workflow-modal" onSubmit={submit}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">SCHEDULING</p>
@@ -4257,7 +4768,7 @@ function AssignmentComposer({
   onSave: (input: {
     title: string;
     instructions: string;
-    responseType: "checkbox" | "text";
+    responseType: "checkbox" | "text" | "file";
     required: boolean;
     dueAt: string | null;
     guardianShare: "client_default" | "share" | "private";
@@ -4265,9 +4776,9 @@ function AssignmentComposer({
 }) {
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [responseType, setResponseType] = useState<"checkbox" | "text">(
-    "checkbox",
-  );
+  const [responseType, setResponseType] = useState<
+    "checkbox" | "text" | "file"
+  >("checkbox");
   const [required, setRequired] = useState(false);
   const [dueAt, setDueAt] = useState(localDateTime(72));
   const [guardianShare, setGuardianShare] = useState<
@@ -4296,10 +4807,7 @@ function AssignmentComposer({
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <form
-        className="workflow-modal"
-        onSubmit={submit}
-      >
+      <form className="workflow-modal" onSubmit={submit}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">ASSIGN TO {client.name.toUpperCase()}</p>
@@ -4330,7 +4838,7 @@ function AssignmentComposer({
               placeholder="What should the client do?"
             />
           </label>
-          <div className="response-choice">
+          <div className="response-choice assignment-response-choice">
             <button
               type="button"
               className={cn(responseType === "checkbox" && "active")}
@@ -4351,6 +4859,17 @@ function AssignmentComposer({
               <span>
                 <strong>Text response</strong>
                 <small>Client submits writing</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={cn(responseType === "file" && "active")}
+              onClick={() => setResponseType("file")}
+            >
+              <FileUp size={17} />
+              <span>
+                <strong>File upload</strong>
+                <small>Client submits a file</small>
               </span>
             </button>
           </div>
@@ -4406,12 +4925,16 @@ function AssignmentDetail({
   onClose,
   onSubmit,
   onReview,
+  onUploadFile,
+  onOpenFile,
   canReview = true,
 }: {
   assignment: Assignment;
   onClose: () => void;
   onSubmit: (responseText: string, completed: boolean) => Promise<void>;
   onReview: () => Promise<void>;
+  onUploadFile?: (file: File) => Promise<void>;
+  onOpenFile?: (storagePath: string) => Promise<void>;
   canReview?: boolean;
 }) {
   const [response, setResponse] = useState(assignment.responseText);
@@ -4419,6 +4942,8 @@ function AssignmentDetail({
     assignment.status === "Complete" || assignment.status === "Reviewed",
   );
   const [saving, setSaving] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const submit = async () => {
     setSaving(true);
     try {
@@ -4432,6 +4957,23 @@ function AssignmentDetail({
   };
   const reviewable =
     assignment.status === "Submitted" || assignment.status === "Complete";
+  const submitFile = async () => {
+    if (!selectedFile || !onUploadFile) return;
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setFileError("That file is over the 10 MB limit.");
+      return;
+    }
+    setSaving(true);
+    setFileError(null);
+    try {
+      await onUploadFile(selectedFile);
+      onClose();
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div
       className="modal-backdrop"
@@ -4492,8 +5034,74 @@ function AssignmentDetail({
                 placeholder="The client’s response appears here…"
               />
             </label>
+          ) : assignment.responseType === "file" ? (
+            <div className="homework-files">
+              {assignment.files.length > 0 && (
+                <div className="submitted-file-list">
+                  {assignment.files.map((file) => (
+                    <button
+                      type="button"
+                      key={file.id}
+                      onClick={() => void onOpenFile?.(file.storagePath)}
+                    >
+                      <FileCheck2 size={17} />
+                      <span>
+                        <strong>{file.name}</strong>
+                        <small>
+                          {fileSizeLabel(file.byteSize)} · Submitted{" "}
+                          {new Date(file.createdAt).toLocaleDateString(
+                            "en-US",
+                            { month: "short", day: "numeric" },
+                          )}
+                        </small>
+                      </span>
+                      <FileDown size={14} />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {onUploadFile && (
+                <label
+                  className={cn(
+                    "homework-dropzone",
+                    selectedFile && "selected",
+                  )}
+                >
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx,.xls,.xlsx"
+                    onChange={(event) => {
+                      setSelectedFile(event.target.files?.[0] || null);
+                      setFileError(null);
+                    }}
+                  />
+                  <FileUp size={20} />
+                  <span>
+                    <strong>
+                      {selectedFile
+                        ? selectedFile.name
+                        : "Choose your completed file"}
+                    </strong>
+                    <small>
+                      {selectedFile
+                        ? `${fileSizeLabel(selectedFile.size)} · Ready to submit`
+                        : "PDF, document, spreadsheet, or image · 10 MB max"}
+                    </small>
+                  </span>
+                </label>
+              )}
+              {!assignment.files.length && !onUploadFile && (
+                <div className="mini-empty">
+                  No file has been submitted yet.
+                </div>
+              )}
+              {fileError && <p className="form-error">{fileError}</p>}
+            </div>
           ) : (
-            <label className="completion-check" aria-label="Mark assignment complete">
+            <label
+              className="completion-check"
+              aria-label="Mark assignment complete"
+            >
               <input
                 type="checkbox"
                 checked={checked}
@@ -4515,19 +5123,32 @@ function AssignmentDetail({
               Mark reviewed
             </Button>
           )}
-          <Button
-            variant="accent"
-            onClick={() => void submit()}
-            disabled={
-              saving || (assignment.responseType === "text" && !response.trim())
-            }
-          >
-            {saving
-              ? "Saving…"
-              : assignment.responseType === "text"
-                ? "Submit response"
-                : "Save completion"}
-          </Button>
+          {assignment.responseType === "file" ? (
+            onUploadFile && (
+              <Button
+                variant="accent"
+                onClick={() => void submitFile()}
+                disabled={!selectedFile || saving}
+              >
+                {saving ? "Uploading…" : "Submit file"}
+              </Button>
+            )
+          ) : (
+            <Button
+              variant="accent"
+              onClick={() => void submit()}
+              disabled={
+                saving ||
+                (assignment.responseType === "text" && !response.trim())
+              }
+            >
+              {saving
+                ? "Saving…"
+                : assignment.responseType === "text"
+                  ? "Submit response"
+                  : "Save completion"}
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -4741,6 +5362,8 @@ function ClientPortalPreview({
                     <span>
                       {assignment.responseType === "text" ? (
                         <TextCursorInput size={16} />
+                      ) : assignment.responseType === "file" ? (
+                        <FileUp size={16} />
                       ) : (
                         <ListChecks size={16} />
                       )}
