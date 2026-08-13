@@ -775,13 +775,17 @@ kbd {
 .attention-list > button:hover p strong {
   color: #544bd7;
 }
-.attention-icon {
-  display: flex;
+.attention-list > button > .attention-icon {
+  display: inline-flex;
   width: 30px;
   height: 30px;
+  flex: 0 0 30px;
   align-items: center;
   justify-content: center;
   border-radius: 9px;
+}
+.attention-list > button > .attention-icon svg {
+  display: block;
 }
 .attention-icon.rose {
   background: #ffebee;
@@ -919,13 +923,17 @@ kbd {
   padding: 8px 0;
   border-top: 1px solid #f0eeeb;
 }
-.activity-dot {
-  display: flex;
+.activity-list > div > .activity-dot {
+  display: inline-flex;
   width: 23px;
   height: 23px;
+  flex: 0 0 23px;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+}
+.activity-list > div > .activity-dot svg {
+  display: block;
 }
 .activity-dot.green {
   background: #e7f5eb;
