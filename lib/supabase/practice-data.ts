@@ -69,6 +69,42 @@ export type IntegrationConnection = {
   updatedAt: string;
 };
 
+export type BookingQuestion = {
+  id: string;
+  label: string;
+  type: "short_text" | "long_text" | "select" | "checkbox";
+  required: boolean;
+  options: string[];
+};
+
+export type BookingPage = {
+  id: string;
+  slug: string;
+  brandName: string;
+  title: string;
+  description: string;
+  accentColor: string;
+  durationMinutes: number;
+  locationType: "zoom" | "google_meet" | "phone";
+  availability: { days: number[]; start: string; end: string };
+  minimumNoticeHours: number;
+  active: boolean;
+  questions: BookingQuestion[];
+};
+
+export type BookingRequest = {
+  id: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone: string | null;
+  startsAt: string;
+  endsAt: string;
+  guestTimezone: string;
+  answers: Json;
+  status: "pending" | "confirmed" | "cancelled";
+  createdAt: string;
+};
+
 export type PracticeData = {
   clients: Client[];
   assignments: Assignment[];
@@ -78,6 +114,8 @@ export type PracticeData = {
   resources: Resource[];
   templates: Template[];
   integrations: IntegrationConnection[];
+  bookingPage: BookingPage | null;
+  bookingRequests: BookingRequest[];
   mode: DataMode;
   connectionState: ConnectionState;
   organizationId: string | null;
@@ -100,6 +138,8 @@ const initialData: PracticeData = {
   resources: demoResources,
   templates: demoTemplates,
   integrations: [],
+  bookingPage: null,
+  bookingRequests: [],
   mode: "demo",
   connectionState: isSupabaseConfigured() ? "loading" : "unconfigured",
   organizationId: null,
@@ -224,6 +264,26 @@ function permissionLabels(value: Json): string[] {
   return Object.entries(value)
     .filter(([, enabled]) => enabled === true)
     .map(([key]) => labels[key] ?? key);
+}
+
+function bookingAvailability(value: Json) {
+  const fallback = { days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" };
+  if (!value || Array.isArray(value) || typeof value !== "object")
+    return fallback;
+  const days = Array.isArray(value.days)
+    ? value.days.filter((day): day is number => typeof day === "number")
+    : fallback.days;
+  return {
+    days,
+    start: typeof value.start === "string" ? value.start : fallback.start,
+    end: typeof value.end === "string" ? value.end : fallback.end,
+  };
+}
+
+function stringOptions(value: Json) {
+  return Array.isArray(value)
+    ? value.filter((option): option is string => typeof option === "string")
+    : [];
 }
 
 function mapClient(
@@ -568,6 +628,8 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
     })),
     templates: [],
     integrations: [],
+    bookingPage: null,
+    bookingRequests: [],
     mode: "supabase",
     connectionState: "connected",
     organizationId,
@@ -614,6 +676,9 @@ async function loadForUser(user: User): Promise<PracticeData> {
     templatesResult,
     invitationsResult,
     integrationsResult,
+    bookingPageResult,
+    bookingQuestionsResult,
+    bookingRequestsResult,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -682,6 +747,22 @@ async function loadForUser(user: User): Promise<PracticeData> {
       .eq("organization_id", organizationId)
       .eq("profile_id", user.id)
       .order("provider"),
+    supabase
+      .from("booking_pages")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("coach_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("booking_questions")
+      .select("*")
+      .order("sort_order"),
+    supabase
+      .from("booking_requests")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("coach_id", user.id)
+      .order("starts_at", { ascending: true }),
   ]);
 
   const firstError = [
@@ -699,6 +780,9 @@ async function loadForUser(user: User): Promise<PracticeData> {
     templatesResult,
     invitationsResult,
     integrationsResult,
+    bookingPageResult,
+    bookingQuestionsResult,
+    bookingRequestsResult,
   ].find((result) => result.error)?.error;
   if (firstError) throw firstError;
 
@@ -849,6 +933,47 @@ async function loadForUser(user: User): Promise<PracticeData> {
       defaultForScheduling: integration.default_for_scheduling,
       lastSyncedAt: integration.last_synced_at,
       updatedAt: integration.updated_at,
+    })),
+    bookingPage: bookingPageResult.data
+      ? {
+          id: bookingPageResult.data.id,
+          slug: bookingPageResult.data.slug,
+          brandName: bookingPageResult.data.brand_name,
+          title: bookingPageResult.data.title,
+          description: bookingPageResult.data.description,
+          accentColor: bookingPageResult.data.accent_color,
+          durationMinutes: bookingPageResult.data.duration_minutes,
+          locationType: bookingPageResult.data.location_type,
+          availability: bookingAvailability(
+            bookingPageResult.data.availability,
+          ),
+          minimumNoticeHours: bookingPageResult.data.minimum_notice_hours,
+          active: bookingPageResult.data.is_active,
+          questions: (bookingQuestionsResult.data || [])
+            .filter(
+              (question) =>
+                question.booking_page_id === bookingPageResult.data?.id,
+            )
+            .map((question) => ({
+              id: question.id,
+              label: question.label,
+              type: question.question_type,
+              required: question.is_required,
+              options: stringOptions(question.options),
+            })),
+        }
+      : null,
+    bookingRequests: (bookingRequestsResult.data || []).map((request) => ({
+      id: request.id,
+      guestName: request.guest_name,
+      guestEmail: request.guest_email,
+      guestPhone: request.guest_phone,
+      startsAt: request.starts_at,
+      endsAt: request.ends_at,
+      guestTimezone: request.guest_timezone,
+      answers: request.answers,
+      status: request.status,
+      createdAt: request.created_at,
     })),
     mode: "supabase",
     connectionState: "connected",
@@ -1541,6 +1666,50 @@ export function usePracticeData() {
     [data.organizationId, data.portalClientId, data.userId],
   );
 
+  const saveBookingPage = useCallback(
+    async (page: Omit<BookingPage, "id">) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.organizationId)
+        throw new Error("Sign in to publish a booking page.");
+      const { error } = await supabase.rpc("save_booking_page", {
+        target_organization: data.organizationId,
+        target_slug: page.slug,
+        target_brand_name: page.brandName,
+        target_title: page.title,
+        target_description: page.description,
+        target_accent_color: page.accentColor,
+        target_duration_minutes: page.durationMinutes,
+        target_location_type: page.locationType,
+        target_availability: page.availability,
+        target_minimum_notice_hours: page.minimumNoticeHours,
+        target_is_active: page.active,
+        target_questions: page.questions.map((question) => ({
+          label: question.label,
+          type: question.type,
+          required: question.required,
+          options: question.options,
+        })),
+      });
+      if (error) throw error;
+      await refresh();
+    },
+    [data.organizationId, refresh],
+  );
+
+  const cancelBookingRequest = useCallback(
+    async (requestId: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { error } = await supabase
+        .from("booking_requests")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", requestId);
+      if (error) throw error;
+      await refresh();
+    },
+    [refresh],
+  );
+
   return {
     ...data,
     needsPasswordUpdate,
@@ -1570,6 +1739,8 @@ export function usePracticeData() {
     createPortalInvitation,
     acceptPortalInvitation,
     requestScheduleChange,
+    saveBookingPage,
+    cancelBookingRequest,
   };
 }
 

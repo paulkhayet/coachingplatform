@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Bell,
   CalendarDays,
+  CalendarPlus2,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -59,6 +60,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BookingsView } from "@/components/bookings-view";
 import {
   assignments,
   clients,
@@ -84,6 +86,7 @@ type View =
   | "Dashboard"
   | "Clients"
   | "Calendar"
+  | "Bookings"
   | "Resources"
   | "Templates"
   | "Integrations";
@@ -93,6 +96,7 @@ const navItems: { label: View; icon: typeof Home }[] = [
   { label: "Dashboard", icon: Home },
   { label: "Clients", icon: Users },
   { label: "Calendar", icon: CalendarDays },
+  { label: "Bookings", icon: CalendarPlus2 },
   { label: "Resources", icon: FolderOpen },
   { label: "Templates", icon: LayoutTemplate },
   { label: "Integrations", icon: Plug },
@@ -590,6 +594,15 @@ export function CoachApp() {
                 window.open(url, "_blank", "noopener,noreferrer");
               }}
               onAssign={practice.assignResourceAsHomework}
+              onToast={setToast}
+            />
+          ) : view === "Bookings" ? (
+            <BookingsView
+              userName={practice.userName || "Your practice"}
+              bookingPage={practice.bookingPage}
+              requests={practice.bookingRequests}
+              onSave={practice.saveBookingPage}
+              onCancelRequest={practice.cancelBookingRequest}
               onToast={setToast}
             />
           ) : view === "Templates" ? (

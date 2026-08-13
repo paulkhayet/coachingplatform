@@ -584,6 +584,107 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["templates"]["Insert"]>;
         Relationships: [];
       };
+      booking_pages: {
+        Row: {
+          id: string;
+          organization_id: string;
+          coach_id: string;
+          slug: string;
+          brand_name: string;
+          title: string;
+          description: string;
+          accent_color: string;
+          duration_minutes: number;
+          location_type: "zoom" | "google_meet" | "phone";
+          availability: Json;
+          minimum_notice_hours: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          coach_id: string;
+          slug: string;
+          brand_name: string;
+          title?: string;
+          description?: string;
+          accent_color?: string;
+          duration_minutes?: number;
+          location_type?: "zoom" | "google_meet" | "phone";
+          availability?: Json;
+          minimum_notice_hours?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["booking_pages"]["Insert"]>;
+        Relationships: [];
+      };
+      booking_questions: {
+        Row: {
+          id: string;
+          booking_page_id: string;
+          label: string;
+          question_type: "short_text" | "long_text" | "select" | "checkbox";
+          is_required: boolean;
+          options: Json;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          booking_page_id: string;
+          label: string;
+          question_type?: "short_text" | "long_text" | "select" | "checkbox";
+          is_required?: boolean;
+          options?: Json;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["booking_questions"]["Insert"]>;
+        Relationships: [];
+      };
+      booking_requests: {
+        Row: {
+          id: string;
+          booking_page_id: string;
+          organization_id: string;
+          coach_id: string;
+          guest_name: string;
+          guest_email: string;
+          guest_phone: string | null;
+          starts_at: string;
+          ends_at: string;
+          guest_timezone: string;
+          answers: Json;
+          status: "pending" | "confirmed" | "cancelled";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          booking_page_id: string;
+          organization_id: string;
+          coach_id: string;
+          guest_name: string;
+          guest_email: string;
+          guest_phone?: string | null;
+          starts_at: string;
+          ends_at: string;
+          guest_timezone?: string;
+          answers?: Json;
+          status?: "pending" | "confirmed" | "cancelled";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: "pending" | "confirmed" | "cancelled";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -640,6 +741,40 @@ export type Database = {
       disconnect_integration: {
         Args: { target_connection: string };
         Returns: undefined;
+      };
+      save_booking_page: {
+        Args: {
+          target_organization: string;
+          target_slug: string;
+          target_brand_name: string;
+          target_title: string;
+          target_description: string;
+          target_accent_color: string;
+          target_duration_minutes: number;
+          target_location_type: string;
+          target_availability: Json;
+          target_minimum_notice_hours: number;
+          target_is_active: boolean;
+          target_questions: Json;
+        };
+        Returns: string;
+      };
+      get_public_booking_page: {
+        Args: { page_slug: string };
+        Returns: Json;
+      };
+      submit_public_booking: {
+        Args: {
+          page_slug: string;
+          guest_name: string;
+          guest_email: string;
+          guest_phone: string;
+          requested_starts_at: string;
+          guest_timezone: string;
+          submitted_answers: Json;
+          website?: string;
+        };
+        Returns: string;
       };
     };
     Enums: {

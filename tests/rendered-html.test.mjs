@@ -47,6 +47,9 @@ test("ships the privacy-aware MVP foundation", async () => {
     portalMigration,
     storageMigration,
     integrationMigration,
+    bookingMigration,
+    bookingsView,
+    publicBookingPage,
     oauth,
     repository,
   ] = await Promise.all([
@@ -94,6 +97,18 @@ test("ships the privacy-aware MVP foundation", async () => {
         "../supabase/migrations/20260813050000_practice_integrations.sql",
         import.meta.url,
       ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260813060000_public_booking_pages.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(new URL("../components/bookings-view.tsx", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/book/[slug]/public-booking-page.tsx", import.meta.url),
       "utf8",
     ),
     readFile(new URL("../lib/integrations/oauth.ts", import.meta.url), "utf8"),
@@ -154,6 +169,17 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(integrationMigration, /save_integration_oauth_connection/);
   assert.match(integrationMigration, /disconnect_integration/);
   assert.match(integrationMigration, /No direct authenticated-user policy/);
+  assert.match(bookingMigration, /create table if not exists public\.booking_pages/);
+  assert.match(bookingMigration, /create table if not exists public\.booking_requests/);
+  assert.match(bookingMigration, /create or replace function public\.submit_public_booking/);
+  assert.match(bookingMigration, /availableSlots/);
+  assert.match(bookingMigration, /#variable_conflict use_variable/);
+  assert.match(bookingsView, /Intake questionnaire/);
+  assert.match(bookingsView, /Choices separated by commas/);
+  assert.match(bookingsView, /Your consultation link/);
+  assert.match(publicBookingPage, /Book consultation/);
+  assert.match(publicBookingPage, /availableSlots/);
+  assert.match(app, /Bookings/);
   assert.match(oauth, /AES-GCM/);
   assert.match(oauth, /https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/);
   assert.match(oauth, /https:\/\/zoom\.us\/oauth\/authorize/);
