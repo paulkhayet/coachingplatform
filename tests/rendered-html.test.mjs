@@ -28,7 +28,7 @@ test("server-renders the Soli coaching workspace", async () => {
 });
 
 test("ships the privacy-aware MVP foundation", async () => {
-  const [app, data, layout, packageJson, migration, authMigration, workflowMigration, repository] = await Promise.all([
+  const [app, data, layout, packageJson, migration, authMigration, workflowMigration, portalMigration, repository] = await Promise.all([
     readFile(new URL("../app/coach-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
@@ -36,11 +36,12 @@ test("ships the privacy-aware MVP foundation", async () => {
     readFile(new URL("../supabase/migrations/20260813000000_initial.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260813010000_auth_bootstrap_and_storage.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260813020000_core_coaching_workflows.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260813030000_portal_accounts_and_invitations.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/supabase/practice-data.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(app, /Minor privacy controls are active/);
-  assert.match(app, /Soli never gives coaching advice/);
+  assert.match(app, /Soli never gives\s+coaching advice/);
   assert.match(app, /Coach \+ Parent/);
   assert.match(data, /Dr\. Nina Patel/);
   assert.match(layout, /og\.png/);
@@ -55,7 +56,14 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(workflowMigration, /automatic_assignment_updates/);
   assert.match(workflowMigration, /guardian_can_read_assignment_logistics/);
   assert.match(workflowMigration, /Never shares response content/);
-  assert.match(repository, /supabase\.from\("clients"\)/);
+  assert.match(portalMigration, /create table public\.portal_invitations/);
+  assert.match(portalMigration, /create table public\.scheduling_requests/);
+  assert.match(portalMigration, /get_portal_client/);
+  assert.match(portalMigration, /sensitive intake columns/);
+  assert.match(portalMigration, /claim_portal_invitation/);
+  assert.match(portalMigration, /submit_portal_assignment/);
+  assert.match(portalMigration, /portal_audit_events/);
+  assert.match(repository, /supabase\s*\.from\("clients"\)/);
   assert.match(repository, /createSession/);
   assert.match(repository, /completeSession/);
   assert.match(repository, /submitAssignmentResponse/);
@@ -73,7 +81,12 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(app, /ScheduleSessionModal/);
   assert.match(app, /AssignmentComposer/);
   assert.match(app, /Guardian assignment updates/);
-  assert.match(app, /The assignment response is never automatically visible to a guardian/);
+  assert.match(app, /The assignment response is never\s+automatically visible to a guardian/);
+  assert.match(app, /Guardian portal/);
+  assert.match(app, /Join Zoom/);
+  assert.match(app, /Portal access for/);
+  assert.match(app, /Create portal account/);
+  assert.match(app, /Zoom is the primary meeting provider/);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
 });

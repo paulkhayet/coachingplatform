@@ -68,9 +68,9 @@ const at = (days, hour, minute = 0) => {
   return date;
 };
 await must(supabase.from("sessions").insert([
-  { organization_id: organizationId, client_id: byName.get("Maya Chen"), coach_id: coach.id, starts_at: at(0, 10).toISOString(), ends_at: at(0, 10, 50).toISOString(), meeting_provider: "google_meet", meeting_url: "https://meet.google.com/demo-maya" },
-  { organization_id: organizationId, client_id: byName.get("Eli Rivera"), coach_id: coach.id, starts_at: at(0, 14, 30).toISOString(), ends_at: at(0, 15, 20).toISOString(), meeting_provider: "google_meet", meeting_url: "https://meet.google.com/demo-eli" },
-  { organization_id: organizationId, client_id: byName.get("Jonah Brooks"), coach_id: coach.id, starts_at: at(1, 11).toISOString(), ends_at: at(1, 11, 50).toISOString(), meeting_provider: "google_meet", meeting_url: "https://meet.google.com/demo-jonah" },
+  { organization_id: organizationId, client_id: byName.get("Maya Chen"), coach_id: coach.id, starts_at: at(0, 10).toISOString(), ends_at: at(0, 10, 50).toISOString(), meeting_provider: "zoom", meeting_url: "https://zoom.us/j/10000000001" },
+  { organization_id: organizationId, client_id: byName.get("Eli Rivera"), coach_id: coach.id, starts_at: at(0, 14, 30).toISOString(), ends_at: at(0, 15, 20).toISOString(), meeting_provider: "zoom", meeting_url: "https://zoom.us/j/10000000002" },
+  { organization_id: organizationId, client_id: byName.get("Jonah Brooks"), coach_id: coach.id, starts_at: at(1, 11).toISOString(), ends_at: at(1, 11, 50).toISOString(), meeting_provider: "zoom", meeting_url: "https://zoom.us/j/10000000003" },
 ]), "Create sessions");
 
 await must(supabase.from("assignments").insert([
