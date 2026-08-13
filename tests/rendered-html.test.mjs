@@ -57,8 +57,11 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(repository, /updateUser\(\{ password \}\)/);
   assert.match(app, /Create your practice/);
   assert.match(app, /Set password and continue/);
-  assert.match(app, /Continue with Google/);
+  assert.match(app, /Sign in with Google/);
   assert.match(app, /Continue with Apple/);
+  assert.match(app, /google-signin-light\.png/);
+  assert.match(app, /apple-continue-white\.png/);
+  assert.doesNotMatch(app, /oauth-google-mark/);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
 });

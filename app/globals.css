@@ -476,11 +476,11 @@ kbd { display: inline-flex; min-width: 20px; height: 19px; align-items: center; 
 .auth-heading p { max-width: 310px; margin: 8px auto 0; color: #87858c; font-size: 10px; line-height: 1.55; }
 .auth-form { display: flex; flex-direction: column; gap: 11px; }
 .oauth-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
-.oauth-options button { display: flex; height: 42px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #dedbd6; border-radius: 9px; background: #fdfcfb; color: #454349; font-size: 9px; font-weight: 650; transition: .16s ease; }
-.oauth-options button:hover:not(:disabled) { border-color: #bdb9b1; background: white; box-shadow: 0 4px 12px rgba(39,37,45,.06); transform: translateY(-1px); }
-.oauth-options button:focus-visible { outline: 2px solid rgba(98,89,223,.35); outline-offset: 2px; }
-.oauth-options button:disabled { cursor: wait; opacity: .55; }
-.oauth-google-mark { display: grid; width: 17px; height: 17px; place-items: center; border: 1px solid #e2dfda; border-radius: 50%; background: white; color: #4285f4; font-size: 10px; font-weight: 750; }
+.oauth-provider-button { display: block; width: 180px; height: 40px; justify-self: center; padding: 0; overflow: hidden; border: 0; border-radius: 4px; background: transparent; transition: box-shadow .16s ease, transform .16s ease, opacity .16s ease; }
+.oauth-provider-button img { display: block; width: 180px; height: 40px; }
+.oauth-provider-button:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(39,37,45,.1); transform: translateY(-1px); }
+.oauth-provider-button:focus-visible { outline: 2px solid rgba(98,89,223,.35); outline-offset: 2px; }
+.oauth-provider-button:disabled { cursor: wait; opacity: .55; }
 .auth-divider { display: flex; align-items: center; gap: 9px; margin-bottom: 15px; color: #aaa7ad; font-size: 7.5px; }
 .auth-divider::before, .auth-divider::after { height: 1px; flex: 1; background: #ece9e4; content: ""; }
 .auth-form label { color: #5d5b62; font-size: 8.5px; font-weight: 650; }

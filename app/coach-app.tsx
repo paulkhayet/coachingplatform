@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  Apple,
   ArrowLeft,
   ArrowRight,
   Bell,
@@ -739,7 +738,7 @@ function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onOAuth, onSi
           <div className="auth-check-email"><div><CheckCircle2 size={20} /></div><p>The link may take a minute to arrive. Check your spam folder if you don’t see it.</p><Button variant="outline" onClick={() => changeView("sign_in")}><ArrowLeft size={14} />Back to sign in</Button></div>
         ) : (
           <>
-          {(view === "sign_in" || view === "sign_up") && <div className="oauth-options"><button type="button" onClick={() => void startOAuth("google")} disabled={submitting || oauthProvider !== null}><span className="oauth-google-mark">G</span>{oauthProvider === "google" ? "Opening Google…" : "Continue with Google"}</button><button type="button" onClick={() => void startOAuth("apple")} disabled={submitting || oauthProvider !== null}><Apple size={16} fill="currentColor" />{oauthProvider === "apple" ? "Opening Apple…" : "Continue with Apple"}</button></div>}
+          {(view === "sign_in" || view === "sign_up") && <div className="oauth-options"><button className="oauth-provider-button" type="button" aria-label={oauthProvider === "google" ? "Opening Google" : "Sign in with Google"} aria-busy={oauthProvider === "google"} onClick={() => void startOAuth("google")} disabled={submitting || oauthProvider !== null}><img src="/oauth/google-signin-light.png" alt="" width="180" height="40" /></button><button className="oauth-provider-button" type="button" aria-label={oauthProvider === "apple" ? "Opening Apple" : "Continue with Apple"} aria-busy={oauthProvider === "apple"} onClick={() => void startOAuth("apple")} disabled={submitting || oauthProvider !== null}><img src="/oauth/apple-continue-white.png" alt="" width="180" height="40" /></button></div>}
           {(view === "sign_in" || view === "sign_up") && <div className="auth-divider"><span>or continue with email</span></div>}
           <form className="auth-form" onSubmit={submit}>
             {view === "sign_up" && <label>Full name<input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required placeholder="Your name" /></label>}
