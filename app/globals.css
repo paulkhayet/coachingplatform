@@ -476,9 +476,9 @@ kbd { display: inline-flex; min-width: 20px; height: 19px; align-items: center; 
 .auth-heading p { max-width: 310px; margin: 8px auto 0; color: #87858c; font-size: 10px; line-height: 1.55; }
 .auth-form { display: flex; flex-direction: column; gap: 11px; }
 .oauth-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
-.oauth-provider-button { display: block; width: 180px; height: 40px; justify-self: center; padding: 0; overflow: hidden; border: 0; border-radius: 4px; background: transparent; transition: box-shadow .16s ease, transform .16s ease, opacity .16s ease; }
-.oauth-provider-button img { display: block; width: 180px; height: 40px; }
-.oauth-provider-button:hover:not(:disabled) { box-shadow: 0 5px 14px rgba(74,67,133,.12); transform: translateY(-1px); }
+.oauth-provider-button { display: block; width: 182px; height: 42px; justify-self: center; padding: 0; overflow: hidden; border: 1px solid #d8d4e8; border-radius: 9px; background: white; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease, opacity .16s ease; }
+.oauth-provider-button img { display: block; width: 180px; height: 40px; border-radius: 7px; }
+.oauth-provider-button:hover:not(:disabled) { border-color: #b8b2df; box-shadow: 0 5px 14px rgba(74,67,133,.12); transform: translateY(-1px); }
 .oauth-provider-button:focus-visible { outline: 2px solid rgba(98,89,223,.35); outline-offset: 2px; }
 .oauth-provider-button:disabled { cursor: wait; opacity: .55; }
 .auth-divider { display: flex; align-items: center; gap: 9px; margin-bottom: 15px; color: #aaa7ad; font-size: 7.5px; }
