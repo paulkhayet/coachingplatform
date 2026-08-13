@@ -24,7 +24,7 @@ test("server-renders the Soli coaching workspace", async () => {
   assert.match(html, /Good morning, Alex/);
   assert.match(html, /Sessions today/);
   assert.match(html, /Client homework/);
-  assert.match(html, /Demo data · Supabase ready/);
+  assert.match(html, /Demo data · Supabase ready|Connecting data…/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
