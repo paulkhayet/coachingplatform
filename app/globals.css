@@ -478,7 +478,7 @@ kbd { display: inline-flex; min-width: 20px; height: 19px; align-items: center; 
 .oauth-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
 .oauth-provider-button { display: block; width: 180px; height: 40px; justify-self: center; padding: 0; overflow: hidden; border: 0; border-radius: 4px; background: transparent; transition: box-shadow .16s ease, transform .16s ease, opacity .16s ease; }
 .oauth-provider-button img { display: block; width: 180px; height: 40px; }
-.oauth-provider-button:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(39,37,45,.1); transform: translateY(-1px); }
+.oauth-provider-button:hover:not(:disabled) { box-shadow: 0 5px 14px rgba(74,67,133,.12); transform: translateY(-1px); }
 .oauth-provider-button:focus-visible { outline: 2px solid rgba(98,89,223,.35); outline-offset: 2px; }
 .oauth-provider-button:disabled { cursor: wait; opacity: .55; }
 .auth-divider { display: flex; align-items: center; gap: 9px; margin-bottom: 15px; color: #aaa7ad; font-size: 7.5px; }
