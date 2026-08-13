@@ -23,11 +23,14 @@ import {
   Goal,
   Headphones,
   Home,
+  KeyRound,
   Inbox,
   LayoutTemplate,
   Link2,
   ListChecks,
   LockKeyhole,
+  LogIn,
+  Mail,
   Menu,
   MessageCircle,
   Mic2,
@@ -178,6 +181,20 @@ export function CoachApp() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  if (practice.connectionState !== "unconfigured" && (practice.connectionState !== "connected" || practice.needsPasswordUpdate)) {
+    return (
+      <AuthScreen
+        state={practice.connectionState}
+        error={practice.error}
+        needsPasswordUpdate={practice.needsPasswordUpdate}
+        onSignIn={practice.signIn}
+        onSignUp={practice.signUp}
+        onReset={practice.requestPasswordReset}
+        onUpdatePassword={practice.updatePassword}
+      />
+    );
+  }
+
   const navigate = (nextView: View) => {
     setView(nextView);
     setSelectedClient(null);
@@ -216,9 +233,9 @@ export function CoachApp() {
           <button className="mobile-close" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu"><X size={18} /></button>
         </div>
 
-        <button className="workspace-switcher">
-          <Avatar initials="AM" color="#f1c8ab" size="sm" />
-          <span><strong>Alex Morgan</strong><small>Personal practice</small></span>
+        <button className="workspace-switcher" onClick={() => setDataPanelOpen(true)}>
+          <Avatar initials={(practice.userName || "Alex Morgan").split(/\s+/).slice(0, 2).map((part) => part[0]).join("")} color="#f1c8ab" size="sm" />
+          <span><strong>{practice.userName || "Alex Morgan"}</strong><small>{practice.mode === "supabase" ? "Soli Coaching" : "Personal practice"}</small></span>
           <ChevronDown size={14} />
         </button>
 
@@ -245,7 +262,7 @@ export function CoachApp() {
         <div className="sidebar-footer">
           <button onClick={() => setToast("No new notifications")}><Bell size={17} /><span>Notifications</span><i /></button>
           <button onClick={() => setToast("Settings are ready for the next build")}><Settings size={17} /><span>Settings</span></button>
-          <button className={cn("security-note", "data-status", `data-${practice.connectionState}`)} onClick={() => setDataPanelOpen(true)} title={practice.error || undefined}><ShieldCheck size={13} /><span>{practice.connectionState === "connected" ? "Supabase connected" : practice.connectionState === "loading" ? "Connecting data…" : practice.connectionState === "error" ? "Data connection error" : "Demo data · Supabase ready"}</span></button>
+          <button className={cn("security-note", "data-status", `data-${practice.connectionState}`)} onClick={() => setDataPanelOpen(true)} title={practice.error || undefined}><ShieldCheck size={13} /><span>{practice.connectionState === "connected" ? "Supabase connected" : "Demo data · Supabase ready"}</span></button>
         </div>
       </aside>
 
@@ -264,7 +281,7 @@ export function CoachApp() {
               <Search size={15} /><span>Search anything…</span><kbd>⌘ K</kbd>
             </button>
             <Button variant="accent" size="sm" onClick={() => setQuickAddOpen(true)}><Plus size={15} />Quick add</Button>
-            <button className="top-avatar"><Avatar initials="AM" color="#f1c8ab" size="sm" /></button>
+            <button className="top-avatar" onClick={() => setDataPanelOpen(true)} aria-label="Open account settings"><Avatar initials={(practice.userName || "Alex Morgan").split(/\s+/).slice(0, 2).map((part) => part[0]).join("")} color="#f1c8ab" size="sm" /></button>
           </div>
         </header>
 
@@ -319,7 +336,7 @@ export function CoachApp() {
 
       {commandOpen && <CommandPalette clientData={practiceClients} onClose={() => setCommandOpen(false)} onNavigate={navigate} onClient={openClient} />}
       {quickAddOpen && <QuickAdd onClose={() => setQuickAddOpen(false)} onToast={(message) => { setQuickAddOpen(false); setToast(message); }} />}
-      {dataPanelOpen && <DataConnectionModal state={practice.connectionState} error={practice.error} onClose={() => setDataPanelOpen(false)} onSignIn={practice.signIn} onSignOut={practice.signOut} />}
+      {dataPanelOpen && <AccountModal state={practice.connectionState} email={practice.userEmail} error={practice.error} onClose={() => setDataPanelOpen(false)} onSignOut={practice.signOut} />}
       {sessionOpen && <SessionPanel client={selectedClient || practiceClients[0] || clients[0]} onClose={() => setSessionOpen(false)} onSaved={saveSessionNote} />}
       {toast && <div className="toast"><CheckCircle2 size={17} /><span>{toast}</span></div>}
     </div>
@@ -632,26 +649,106 @@ function CommandPalette({ clientData, onClose, onNavigate, onClient }: { clientD
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="command-palette" onMouseDown={(event) => event.stopPropagation()}><div className="command-input"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search clients, notes, sessions…" /><kbd>ESC</kbd></div><div className="command-results"><p>QUICK NAVIGATION</p><div className="command-nav">{navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => { onNavigate(label); onClose(); }}><Icon size={16} /><span>{label}</span><Command size={12} /></button>)}</div><p>CLIENTS</p>{matches.slice(0,4).map((client) => <button className="command-client" key={client.id} onClick={() => { onClient(client); onClose(); }}><Avatar initials={client.initials} color={client.color} size="sm" /><span><strong>{client.name}</strong><small>{client.type} · {client.nextSession} {client.nextSessionTime}</small></span><ArrowRight size={13} /></button>)}</div><div className="command-footer"><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>↵</kbd> Open</span><span>Searches stay private</span></div></div></div>;
 }
 
-function DataConnectionModal({ state, error, onClose, onSignIn, onSignOut }: { state: ConnectionState; error: string | null; onClose: () => void; onSignIn: (email: string, password: string) => Promise<void>; onSignOut: () => Promise<void> }) {
+type AuthView = "sign_in" | "sign_up" | "forgot" | "check_email" | "set_password";
+
+function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onSignUp, onReset, onUpdatePassword }: {
+  state: ConnectionState;
+  error: string | null;
+  needsPasswordUpdate: boolean;
+  onSignIn: (email: string, password: string) => Promise<void>;
+  onSignUp: (fullName: string, email: string, password: string) => Promise<{ requiresEmailConfirmation: boolean }>;
+  onReset: (email: string) => Promise<void>;
+  onUpdatePassword: (password: string) => Promise<void>;
+}) {
+  const [view, setView] = useState<AuthView>(needsPasswordUpdate ? "set_password" : "sign_in");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (needsPasswordUpdate) setView("set_password");
+  }, [needsPasswordUpdate]);
+
+  const changeView = (next: AuthView) => {
+    setView(next);
+    setPassword("");
+    setConfirmPassword("");
+    setFormError(null);
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
     setFormError(null);
     try {
-      await onSignIn(email, password);
-      onClose();
-    } catch (signInError) {
-      setFormError(signInError instanceof Error ? signInError.message : "Unable to sign in.");
+      if (view === "sign_in") await onSignIn(email.trim(), password);
+      if (view === "sign_up") {
+        if (password.length < 10) throw new Error("Use at least 10 characters for your password.");
+        if (password !== confirmPassword) throw new Error("Passwords do not match.");
+        const result = await onSignUp(fullName.trim(), email.trim(), password);
+        if (result.requiresEmailConfirmation) setView("check_email");
+      }
+      if (view === "forgot") {
+        await onReset(email.trim());
+        setView("check_email");
+      }
+      if (view === "set_password") {
+        if (password.length < 10) throw new Error("Use at least 10 characters for your password.");
+        if (password !== confirmPassword) throw new Error("Passwords do not match.");
+        await onUpdatePassword(password);
+      }
+    } catch (authError) {
+      setFormError(authError instanceof Error ? authError.message : "We couldn't complete that request.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="data-modal" onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">DATA CONNECTION</p><h2>{state === "connected" ? "Supabase is connected" : state === "unconfigured" ? "Connect Supabase" : "Sign in to Supabase"}</h2></div><button onClick={onClose}><X size={18} /></button></div>{state === "unconfigured" ? <div className="data-setup"><span><Zap size={18} /></span><p><strong>Add two environment variables</strong><small>Copy `.env.example` to `.env.local`, then set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Restart the app afterward.</small></p></div> : state === "connected" ? <div className="data-connected"><span><CheckCircle2 size={20} /></span><div><strong>Live data is active</strong><p>Clients, goals, sessions, assignments, resources, and templates are loading through authenticated row-level security.</p></div><Button variant="outline" onClick={() => void onSignOut().then(onClose)}>Sign out</Button></div> : <form className="data-signin" onSubmit={submit}><p>Use the coach account created in Supabase Auth or by the guarded seed command.</p><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required placeholder="coach@example.com" /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required placeholder="••••••••••••" /></label>{(formError || error) && <div className="data-error">{formError || error}</div>}<Button variant="accent" type="submit" disabled={submitting}>{submitting ? "Signing in…" : "Sign in and load data"}</Button></form>}<div className="data-modal-note"><LockKeyhole size={12} />The service-role key is never sent to the browser.</div></div></div>;
+  if (state === "loading" && !needsPasswordUpdate) {
+    return <main className="auth-shell"><section className="auth-card auth-loading" role="status" aria-live="polite"><AppLogo /><span className="auth-spinner" aria-hidden="true" /><p>Securing your workspace…</p></section></main>;
+  }
+
+  const title = view === "sign_up" ? "Create your practice" : view === "forgot" ? "Reset your password" : view === "check_email" ? "Check your email" : view === "set_password" ? "Choose your password" : "Welcome back";
+  const copy = view === "sign_up" ? "Start a private workspace for your coaching practice." : view === "forgot" ? "We'll send you a secure link to choose a new password." : view === "check_email" ? `We sent a secure link to ${email || "your inbox"}.` : view === "set_password" ? "Finish activating your account with a password only you know." : "Sign in to your private Soli workspace.";
+
+  return (
+    <main className="auth-shell">
+      <div className="auth-ambient auth-ambient-one" /><div className="auth-ambient auth-ambient-two" />
+      <section className="auth-card">
+        <header className="auth-brand"><AppLogo /><span><ShieldCheck size={12} />Private by design</span></header>
+        <div className="auth-heading"><span className="auth-icon">{view === "check_email" ? <Mail size={20} /> : view === "set_password" || view === "forgot" ? <KeyRound size={20} /> : <LogIn size={20} />}</span><h1>{title}</h1><p>{copy}</p></div>
+        {view === "check_email" ? (
+          <div className="auth-check-email"><div><CheckCircle2 size={20} /></div><p>The link may take a minute to arrive. Check your spam folder if you don’t see it.</p><Button variant="outline" onClick={() => changeView("sign_in")}><ArrowLeft size={14} />Back to sign in</Button></div>
+        ) : (
+          <form className="auth-form" onSubmit={submit}>
+            {view === "sign_up" && <label>Full name<input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required placeholder="Your name" /></label>}
+            {view !== "set_password" && <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required placeholder="you@yourpractice.com" /></label>}
+            {(view === "sign_in" || view === "sign_up" || view === "set_password") && <label>{view === "set_password" ? "New password" : "Password"}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={view === "sign_in" ? "current-password" : "new-password"} minLength={view === "sign_in" ? undefined : 10} required placeholder="••••••••••••" /></label>}
+            {(view === "sign_up" || view === "set_password") && <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={10} required placeholder="••••••••••••" /></label>}
+            {view === "sign_in" && <button className="auth-text-button" type="button" onClick={() => changeView("forgot")}>Forgot password?</button>}
+            {(formError || error) && <div className="data-error" role="alert">{formError || error}</div>}
+            <Button variant="accent" type="submit" disabled={submitting}>{submitting ? "Please wait…" : view === "sign_up" ? "Create practice" : view === "forgot" ? "Send reset link" : view === "set_password" ? "Set password and continue" : "Sign in"}</Button>
+          </form>
+        )}
+        {(view === "sign_in" || view === "sign_up") && <footer className="auth-switch">{view === "sign_in" ? <>New to Soli? <button onClick={() => changeView("sign_up")}>Create an account</button></> : <>Already have an account? <button onClick={() => changeView("sign_in")}>Sign in</button></>}</footer>}
+        <div className="auth-trust"><LockKeyhole size={11} />Your client data is protected by account and organization permissions.</div>
+      </section>
+    </main>
+  );
+}
+
+function AccountModal({ state, email, error, onClose, onSignOut }: { state: ConnectionState; email: string | null; error: string | null; onClose: () => void; onSignOut: () => Promise<void> }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const signOut = async () => {
+    setSubmitting(true);
+    setFormError(null);
+    try { await onSignOut(); onClose(); } catch (signOutError) { setFormError(signOutError instanceof Error ? signOutError.message : "Unable to sign out."); setSubmitting(false); }
+  };
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="data-modal" onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">ACCOUNT</p><h2>Your secure workspace</h2></div><button onClick={onClose} aria-label="Close account settings"><X size={18} /></button></div><div className="data-connected"><span><CheckCircle2 size={20} /></span><div><strong>Live data is active</strong><p>{email || "Signed in"} · Protected by row-level permissions.</p></div></div>{(formError || error) && <div className="data-error">{formError || error}</div>}<Button className="account-signout" variant="outline" onClick={() => void signOut()} disabled={submitting}>{submitting ? "Signing out…" : "Sign out"}</Button><div className="data-modal-note"><LockKeyhole size={12} />Your browser never receives administrative credentials.</div></div></div>;
 }
 
 function QuickAdd({ onClose, onToast }: { onClose: () => void; onToast: (message: string) => void }) {

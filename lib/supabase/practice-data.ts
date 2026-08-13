@@ -29,6 +29,8 @@ export type PracticeData = {
   connectionState: ConnectionState;
   organizationId: string | null;
   userId: string | null;
+  userEmail: string | null;
+  userName: string | null;
   error: string | null;
 };
 
@@ -41,6 +43,8 @@ const initialData: PracticeData = {
   connectionState: isSupabaseConfigured() ? "loading" : "unconfigured",
   organizationId: null,
   userId: null,
+  userEmail: null,
+  userName: null,
   error: null,
 };
 
@@ -208,12 +212,15 @@ async function loadForUser(user: User): Promise<PracticeData> {
     connectionState: "connected",
     organizationId,
     userId: user.id,
+    userEmail: user.email || null,
+    userName: coachName,
     error: null,
   };
 }
 
 export function usePracticeData() {
   const [data, setData] = useState<PracticeData>(initialData);
+  const [needsPasswordUpdate, setNeedsPasswordUpdate] = useState(false);
 
   const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -237,10 +244,18 @@ export function usePracticeData() {
   }, []);
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+    const authType = hash.get("type") || url.searchParams.get("type");
+    if (authType === "invite" || authType === "recovery") setNeedsPasswordUpdate(true);
+
     void refresh();
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
-    const { data: listener } = supabase.auth.onAuthStateChange(() => void refresh());
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setNeedsPasswordUpdate(true);
+      window.setTimeout(() => void refresh(), 0);
+    });
     return () => listener.subscription.unsubscribe();
   }, [refresh]);
 
@@ -260,7 +275,40 @@ export function usePracticeData() {
     setData({ ...initialData, connectionState: "signed_out" });
   }, []);
 
-  return { ...data, refresh, signIn, signOut };
+  const signUp = useCallback(async (fullName: string, email: string, password: string) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { data: authData, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { full_name: fullName, account_type: "coach" },
+      },
+    });
+    if (error) throw error;
+    if (authData.session) await refresh();
+    return { requiresEmailConfirmation: !authData.session };
+  }, [refresh]);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    if (error) throw error;
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+    setNeedsPasswordUpdate(false);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    await refresh();
+  }, [refresh]);
+
+  return { ...data, needsPasswordUpdate, refresh, signIn, signOut, signUp, requestPasswordReset, updatePassword };
 }
 
 export function uiVisibilityToDatabase(value: Visibility): VisibilityLevel {

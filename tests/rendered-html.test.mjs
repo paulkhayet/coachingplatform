@@ -21,10 +21,9 @@ test("server-renders the Soli coaching workspace", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Soli — Your coaching practice, beautifully organized<\/title>/i);
-  assert.match(html, /Good morning, Alex/);
-  assert.match(html, /Sessions today/);
-  assert.match(html, /Client homework/);
-  assert.match(html, /Demo data · Supabase ready|Connecting data…/);
+  assert.match(html, /Good morning, Alex|Securing your workspace…/);
+  assert.match(html, /Sessions today|auth-spinner/);
+  assert.match(html, /Client homework|auth-loading/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
@@ -53,6 +52,10 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(authMigration, /soli-resources/);
   assert.match(repository, /supabase\.from\("clients"\)/);
   assert.match(repository, /saveCoachNote/);
+  assert.match(repository, /resetPasswordForEmail/);
+  assert.match(repository, /updateUser\(\{ password \}\)/);
+  assert.match(app, /Create your practice/);
+  assert.match(app, /Set password and continue/);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
 });
