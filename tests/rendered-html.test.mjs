@@ -53,9 +53,12 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(repository, /supabase\.from\("clients"\)/);
   assert.match(repository, /saveCoachNote/);
   assert.match(repository, /resetPasswordForEmail/);
+  assert.match(repository, /signInWithOAuth/);
   assert.match(repository, /updateUser\(\{ password \}\)/);
   assert.match(app, /Create your practice/);
   assert.match(app, /Set password and continue/);
+  assert.match(app, /Continue with Google/);
+  assert.match(app, /Continue with Apple/);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
 });

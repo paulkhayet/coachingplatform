@@ -248,11 +248,18 @@ export function usePracticeData() {
     const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
     const authType = hash.get("type") || url.searchParams.get("type");
     if (authType === "invite" || authType === "recovery") setNeedsPasswordUpdate(true);
+    const callbackError = url.searchParams.get("error_description") || hash.get("error_description");
+    if (callbackError) {
+      setData({ ...initialData, connectionState: "signed_out", error: callbackError.replaceAll("+", " ") });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      void refresh();
+    }
 
-    void refresh();
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (callbackError && event === "INITIAL_SESSION") return;
       if (event === "PASSWORD_RECOVERY") setNeedsPasswordUpdate(true);
       window.setTimeout(() => void refresh(), 0);
     });
@@ -266,6 +273,18 @@ export function usePracticeData() {
     if (error) throw error;
     await refresh();
   }, [refresh]);
+
+  const signInWithOAuth = useCallback(async (provider: "google" | "apple") => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) throw error;
+  }, []);
 
   const signOut = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -308,7 +327,7 @@ export function usePracticeData() {
     await refresh();
   }, [refresh]);
 
-  return { ...data, needsPasswordUpdate, refresh, signIn, signOut, signUp, requestPasswordReset, updatePassword };
+  return { ...data, needsPasswordUpdate, refresh, signIn, signInWithOAuth, signOut, signUp, requestPasswordReset, updatePassword };
 }
 
 export function uiVisibilityToDatabase(value: Visibility): VisibilityLevel {

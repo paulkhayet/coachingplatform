@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  Apple,
   ArrowLeft,
   ArrowRight,
   Bell,
@@ -188,6 +189,7 @@ export function CoachApp() {
         error={practice.error}
         needsPasswordUpdate={practice.needsPasswordUpdate}
         onSignIn={practice.signIn}
+        onOAuth={practice.signInWithOAuth}
         onSignUp={practice.signUp}
         onReset={practice.requestPasswordReset}
         onUpdatePassword={practice.updatePassword}
@@ -651,11 +653,12 @@ function CommandPalette({ clientData, onClose, onNavigate, onClient }: { clientD
 
 type AuthView = "sign_in" | "sign_up" | "forgot" | "check_email" | "set_password";
 
-function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onSignUp, onReset, onUpdatePassword }: {
+function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onOAuth, onSignUp, onReset, onUpdatePassword }: {
   state: ConnectionState;
   error: string | null;
   needsPasswordUpdate: boolean;
   onSignIn: (email: string, password: string) => Promise<void>;
+  onOAuth: (provider: "google" | "apple") => Promise<void>;
   onSignUp: (fullName: string, email: string, password: string) => Promise<{ requiresEmailConfirmation: boolean }>;
   onReset: (email: string) => Promise<void>;
   onUpdatePassword: (password: string) => Promise<void>;
@@ -666,6 +669,7 @@ function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onSignUp, onR
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [oauthProvider, setOauthProvider] = useState<"google" | "apple" | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -707,6 +711,17 @@ function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onSignUp, onR
     }
   };
 
+  const startOAuth = async (provider: "google" | "apple") => {
+    setOauthProvider(provider);
+    setFormError(null);
+    try {
+      await onOAuth(provider);
+    } catch (oauthError) {
+      setFormError(oauthError instanceof Error ? oauthError.message : `Unable to continue with ${provider === "google" ? "Google" : "Apple"}.`);
+      setOauthProvider(null);
+    }
+  };
+
   if (state === "loading" && !needsPasswordUpdate) {
     return <main className="auth-shell"><section className="auth-card auth-loading" role="status" aria-live="polite"><AppLogo /><span className="auth-spinner" aria-hidden="true" /><p>Securing your workspace…</p></section></main>;
   }
@@ -723,6 +738,9 @@ function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onSignUp, onR
         {view === "check_email" ? (
           <div className="auth-check-email"><div><CheckCircle2 size={20} /></div><p>The link may take a minute to arrive. Check your spam folder if you don’t see it.</p><Button variant="outline" onClick={() => changeView("sign_in")}><ArrowLeft size={14} />Back to sign in</Button></div>
         ) : (
+          <>
+          {(view === "sign_in" || view === "sign_up") && <div className="oauth-options"><button type="button" onClick={() => void startOAuth("google")} disabled={submitting || oauthProvider !== null}><span className="oauth-google-mark">G</span>{oauthProvider === "google" ? "Opening Google…" : "Continue with Google"}</button><button type="button" onClick={() => void startOAuth("apple")} disabled={submitting || oauthProvider !== null}><Apple size={16} fill="currentColor" />{oauthProvider === "apple" ? "Opening Apple…" : "Continue with Apple"}</button></div>}
+          {(view === "sign_in" || view === "sign_up") && <div className="auth-divider"><span>or continue with email</span></div>}
           <form className="auth-form" onSubmit={submit}>
             {view === "sign_up" && <label>Full name<input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required placeholder="Your name" /></label>}
             {view !== "set_password" && <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required placeholder="you@yourpractice.com" /></label>}
@@ -732,6 +750,7 @@ function AuthScreen({ state, error, needsPasswordUpdate, onSignIn, onSignUp, onR
             {(formError || error) && <div className="data-error" role="alert">{formError || error}</div>}
             <Button variant="accent" type="submit" disabled={submitting}>{submitting ? "Please wait…" : view === "sign_up" ? "Create practice" : view === "forgot" ? "Send reset link" : view === "set_password" ? "Set password and continue" : "Sign in"}</Button>
           </form>
+          </>
         )}
         {(view === "sign_in" || view === "sign_up") && <footer className="auth-switch">{view === "sign_in" ? <>New to Soli? <button onClick={() => changeView("sign_up")}>Create an account</button></> : <>Already have an account? <button onClick={() => changeView("sign_in")}>Sign in</button></>}</footer>}
         <div className="auth-trust"><LockKeyhole size={11} />Your client data is protected by account and organization permissions.</div>
