@@ -23,6 +23,21 @@ npm run dev
 
 Copy `.env.example` to `.env.local` when connecting external services. Apply the SQL in `supabase/migrations` to a new Supabase project before replacing the seed-data adapter.
 
+## Supabase data integration
+
+1. Create a Supabase project and run the migrations in `supabase/migrations` in filename order.
+2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from the project API settings.
+3. Create a coach through Supabase Auth with `full_name` in user metadata. The signup trigger creates the profile, personal organization, and owner membership.
+4. Sign into the app through Supabase Auth. The data adapter automatically replaces the demo clients, goals, sessions, assignments, resources, and templates with records allowed by row-level security.
+
+To seed a non-production project, also set `SUPABASE_SERVICE_ROLE_KEY`, `SOLI_ALLOW_SEED=true`, and a strong `SOLI_SEED_PASSWORD`, then run:
+
+```bash
+npm run supabase:seed
+```
+
+The seed command refuses to run without the explicit safety flag and will not duplicate clients in an organization that already has them. Never expose the service-role key to browser code or commit `.env.local`.
+
 ## Privacy model
 
 Every shareable record carries one of four visibility levels: Coach only, Coach + Client, Coach + Parent, or Coach + Client + Parent. Logistics permissions such as billing or scheduling do not imply access to coaching notes. Coaches remain the only users who can broaden visibility.

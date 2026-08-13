@@ -24,17 +24,19 @@ test("server-renders the Soli coaching workspace", async () => {
   assert.match(html, /Good morning, Alex/);
   assert.match(html, /Sessions today/);
   assert.match(html, /Client homework/);
-  assert.match(html, /Private &amp; encrypted/);
+  assert.match(html, /Demo data · Supabase ready/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
 test("ships the privacy-aware MVP foundation", async () => {
-  const [app, data, layout, packageJson, migration] = await Promise.all([
+  const [app, data, layout, packageJson, migration, authMigration, repository] = await Promise.all([
     readFile(new URL("../app/coach-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260813000000_initial.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260813010000_auth_bootstrap_and_storage.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/supabase/practice-data.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(app, /Minor privacy controls are active/);
@@ -47,6 +49,10 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(migration, /create type public\.visibility_level/);
   assert.match(migration, /guardians read explicitly shared notes/);
   assert.match(migration, /check \(not ai_generated or note_type = 'meeting_summary'\)/);
+  assert.match(authMigration, /create or replace function public\.handle_new_user/);
+  assert.match(authMigration, /soli-resources/);
+  assert.match(repository, /supabase\.from\("clients"\)/);
+  assert.match(repository, /saveCoachNote/);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
 });

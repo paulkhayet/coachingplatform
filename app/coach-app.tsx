@@ -63,6 +63,7 @@ import {
   type Visibility,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import { saveCoachNote, usePracticeData, type ConnectionState } from "@/lib/supabase/practice-data";
 
 type View = "Dashboard" | "Clients" | "Calendar" | "Resources" | "Templates";
 type ClientTab = "Overview" | "Sessions" | "Notes" | "Assignments" | "Files";
@@ -136,6 +137,11 @@ function AppLogo() {
 }
 
 export function CoachApp() {
+  const practice = usePracticeData();
+  const practiceClients = practice.clients;
+  const practiceAssignments = practice.assignments;
+  const practiceResources = practice.resources;
+  const practiceTemplates = practice.templates;
   const [view, setView] = useState<View>("Dashboard");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientTab, setClientTab] = useState<ClientTab>("Overview");
@@ -143,6 +149,7 @@ export function CoachApp() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(false);
+  const [dataPanelOpen, setDataPanelOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [doneAssignments, setDoneAssignments] = useState<string[]>([]);
@@ -183,6 +190,24 @@ export function CoachApp() {
     setClientTab("Overview");
   };
 
+  const saveSessionNote = async (body: string, visibility: Visibility) => {
+    const client = selectedClient || practiceClients[0];
+    if (practice.mode === "supabase" && practice.organizationId && practice.userId && client) {
+      await saveCoachNote({
+        organizationId: practice.organizationId,
+        userId: practice.userId,
+        clientId: client.id,
+        body,
+        visibility,
+      });
+      await practice.refresh();
+      setToast("Session note saved to Supabase");
+    } else {
+      setToast("Demo note completed — connect and sign in to persist it");
+    }
+    setSessionOpen(false);
+  };
+
   return (
     <div className="app-shell">
       <aside className={cn("sidebar", mobileMenuOpen && "sidebar-mobile-open")}>
@@ -206,7 +231,7 @@ export function CoachApp() {
             >
               <Icon size={17} strokeWidth={1.9} />
               <span>{label}</span>
-              {label === "Clients" && <small>5</small>}
+              {label === "Clients" && <small>{practiceClients.length}</small>}
             </button>
           ))}
         </nav>
@@ -220,7 +245,7 @@ export function CoachApp() {
         <div className="sidebar-footer">
           <button onClick={() => setToast("No new notifications")}><Bell size={17} /><span>Notifications</span><i /></button>
           <button onClick={() => setToast("Settings are ready for the next build")}><Settings size={17} /><span>Settings</span></button>
-          <div className="security-note"><ShieldCheck size={13} /><span>Private & encrypted</span></div>
+          <button className={cn("security-note", "data-status", `data-${practice.connectionState}`)} onClick={() => setDataPanelOpen(true)} title={practice.error || undefined}><ShieldCheck size={13} /><span>{practice.connectionState === "connected" ? "Supabase connected" : practice.connectionState === "loading" ? "Connecting data…" : practice.connectionState === "error" ? "Data connection error" : "Demo data · Supabase ready"}</span></button>
         </div>
       </aside>
 
@@ -247,6 +272,7 @@ export function CoachApp() {
           {selectedClient ? (
             <ClientProfile
               client={selectedClient}
+              assignmentData={practiceAssignments}
               tab={clientTab}
               setTab={setClientTab}
               onBack={() => setSelectedClient(null)}
@@ -255,6 +281,8 @@ export function CoachApp() {
             />
           ) : view === "Dashboard" ? (
             <Dashboard
+              clientData={practiceClients}
+              assignmentData={practiceAssignments}
               onClient={openClient}
               onNavigate={navigate}
               onSession={() => setSessionOpen(true)}
@@ -264,6 +292,7 @@ export function CoachApp() {
             />
           ) : view === "Clients" ? (
             <ClientsView
+              clientData={practiceClients}
               search={search}
               setSearch={setSearch}
               filter={clientFilter}
@@ -274,9 +303,9 @@ export function CoachApp() {
           ) : view === "Calendar" ? (
             <CalendarView onSession={() => setSessionOpen(true)} onToast={setToast} />
           ) : view === "Resources" ? (
-            <ResourcesView onToast={setToast} />
+            <ResourcesView resourcesData={practiceResources} onToast={setToast} />
           ) : (
-            <TemplatesView onToast={setToast} />
+            <TemplatesView templatesData={practiceTemplates} onToast={setToast} />
           )}
         </div>
       </main>
@@ -288,15 +317,18 @@ export function CoachApp() {
         <button onClick={() => setMobileMenuOpen(true)}><Menu size={18} /><span>More</span></button>
       </nav>
 
-      {commandOpen && <CommandPalette onClose={() => setCommandOpen(false)} onNavigate={navigate} onClient={openClient} />}
+      {commandOpen && <CommandPalette clientData={practiceClients} onClose={() => setCommandOpen(false)} onNavigate={navigate} onClient={openClient} />}
       {quickAddOpen && <QuickAdd onClose={() => setQuickAddOpen(false)} onToast={(message) => { setQuickAddOpen(false); setToast(message); }} />}
-      {sessionOpen && <SessionPanel client={selectedClient || clients[0]} onClose={() => setSessionOpen(false)} onSaved={() => { setSessionOpen(false); setToast("Session notes saved privately"); }} />}
+      {dataPanelOpen && <DataConnectionModal state={practice.connectionState} error={practice.error} onClose={() => setDataPanelOpen(false)} onSignIn={practice.signIn} onSignOut={practice.signOut} />}
+      {sessionOpen && <SessionPanel client={selectedClient || practiceClients[0] || clients[0]} onClose={() => setSessionOpen(false)} onSaved={saveSessionNote} />}
       {toast && <div className="toast"><CheckCircle2 size={17} /><span>{toast}</span></div>}
     </div>
   );
 }
 
 function Dashboard({
+  clientData,
+  assignmentData,
   onClient,
   onNavigate,
   onSession,
@@ -304,6 +336,8 @@ function Dashboard({
   onToggleAssignment,
   onToast,
 }: {
+  clientData: Client[];
+  assignmentData: typeof assignments;
   onClient: (client: Client) => void;
   onNavigate: (view: View) => void;
   onSession: () => void;
@@ -338,7 +372,7 @@ function Dashboard({
           <div className="day-progress"><span>9 AM</span><div><i style={{ width: "38%" }} /></div><span>5 PM</span></div>
           <div className="session-list">
             {sessions.map((session, index) => {
-              const client = clients.find((item) => item.name === session.client);
+              const client = clientData.find((item) => item.name === session.client);
               return (
                 <button className="session-row" key={session.client} onClick={() => client ? onClient(client) : onSession()}>
                   <div className="session-time"><strong>{session.time}</strong><span>{session.meridiem}</span></div>
@@ -357,9 +391,9 @@ function Dashboard({
         <section className="panel focus-panel">
           <SectionTitle action={<button className="icon-button" aria-label="More options"><MoreHorizontal size={17} /></button>}>Needs attention</SectionTitle>
           <div className="attention-list">
-            <button onClick={() => onClient(clients[2])}><span className="attention-icon rose"><CircleDollarSign size={16} /></span><p><strong>Invoice due soon</strong><span>Jonah’s payment is due Aug 15</span></p><Badge variant="rose">$900</Badge></button>
-            <button onClick={() => onClient(clients[1])}><span className="attention-icon amber"><FileCheck2 size={16} /></span><p><strong>Guardian signature</strong><span>Eli’s updated agreement is waiting</span></p><ChevronRight size={14} /></button>
-            <button onClick={() => onClient(clients[0])}><span className="attention-icon blue"><MessageCircle size={16} /></span><p><strong>Follow up with Maya</strong><span>Send the role scorecard before 5 PM</span></p><ChevronRight size={14} /></button>
+            {clientData[2] && <button onClick={() => onClient(clientData[2])}><span className="attention-icon rose"><CircleDollarSign size={16} /></span><p><strong>Invoice due soon</strong><span>{clientData[2].name.split(" ")[0]}’s payment needs review</span></p><Badge variant="rose">Review</Badge></button>}
+            {clientData[1] && <button onClick={() => onClient(clientData[1])}><span className="attention-icon amber"><FileCheck2 size={16} /></span><p><strong>{clientData[1].type === "Teen" ? "Guardian signature" : "Agreement signature"}</strong><span>{clientData[1].name.split(" ")[0]}’s agreement is waiting</span></p><ChevronRight size={14} /></button>}
+            {clientData[0] && <button onClick={() => onClient(clientData[0])}><span className="attention-icon blue"><MessageCircle size={16} /></span><p><strong>Follow up with {clientData[0].name.split(" ")[0]}</strong><span>Send a check-in before 5 PM</span></p><ChevronRight size={14} /></button>}
           </div>
           <div className="calm-callout"><span>✦</span><p><strong>You’re all caught up on notes.</strong><br />Last session note finished 18 hours ago.</p></div>
         </section>
@@ -369,9 +403,10 @@ function Dashboard({
         <section className="panel assignments-panel">
           <SectionTitle action={<button className="text-action" onClick={() => onNavigate("Clients")}>See all <ArrowRight size={13} /></button>}>Client homework</SectionTitle>
           <div className="assignment-list">
-            {assignments.map((assignment) => {
-              const client = clients.find((item) => item.name === assignment.client)!;
+            {assignmentData.map((assignment) => {
+              const client = clientData.find((item) => item.name === assignment.client);
               const done = doneAssignments.includes(assignment.id);
+              if (!client) return null;
               return (
                 <div className={cn("assignment-row", done && "done")} key={assignment.id}>
                   <button className="check-button" onClick={() => onToggleAssignment(assignment.id)} aria-label={`Mark ${assignment.title} complete`}>{done && <Check size={12} />}</button>
@@ -399,6 +434,7 @@ function Dashboard({
 }
 
 function ClientsView({
+  clientData,
   search,
   setSearch,
   filter,
@@ -406,6 +442,7 @@ function ClientsView({
   onClient,
   onAdd,
 }: {
+  clientData: Client[];
   search: string;
   setSearch: (value: string) => void;
   filter: "All" | "Adult" | "Teen";
@@ -413,10 +450,10 @@ function ClientsView({
   onClient: (client: Client) => void;
   onAdd: () => void;
 }) {
-  const filtered = useMemo(() => clients.filter((client) => {
+  const filtered = useMemo(() => clientData.filter((client) => {
     const matchesSearch = client.name.toLowerCase().includes(search.toLowerCase()) || client.email.toLowerCase().includes(search.toLowerCase());
     return matchesSearch && (filter === "All" || client.type === filter);
-  }), [search, filter]);
+  }), [clientData, search, filter]);
 
   return (
     <div className="clients-page page-enter">
@@ -426,7 +463,7 @@ function ClientsView({
       </div>
       <div className="client-toolbar">
         <div className="filter-tabs">
-          {(["All", "Adult", "Teen"] as const).map((item) => <button key={item} className={cn(filter === item && "active")} onClick={() => setFilter(item)}>{item}{item === "All" && <span>5</span>}</button>)}
+          {(["All", "Adult", "Teen"] as const).map((item) => <button key={item} className={cn(filter === item && "active")} onClick={() => setFilter(item)}>{item}{item === "All" && <span>{clientData.length}</span>}</button>)}
         </div>
         <div className="inline-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search clients" aria-label="Search clients" />{search && <button onClick={() => setSearch("")}><X size={14} /></button>}</div>
       </div>
@@ -454,6 +491,7 @@ function ClientsView({
 
 function ClientProfile({
   client,
+  assignmentData,
   tab,
   setTab,
   onBack,
@@ -461,13 +499,14 @@ function ClientProfile({
   onToast,
 }: {
   client: Client;
+  assignmentData: typeof assignments;
   tab: ClientTab;
   setTab: (tab: ClientTab) => void;
   onBack: () => void;
   onSession: () => void;
   onToast: (message: string) => void;
 }) {
-  const clientAssignments = client.name === "Maya Chen" ? assignments.slice(0, 1) : client.name === "Eli Rivera" ? assignments.slice(1, 2) : assignments.slice(2);
+  const clientAssignments = assignmentData.filter((assignment) => assignment.client === client.name);
   return (
     <div className="client-profile page-enter">
       <button className="back-link" onClick={onBack}><ArrowLeft size={14} />All clients</button>
@@ -547,7 +586,7 @@ function ClientProfile({
       ) : tab === "Notes" ? (
         <ClientNotes client={client} onToast={onToast} />
       ) : tab === "Assignments" ? (
-        <ClientAssignments client={client} onToast={onToast} />
+        <ClientAssignments client={client} assignmentData={clientAssignments} onToast={onToast} />
       ) : (
         <ClientFiles client={client} onToast={onToast} />
       )}
@@ -563,8 +602,8 @@ function ClientNotes({ client, onToast }: { client: Client; onToast: (message: s
   return <div className="tab-content page-enter"><div className="tab-content-heading"><div><h2>Notes</h2><p>Private thinking and intentional updates, with visibility attached to every note.</p></div><Button onClick={() => onToast("New note opened with Coach only visibility")}><Plus size={14} />New note</Button></div><div className="privacy-legend"><strong><LockKeyhole size={13} />Visibility guide</strong>{(["Coach only", "Coach + Client", ...(client.type === "Teen" ? ["Coach + Parent", "Everyone"] : [])] as Visibility[]).map((item) => <VisibilityBadge key={item} visibility={item} />)}</div><div className="notes-feed">{[0,1,2].map((item) => <article className="panel feed-note" key={item}><div><VisibilityBadge visibility={item === 0 ? "Coach only" : item === 1 && client.type === "Teen" ? "Coach + Parent" : "Coach + Client"} /><span>{item === 0 ? "Aug 6" : item === 1 ? "Jul 30" : "Jul 23"}</span><button><MoreHorizontal size={15} /></button></div><h3>{item === 0 ? "Post-session observations" : item === 1 ? "Progress update" : "Shared session takeaway"}</h3><p>{item === 0 ? "There was a noticeable shift when we reframed the next decision as an experiment. Return to the language of curiosity next session." : item === 1 && client.type === "Teen" ? "We’re focusing on building consistent routines and practicing how to ask for support early." : "Keep noticing the difference between the path that looks impressive and the path that feels energizing."}</p><small>Edited by Alex Morgan</small></article>)}</div></div>;
 }
 
-function ClientAssignments({ client, onToast }: { client: Client; onToast: (message: string) => void }) {
-  return <div className="tab-content page-enter"><div className="tab-content-heading"><div><h2>Assignments</h2><p>Tasks, reflections, habits, and worksheets between sessions.</p></div><Button onClick={() => onToast("Assignment composer opened")}><Plus size={14} />New assignment</Button></div><div className="assignment-board"><section className="panel"><SectionTitle>Current</SectionTitle>{assignments.slice(0,2).map((item) => <div className="board-assignment" key={item.id}><span><ListChecks size={16} /></span><p><strong>{item.title}</strong><small>Due {item.due} · {item.required ? "Mandatory" : "Optional"}</small></p><VisibilityBadge visibility="Coach + Client" /><Badge variant="warning">{item.status}</Badge></div>)}</section><section className="panel"><SectionTitle>Completed</SectionTitle>{["One brave conversation", "Ideal week reflection"].map((title, index) => <div className="board-assignment completed" key={title}><span><Check size={15} /></span><p><strong>{title}</strong><small>Completed {index ? "Jul 20" : "Aug 3"}</small></p><Badge variant="success">Complete</Badge></div>)}</section></div></div>;
+function ClientAssignments({ client, assignmentData, onToast }: { client: Client; assignmentData: typeof assignments; onToast: (message: string) => void }) {
+  return <div className="tab-content page-enter"><div className="tab-content-heading"><div><h2>Assignments</h2><p>Tasks, reflections, habits, and worksheets between sessions.</p></div><Button onClick={() => onToast("Assignment composer opened")}><Plus size={14} />New assignment</Button></div><div className="assignment-board"><section className="panel"><SectionTitle>Current</SectionTitle>{assignmentData.length ? assignmentData.map((item) => <div className="board-assignment" key={item.id}><span><ListChecks size={16} /></span><p><strong>{item.title}</strong><small>Due {item.due} · {item.required ? "Mandatory" : "Optional"}</small></p><VisibilityBadge visibility={item.visibility} /><Badge variant="warning">{item.status}</Badge></div>) : <div className="mini-empty">No current assignments for {client.name.split(" ")[0]}</div>}</section><section className="panel"><SectionTitle>Completed</SectionTitle>{["One brave conversation", "Ideal week reflection"].map((title, index) => <div className="board-assignment completed" key={title}><span><Check size={15} /></span><p><strong>{title}</strong><small>Completed {index ? "Jul 20" : "Aug 3"}</small></p><Badge variant="success">Complete</Badge></div>)}</section></div></div>;
 }
 
 function ClientFiles({ client, onToast }: { client: Client; onToast: (message: string) => void }) {
@@ -576,21 +615,43 @@ function CalendarView({ onSession, onToast }: { onSession: () => void; onToast: 
   return <div className="calendar-page page-enter"><div className="page-heading compact-heading"><div><h1>Calendar</h1><p>August 10–16, 2026 · Pacific Time</p></div><div className="heading-actions"><Button variant="outline" onClick={() => onToast("Availability editor opened")}><Clock3 size={14} />Availability</Button><Button variant="outline" onClick={() => onToast("Booking page copied")}><Link2 size={14} />Booking page</Button><Button variant="accent" onClick={onSession}><Plus size={14} />New session</Button></div></div><div className="calendar-status"><span><i />Google Calendar connected</span><span><Video size={13} />Meet links added automatically</span><button onClick={() => onToast("Calendar settings opened")}>Manage</button></div><div className="calendar-shell panel"><div className="calendar-controls"><button className="today-button">Today</button><button><ArrowLeft size={15} /></button><button><ArrowRight size={15} /></button><strong>August 10–16</strong><span /><button>Week <ChevronDown size={13} /></button></div><div className="week-grid"><div className="time-column header" />{days.map((day) => <div className={cn("day-header", day.includes("13") && "today")} key={day}>{day.split(" ")[0]}<strong>{day.split(" ")[1]}</strong></div>)}{["9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM"].map((time) => <div className="calendar-row" key={time}><div className="time-label">{time}</div>{days.map((day) => <div className="calendar-cell" key={day + time}>{day.includes("13") && time === "10 AM" && <button className="calendar-event purple" onClick={onSession}><strong>Maya Chen</strong><span>Career clarity · Meet</span></button>}{day.includes("13") && time === "2 PM" && <button className="calendar-event green" onClick={onSession}><strong>Eli Rivera</strong><span>2:30 PM · Meet</span></button>}{day.includes("14") && time === "11 AM" && <button className="calendar-event peach" onClick={onSession}><strong>Jonah Brooks</strong><span>Leadership reset</span></button>}{day.includes("11") && time === "4 PM" && <button className="calendar-event blue"><strong>Ava Thompson</strong><span>Teen coaching</span></button>}</div>)}</div>)}</div></div></div>;
 }
 
-function ResourcesView({ onToast }: { onToast: (message: string) => void }) {
+function ResourcesView({ resourcesData, onToast }: { resourcesData: typeof resources; onToast: (message: string) => void }) {
   const [resourceSearch, setResourceSearch] = useState("");
-  const visible = resources.filter((item) => item.title.toLowerCase().includes(resourceSearch.toLowerCase()));
+  const visible = resourcesData.filter((item) => item.title.toLowerCase().includes(resourceSearch.toLowerCase()));
   return <div className="resources-page page-enter"><div className="page-heading compact-heading"><div><h1>Resources</h1><p>Your reusable library of tools, prompts, and learning materials.</p></div><Button variant="accent" onClick={() => onToast("Secure resource upload opened")}><Plus size={15} />Add resource</Button></div><div className="resource-toolbar"><div className="inline-search"><Search size={15} /><input value={resourceSearch} onChange={(e) => setResourceSearch(e.target.value)} placeholder="Search your library" /></div><div className="resource-filters"><button className="active">All</button><button>Worksheets</button><button>Guides</button><button>Media</button></div></div>{visible.length ? <div className="resource-grid">{visible.map((resource) => <button className="resource-card panel" key={resource.title} onClick={() => onToast(`${resource.title} opened`)}><div className={cn("resource-cover", resource.color)}><span className="resource-brand">SOLI / TOOLS</span><FileText size={28} strokeWidth={1.3} /><strong>{resource.title}</strong><i /></div><div className="resource-card-copy"><div><Badge>{resource.type}</Badge><span className="icon-button"><MoreHorizontal size={15} /></span></div><h3>{resource.title}</h3><p>{resource.size} · Assigned to {resource.assigned} clients</p></div></button>)}</div> : <div className="empty-state panel"><span><BookOpen size={22} /></span><h3>No resources found</h3><p>Try a broader search.</p></div>}</div>;
 }
 
-function TemplatesView({ onToast }: { onToast: (message: string) => void }) {
+function TemplatesView({ templatesData, onToast }: { templatesData: typeof templates; onToast: (message: string) => void }) {
   const icons = { sparkles: Sparkles, shield: ShieldCheck, route: Route, notes: NotebookPen, check: ListChecks, file: FileCheck2 };
-  return <div className="templates-page page-enter"><div className="page-heading compact-heading"><div><h1>Templates</h1><p>Create it once. Deliver a thoughtful, consistent client experience every time.</p></div><Button variant="accent" onClick={() => onToast("New template builder opened")}><Plus size={15} />New template</Button></div><div className="template-starter"><div><span><WandSparkles size={19} /></span><div><h3>Build a complete coaching flow</h3><p>Combine forms, agreements, sessions, assignments, and payment steps into one reusable program.</p></div></div><Button variant="soft" onClick={() => onToast("Program builder opened")}>Build a program <ArrowRight size={13} /></Button></div><div className="template-tabs"><button className="active">All templates <span>6</span></button><button>Onboarding</button><button>Programs</button><button>Sessions</button><button>Assignments</button></div><div className="template-grid">{templates.map((template) => { const Icon = icons[template.icon as keyof typeof icons]; return <button className="template-card panel" key={template.title} onClick={() => onToast(`${template.title} opened`)}><div className={cn("template-icon", template.type.toLowerCase())}><Icon size={18} /></div><span className="icon-button"><MoreHorizontal size={16} /></span><Badge variant={template.type === "Onboarding" ? "purple" : template.type === "Program" ? "success" : "neutral"}>{template.type}</Badge><h3>{template.title}</h3><p>{template.steps} steps · Updated {template.updated}</p><div className="template-footer"><span className="mini-avatars"><i>AM</i><i>JL</i></span><span>Used {template.steps * 3 + 2} times</span><ChevronRight size={14} /></div></button>})}</div></div>;
+  return <div className="templates-page page-enter"><div className="page-heading compact-heading"><div><h1>Templates</h1><p>Create it once. Deliver a thoughtful, consistent client experience every time.</p></div><Button variant="accent" onClick={() => onToast("New template builder opened")}><Plus size={15} />New template</Button></div><div className="template-starter"><div><span><WandSparkles size={19} /></span><div><h3>Build a complete coaching flow</h3><p>Combine forms, agreements, sessions, assignments, and payment steps into one reusable program.</p></div></div><Button variant="soft" onClick={() => onToast("Program builder opened")}>Build a program <ArrowRight size={13} /></Button></div><div className="template-tabs"><button className="active">All templates <span>{templatesData.length}</span></button><button>Onboarding</button><button>Programs</button><button>Sessions</button><button>Assignments</button></div><div className="template-grid">{templatesData.map((template) => { const Icon = icons[template.icon as keyof typeof icons] || Sparkles; return <button className="template-card panel" key={template.title} onClick={() => onToast(`${template.title} opened`)}><div className={cn("template-icon", template.type.toLowerCase())}><Icon size={18} /></div><span className="icon-button"><MoreHorizontal size={16} /></span><Badge variant={template.type === "Onboarding" ? "purple" : template.type === "Program" ? "success" : "neutral"}>{template.type}</Badge><h3>{template.title}</h3><p>{template.steps} steps · Updated {template.updated}</p><div className="template-footer"><span className="mini-avatars"><i>AM</i><i>JL</i></span><span>Used {template.steps * 3 + 2} times</span><ChevronRight size={14} /></div></button>})}</div></div>;
 }
 
-function CommandPalette({ onClose, onNavigate, onClient }: { onClose: () => void; onNavigate: (view: View) => void; onClient: (client: Client) => void }) {
+function CommandPalette({ clientData, onClose, onNavigate, onClient }: { clientData: Client[]; onClose: () => void; onNavigate: (view: View) => void; onClient: (client: Client) => void }) {
   const [query, setQuery] = useState("");
-  const matches = clients.filter((client) => client.name.toLowerCase().includes(query.toLowerCase()));
+  const matches = clientData.filter((client) => client.name.toLowerCase().includes(query.toLowerCase()));
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="command-palette" onMouseDown={(event) => event.stopPropagation()}><div className="command-input"><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search clients, notes, sessions…" /><kbd>ESC</kbd></div><div className="command-results"><p>QUICK NAVIGATION</p><div className="command-nav">{navItems.map(({ label, icon: Icon }) => <button key={label} onClick={() => { onNavigate(label); onClose(); }}><Icon size={16} /><span>{label}</span><Command size={12} /></button>)}</div><p>CLIENTS</p>{matches.slice(0,4).map((client) => <button className="command-client" key={client.id} onClick={() => { onClient(client); onClose(); }}><Avatar initials={client.initials} color={client.color} size="sm" /><span><strong>{client.name}</strong><small>{client.type} · {client.nextSession} {client.nextSessionTime}</small></span><ArrowRight size={13} /></button>)}</div><div className="command-footer"><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>↵</kbd> Open</span><span>Searches stay private</span></div></div></div>;
+}
+
+function DataConnectionModal({ state, error, onClose, onSignIn, onSignOut }: { state: ConnectionState; error: string | null; onClose: () => void; onSignIn: (email: string, password: string) => Promise<void>; onSignOut: () => Promise<void> }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await onSignIn(email, password);
+      onClose();
+    } catch (signInError) {
+      setFormError(signInError instanceof Error ? signInError.message : "Unable to sign in.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="data-modal" onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">DATA CONNECTION</p><h2>{state === "connected" ? "Supabase is connected" : state === "unconfigured" ? "Connect Supabase" : "Sign in to Supabase"}</h2></div><button onClick={onClose}><X size={18} /></button></div>{state === "unconfigured" ? <div className="data-setup"><span><Zap size={18} /></span><p><strong>Add two environment variables</strong><small>Copy `.env.example` to `.env.local`, then set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Restart the app afterward.</small></p></div> : state === "connected" ? <div className="data-connected"><span><CheckCircle2 size={20} /></span><div><strong>Live data is active</strong><p>Clients, goals, sessions, assignments, resources, and templates are loading through authenticated row-level security.</p></div><Button variant="outline" onClick={() => void onSignOut().then(onClose)}>Sign out</Button></div> : <form className="data-signin" onSubmit={submit}><p>Use the coach account created in Supabase Auth or by the guarded seed command.</p><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required placeholder="coach@example.com" /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required placeholder="••••••••••••" /></label>{(formError || error) && <div className="data-error">{formError || error}</div>}<Button variant="accent" type="submit" disabled={submitting}>{submitting ? "Signing in…" : "Sign in and load data"}</Button></form>}<div className="data-modal-note"><LockKeyhole size={12} />The service-role key is never sent to the browser.</div></div></div>;
 }
 
 function QuickAdd({ onClose, onToast }: { onClose: () => void; onToast: (message: string) => void }) {
@@ -598,9 +659,18 @@ function QuickAdd({ onClose, onToast }: { onClose: () => void; onToast: (message
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="quick-add-modal" onMouseDown={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">CREATE</p><h2>What would you like to add?</h2></div><button onClick={onClose}><X size={18} /></button></div><div className="quick-action-grid">{actions.map(({ icon: Icon, title, copy }) => <button key={title} onClick={() => onToast(`${title} flow opened`)}><span><Icon size={18} /></span><p><strong>{title}</strong><small>{copy}</small></p><ChevronRight size={14} /></button>)}</div></div></div>;
 }
 
-function SessionPanel({ client, onClose, onSaved }: { client: Client; onClose: () => void; onSaved: () => void }) {
+function SessionPanel({ client, onClose, onSaved }: { client: Client; onClose: () => void; onSaved: (body: string, visibility: Visibility) => Promise<void> }) {
   const [visibility, setVisibility] = useState<Visibility>("Coach only");
   const [aiSummary, setAiSummary] = useState(false);
   const [notes, setNotes] = useState("");
-  return <div className="drawer-backdrop"><button className="drawer-scrim" onClick={onClose} aria-label="Close session panel" /><aside className="session-drawer"><header><div><p className="eyebrow">SESSION WORKSPACE</p><h2>{client.name}</h2><span>Today · 50 minutes</span></div><button onClick={onClose}><X size={19} /></button></header><div className="session-context"><p><span>Previous session</span><strong>Waiting for certainty vs. learning through small experiments</strong></p><button><ChevronRight size={14} /></button></div><div className="session-form"><label>Attendance<div className="attendance-options"><button className="active"><CheckCircle2 size={14} />Attended</button><button>Late cancel</button><button>No show</button></div></label><label>Session notes<span className="field-hint">Your words stay yours.</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Capture themes, observations, and next steps…" autoFocus /></label><div className="visibility-picker"><div><strong>Who can see this note?</strong><span>The coach always controls sharing.</span></div><div className="visibility-options">{(["Coach only", "Coach + Client", ...(client.type === "Teen" ? ["Coach + Parent", "Everyone"] : [])] as Visibility[]).map((item) => <button key={item} className={cn(visibility === item && "active")} onClick={() => setVisibility(item)}><LockKeyhole size={12} />{item}{visibility === item && <Check size={12} />}</button>)}</div></div><div className="ai-summary-box"><div className="ai-summary-top"><span><Mic2 size={16} /></span><div><strong>AI meeting summary</strong><p>Optional transcription and summary of this session only. Soli never gives coaching advice.</p></div><button className={cn("toggle", aiSummary && "on")} onClick={() => setAiSummary(!aiSummary)}><i /></button></div>{aiSummary && <div className="ai-consent"><ShieldCheck size={13} /><span>Client consent is required before recording. Audio is never used to train models.</span></div>}</div><div className="session-next-step"><label>Next session</label><button><CalendarDays size={14} />Thursday, Aug 20 at 10:00 AM<ChevronDown size={13} /></button></div></div><footer><span><LockKeyhole size={12} />Draft saved privately</span><div><Button variant="outline" onClick={onClose}>Save draft</Button><Button variant="accent" onClick={onSaved} disabled={!notes.trim()}>Finish session</Button></div></footer></aside></div>;
+  const [saving, setSaving] = useState(false);
+  const finish = async () => {
+    setSaving(true);
+    try {
+      await onSaved(notes, visibility);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <div className="drawer-backdrop"><button className="drawer-scrim" onClick={onClose} aria-label="Close session panel" /><aside className="session-drawer"><header><div><p className="eyebrow">SESSION WORKSPACE</p><h2>{client.name}</h2><span>Today · 50 minutes</span></div><button onClick={onClose}><X size={19} /></button></header><div className="session-context"><p><span>Previous session</span><strong>Waiting for certainty vs. learning through small experiments</strong></p><button><ChevronRight size={14} /></button></div><div className="session-form"><label>Attendance<div className="attendance-options"><button className="active"><CheckCircle2 size={14} />Attended</button><button>Late cancel</button><button>No show</button></div></label><label>Session notes<span className="field-hint">Your words stay yours.</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Capture themes, observations, and next steps…" autoFocus /></label><div className="visibility-picker"><div><strong>Who can see this note?</strong><span>The coach always controls sharing.</span></div><div className="visibility-options">{(["Coach only", "Coach + Client", ...(client.type === "Teen" ? ["Coach + Parent", "Everyone"] : [])] as Visibility[]).map((item) => <button key={item} className={cn(visibility === item && "active")} onClick={() => setVisibility(item)}><LockKeyhole size={12} />{item}{visibility === item && <Check size={12} />}</button>)}</div></div><div className="ai-summary-box"><div className="ai-summary-top"><span><Mic2 size={16} /></span><div><strong>AI meeting summary</strong><p>Optional transcription and summary of this session only. Soli never gives coaching advice.</p></div><button className={cn("toggle", aiSummary && "on")} onClick={() => setAiSummary(!aiSummary)}><i /></button></div>{aiSummary && <div className="ai-consent"><ShieldCheck size={13} /><span>Client consent is required before recording. Audio is never used to train models.</span></div>}</div><div className="session-next-step"><label>Next session</label><button><CalendarDays size={14} />Thursday, Aug 20 at 10:00 AM<ChevronDown size={13} /></button></div></div><footer><span><LockKeyhole size={12} />Draft saved privately</span><div><Button variant="outline" onClick={onClose}>Save draft</Button><Button variant="accent" onClick={() => void finish()} disabled={!notes.trim() || saving}>{saving ? "Saving…" : "Finish session"}</Button></div></footer></aside></div>;
 }
