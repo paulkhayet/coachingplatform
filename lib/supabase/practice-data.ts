@@ -7,13 +7,15 @@ import {
   clients as demoClients,
   resources as demoResources,
   templates as demoTemplates,
+  sessions as demoSessions,
+  type Assignment,
   type Client,
+  type PracticeSession,
   type Visibility,
 } from "@/lib/data";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "./client";
 import type { Database, Json, VisibilityLevel } from "./database.types";
 
-type Assignment = (typeof demoAssignments)[number];
 type Resource = (typeof demoResources)[number];
 type Template = (typeof demoTemplates)[number];
 
@@ -23,6 +25,7 @@ export type ConnectionState = "unconfigured" | "signed_out" | "loading" | "conne
 export type PracticeData = {
   clients: Client[];
   assignments: Assignment[];
+  sessions: PracticeSession[];
   resources: Resource[];
   templates: Template[];
   mode: DataMode;
@@ -37,6 +40,7 @@ export type PracticeData = {
 const initialData: PracticeData = {
   clients: demoClients,
   assignments: demoAssignments,
+  sessions: demoSessions,
   resources: demoResources,
   templates: demoTemplates,
   mode: "demo",
@@ -52,6 +56,7 @@ type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type RelationshipRow = Database["public"]["Tables"]["client_relationships"]["Row"];
 type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
+type AssignmentResponseRow = Database["public"]["Tables"]["assignment_responses"]["Row"];
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
@@ -128,7 +133,7 @@ function mapClient(
     timezone: row.timezone.replaceAll("_", " ").split("/").at(-1) || row.timezone,
     headline: row.headline || "Add a short coaching focus for this client.",
     goals: goals.filter((goal) => goal.client_id === row.id && goal.status === "active").map((goal) => ({ title: goal.title, progress: goal.progress })),
-    guardians: guardians.map((guardian) => ({ name: guardian.full_name, relation: guardian.relation_label || "Guardian", initials: initials(guardian.full_name), permissions: permissionLabels(guardian.permissions) })),
+    guardians: guardians.map((guardian) => ({ id: guardian.id, name: guardian.full_name, relation: guardian.relation_label || "Guardian", initials: initials(guardian.full_name), permissions: permissionLabels(guardian.permissions), automaticAssignmentUpdates: guardian.automatic_assignment_updates })),
     careTeam: careTeam.map((person) => ({ name: person.full_name, role: person.relation_label || "Third party", initials: initials(person.full_name), permissions: permissionLabels(person.permissions) })),
   };
 }
@@ -152,6 +157,15 @@ function dueLabel(value: string | null) {
   return due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function assignmentStatus(assignment: Database["public"]["Tables"]["assignments"]["Row"]): Assignment["status"] {
+  if (assignment.reviewed_at) return "Reviewed";
+  if (assignment.status === "completed") return "Complete";
+  if (assignment.status === "submitted") return "Submitted";
+  if (assignment.due_at && new Date(assignment.due_at).getTime() < Date.now()) return "Overdue";
+  if (assignment.status === "in_progress") return "In progress";
+  return "Not started";
+}
+
 async function loadForUser(user: User): Promise<PracticeData> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) return { ...initialData, connectionState: "unconfigured" };
@@ -167,34 +181,55 @@ async function loadForUser(user: User): Promise<PracticeData> {
   if (!membership) throw new Error("Your account is not connected to a coaching organization.");
 
   const organizationId = membership.organization_id;
-  const [profileResult, clientsResult, goalsResult, relationshipsResult, sessionsResult, assignmentsResult, resourcesResult, templatesResult] = await Promise.all([
+  const [profileResult, clientsResult, goalsResult, relationshipsResult, sessionsResult, assignmentsResult, assignmentResponsesResult, resourcesResult, templatesResult] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     supabase.from("clients").select("*").eq("organization_id", organizationId).order("full_name"),
     supabase.from("goals").select("*").eq("organization_id", organizationId).order("created_at"),
     supabase.from("client_relationships").select("*").eq("organization_id", organizationId).order("created_at"),
     supabase.from("sessions").select("*").eq("organization_id", organizationId).order("starts_at"),
     supabase.from("assignments").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
+    supabase.from("assignment_responses").select("*").eq("organization_id", organizationId).order("updated_at", { ascending: false }),
     supabase.from("resources").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
     supabase.from("templates").select("*").eq("organization_id", organizationId).order("updated_at", { ascending: false }),
   ]);
 
-  const firstError = [profileResult, clientsResult, goalsResult, relationshipsResult, sessionsResult, assignmentsResult, resourcesResult, templatesResult].find((result) => result.error)?.error;
+  const firstError = [profileResult, clientsResult, goalsResult, relationshipsResult, sessionsResult, assignmentsResult, assignmentResponsesResult, resourcesResult, templatesResult].find((result) => result.error)?.error;
   if (firstError) throw firstError;
 
   const coachName = profileResult.data?.full_name || user.user_metadata.full_name || user.email || "Your coach";
   const mappedClients = (clientsResult.data || []).map((client, index) => mapClient(client, goalsResult.data || [], relationshipsResult.data || [], sessionsResult.data || [], coachName, index));
   const names = new Map(mappedClients.map((client) => [client.id, client.name]));
+  const responses = new Map((assignmentResponsesResult.data || []).map((response: AssignmentResponseRow) => [response.assignment_id, response]));
+  const autoGuardianClients = new Set((relationshipsResult.data || []).filter((relationship) => relationship.role === "guardian" && relationship.automatic_assignment_updates).map((relationship) => relationship.client_id));
 
   return {
     clients: mappedClients,
     assignments: (assignmentsResult.data || []).map((assignment) => ({
       id: assignment.id,
+      clientId: assignment.client_id,
       client: names.get(assignment.client_id) || "Unknown client",
       title: assignment.title,
+      instructions: assignment.instructions || "",
       due: dueLabel(assignment.due_at),
+      dueAt: assignment.due_at,
       required: assignment.is_required,
-      status: assignment.status === "completed" ? "Complete" : assignment.status === "in_progress" || assignment.status === "submitted" ? "In progress" : "Not started",
+      status: assignmentStatus(assignment),
       visibility: visibilityToUi(assignment.visibility),
+      responseType: assignment.response_type,
+      responseText: responses.get(assignment.id)?.response_text || "",
+      guardianShare: assignment.guardian_share_setting,
+      guardianLogisticsShared: assignment.guardian_share_setting === "share" || (assignment.guardian_share_setting === "client_default" && autoGuardianClients.has(assignment.client_id)),
+    })),
+    sessions: (sessionsResult.data || []).map((session) => ({
+      id: session.id,
+      clientId: session.client_id,
+      client: names.get(session.client_id) || "Unknown client",
+      startsAt: session.starts_at,
+      endsAt: session.ends_at,
+      status: session.status as PracticeSession["status"],
+      meetingProvider: session.meeting_provider,
+      meetingUrl: session.meeting_url,
+      nextSessionAt: session.next_session_at,
     })),
     resources: (resourcesResult.data || []).map((resource, index) => ({
       title: resource.title,
@@ -327,7 +362,73 @@ export function usePracticeData() {
     await refresh();
   }, [refresh]);
 
-  return { ...data, needsPasswordUpdate, refresh, signIn, signInWithOAuth, signOut, signUp, requestPasswordReset, updatePassword };
+  const createSession = useCallback(async (input: { clientId: string; startsAt: string; durationMinutes: number; meetingProvider: "google_meet" | "zoom" | "other" | null }) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !data.organizationId || !data.userId) throw new Error("Sign in to schedule a session.");
+    const startsAt = new Date(input.startsAt);
+    const endsAt = new Date(startsAt.getTime() + input.durationMinutes * 60_000);
+    const { error } = await supabase.from("sessions").insert({ organization_id: data.organizationId, client_id: input.clientId, coach_id: data.userId, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), meeting_provider: input.meetingProvider });
+    if (error) throw error;
+    await refresh();
+  }, [data.organizationId, data.userId, refresh]);
+
+  const createAssignment = useCallback(async (input: { clientId: string; title: string; instructions: string; responseType: "checkbox" | "text"; required: boolean; dueAt: string | null; guardianShare: "client_default" | "share" | "private" }) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !data.organizationId || !data.userId) throw new Error("Sign in to create an assignment.");
+    const { error } = await supabase.from("assignments").insert({ organization_id: data.organizationId, client_id: input.clientId, assigned_by: data.userId, title: input.title, instructions: input.instructions || null, response_type: input.responseType, assignment_type: input.responseType === "text" ? "reflection" : "task", is_required: input.required, due_at: input.dueAt, status: "not_started", visibility: "coach_client", guardian_share_setting: input.guardianShare });
+    if (error) throw error;
+    await refresh();
+  }, [data.organizationId, data.userId, refresh]);
+
+  const completeSession = useCallback(async (input: { sessionId: string | null; clientId: string; attendance: "attended" | "late_cancel" | "no_show"; notes: string; noteVisibility: Visibility; sharedSummary: string; nextSessionAt: string | null; assignment: null | { title: string; instructions: string; responseType: "checkbox" | "text"; required: boolean; dueAt: string | null; guardianShare: "client_default" | "share" | "private" } }) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !data.organizationId || !data.userId) throw new Error("Sign in to complete a session.");
+    let sessionId = input.sessionId;
+    if (!sessionId) {
+      const now = new Date();
+      const { data: created, error } = await supabase.from("sessions").insert({ organization_id: data.organizationId, client_id: input.clientId, coach_id: data.userId, starts_at: now.toISOString(), ends_at: new Date(now.getTime() + 50 * 60_000).toISOString(), status: input.attendance, next_session_at: input.nextSessionAt }).select("id").single();
+      if (error) throw error;
+      sessionId = created.id;
+    } else {
+      const { error } = await supabase.from("sessions").update({ status: input.attendance, next_session_at: input.nextSessionAt }).eq("id", sessionId);
+      if (error) throw error;
+    }
+    const notes: { body: string; visibility: VisibilityLevel; note_type: "coach_note" | "shared_note" }[] = [{ body: input.notes, visibility: uiVisibilityToDatabase(input.noteVisibility), note_type: "coach_note" }];
+    if (input.sharedSummary.trim()) notes.push({ body: input.sharedSummary.trim(), visibility: "coach_client", note_type: "shared_note" });
+    const { error: noteError } = await supabase.from("notes").insert(notes.map((note) => ({ organization_id: data.organizationId!, client_id: input.clientId, session_id: sessionId, author_id: data.userId!, body: note.body, visibility: note.visibility as VisibilityLevel, note_type: note.note_type, ai_generated: false })));
+    if (noteError) throw noteError;
+    if (input.assignment?.title.trim()) await createAssignment({ clientId: input.clientId, ...input.assignment });
+    await refresh();
+  }, [createAssignment, data.organizationId, data.userId, refresh]);
+
+  const updateGuardianAssignmentSharing = useCallback(async (relationshipId: string, enabled: boolean) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { error } = await supabase.from("client_relationships").update({ automatic_assignment_updates: enabled }).eq("id", relationshipId);
+    if (error) throw error;
+    await refresh();
+  }, [refresh]);
+
+  const submitAssignmentResponse = useCallback(async (assignment: Assignment, responseText: string, completed: boolean) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase || !data.organizationId) throw new Error("Sign in to submit an assignment.");
+    const now = new Date().toISOString();
+    const { error: responseError } = await supabase.from("assignment_responses").upsert({ organization_id: data.organizationId, assignment_id: assignment.id, client_id: assignment.clientId, submitted_by: data.userId, response_text: responseText, completed, visibility: "coach_client", submitted_at: now, updated_at: now }, { onConflict: "assignment_id" });
+    if (responseError) throw responseError;
+    const { error } = await supabase.from("assignments").update({ status: completed ? "completed" : "submitted", submitted_at: now, completed_at: completed ? now : null }).eq("id", assignment.id);
+    if (error) throw error;
+    await refresh();
+  }, [data.organizationId, data.userId, refresh]);
+
+  const reviewAssignment = useCallback(async (assignmentId: string) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { error } = await supabase.from("assignments").update({ reviewed_at: new Date().toISOString() }).eq("id", assignmentId);
+    if (error) throw error;
+    await refresh();
+  }, [refresh]);
+
+  return { ...data, needsPasswordUpdate, refresh, signIn, signInWithOAuth, signOut, signUp, requestPasswordReset, updatePassword, createSession, createAssignment, completeSession, updateGuardianAssignmentSharing, submitAssignmentResponse, reviewAssignment };
 }
 
 export function uiVisibilityToDatabase(value: Visibility): VisibilityLevel {

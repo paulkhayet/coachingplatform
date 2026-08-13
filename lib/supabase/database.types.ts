@@ -34,8 +34,8 @@ export type Database = {
         Relationships: [];
       };
       client_relationships: {
-        Row: { id: string; organization_id: string; client_id: string; profile_id: string | null; full_name: string; email: string | null; role: RelationshipRole; relation_label: string | null; permissions: Json; portal_enabled: boolean; created_at: string };
-        Insert: { id?: string; organization_id: string; client_id: string; profile_id?: string | null; full_name: string; email?: string | null; role: RelationshipRole; relation_label?: string | null; permissions?: Json; portal_enabled?: boolean; created_at?: string };
+        Row: { id: string; organization_id: string; client_id: string; profile_id: string | null; full_name: string; email: string | null; role: RelationshipRole; relation_label: string | null; permissions: Json; portal_enabled: boolean; automatic_assignment_updates: boolean; created_at: string };
+        Insert: { id?: string; organization_id: string; client_id: string; profile_id?: string | null; full_name: string; email?: string | null; role: RelationshipRole; relation_label?: string | null; permissions?: Json; portal_enabled?: boolean; automatic_assignment_updates?: boolean; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["client_relationships"]["Insert"]>;
         Relationships: [];
       };
@@ -58,9 +58,15 @@ export type Database = {
         Relationships: [];
       };
       assignments: {
-        Row: { id: string; organization_id: string; client_id: string; assigned_by: string; title: string; instructions: string | null; assignment_type: string; is_required: boolean; due_at: string | null; status: AssignmentStatus; response: Json | null; submitted_at: string | null; completed_at: string | null; visibility: VisibilityLevel; created_at: string };
-        Insert: { id?: string; organization_id: string; client_id: string; assigned_by: string; title: string; instructions?: string | null; assignment_type?: string; is_required?: boolean; due_at?: string | null; status?: AssignmentStatus; response?: Json | null; submitted_at?: string | null; completed_at?: string | null; visibility?: VisibilityLevel; created_at?: string };
+        Row: { id: string; organization_id: string; client_id: string; assigned_by: string; title: string; instructions: string | null; assignment_type: string; response_type: "checkbox" | "text"; is_required: boolean; due_at: string | null; status: AssignmentStatus; response: Json | null; submitted_at: string | null; completed_at: string | null; reviewed_at: string | null; visibility: VisibilityLevel; guardian_share_setting: "client_default" | "share" | "private"; created_at: string };
+        Insert: { id?: string; organization_id: string; client_id: string; assigned_by: string; title: string; instructions?: string | null; assignment_type?: string; response_type?: "checkbox" | "text"; is_required?: boolean; due_at?: string | null; status?: AssignmentStatus; response?: Json | null; submitted_at?: string | null; completed_at?: string | null; reviewed_at?: string | null; visibility?: VisibilityLevel; guardian_share_setting?: "client_default" | "share" | "private"; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["assignments"]["Insert"]>;
+        Relationships: [];
+      };
+      assignment_responses: {
+        Row: { id: string; organization_id: string; assignment_id: string; client_id: string; submitted_by: string | null; response_text: string; completed: boolean; visibility: VisibilityLevel; submitted_at: string | null; updated_at: string };
+        Insert: { id?: string; organization_id: string; assignment_id: string; client_id: string; submitted_by?: string | null; response_text?: string; completed?: boolean; visibility?: VisibilityLevel; submitted_at?: string | null; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["assignment_responses"]["Insert"]>;
         Relationships: [];
       };
       resources: {

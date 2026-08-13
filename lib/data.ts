@@ -25,7 +25,7 @@ export type Client = {
   timezone: string;
   headline: string;
   goals: { title: string; progress: number }[];
-  guardians?: { name: string; relation: string; initials: string; permissions: string[] }[];
+  guardians?: { id: string; name: string; relation: string; initials: string; permissions: string[]; automaticAssignmentUpdates: boolean }[];
   careTeam?: { name: string; role: string; initials: string; permissions: string[] }[];
 };
 
@@ -80,16 +80,20 @@ export const clients: Client[] = [
     ],
     guardians: [
       {
+        id: "guardian-sofia",
         name: "Sofia Rivera",
         relation: "Mother",
         initials: "SR",
         permissions: ["Scheduling", "Billing", "Agreements", "Progress updates"],
+        automaticAssignmentUpdates: true,
       },
       {
+        id: "guardian-daniel",
         name: "Daniel Rivera",
         relation: "Father",
         initials: "DR",
         permissions: ["Scheduling", "Agreements"],
+        automaticAssignmentUpdates: false,
       },
     ],
     careTeam: [
@@ -151,10 +155,12 @@ export const clients: Client[] = [
     ],
     guardians: [
       {
+        id: "guardian-caroline",
         name: "Caroline Thompson",
         relation: "Mother",
         initials: "CT",
         permissions: ["Scheduling", "Billing", "Agreements"],
+        automaticAssignmentUpdates: false,
       },
     ],
   },
@@ -181,40 +187,90 @@ export const clients: Client[] = [
   },
 ];
 
-export const assignments = [
+export type Assignment = {
+  id: string;
+  clientId: string;
+  client: string;
+  title: string;
+  instructions: string;
+  due: string;
+  dueAt: string | null;
+  required: boolean;
+  status: "Not started" | "In progress" | "Submitted" | "Reviewed" | "Complete" | "Overdue";
+  visibility: Visibility;
+  responseType: "checkbox" | "text";
+  responseText: string;
+  guardianShare: "client_default" | "share" | "private";
+  guardianLogisticsShared: boolean;
+};
+
+export const assignments: Assignment[] = [
   {
     id: "a1",
+    clientId: "maya-chen",
     client: "Maya Chen",
     title: "Values-aligned role scorecard",
+    instructions: "Score the three roles you are considering against your five most important values.",
     due: "Today",
+    dueAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
     required: true,
     status: "In progress",
     visibility: "Coach + Client" as Visibility,
+    responseType: "text",
+    responseText: "",
+    guardianShare: "private",
+    guardianLogisticsShared: false,
   },
   {
     id: "a2",
+    clientId: "eli-rivera",
     client: "Eli Rivera",
     title: "Three moments I trusted myself",
+    instructions: "Write a sentence about three moments when you listened to your own judgment this week.",
     due: "Tomorrow",
+    dueAt: new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString(),
     required: false,
     status: "Not started",
     visibility: "Coach + Client" as Visibility,
+    responseType: "text",
+    responseText: "",
+    guardianShare: "client_default",
+    guardianLogisticsShared: true,
   },
   {
     id: "a3",
+    clientId: "jonah-brooks",
     client: "Jonah Brooks",
     title: "Energy audit: one workweek",
+    instructions: "Mark the audit complete after tracking your energy at the end of each workday.",
     due: "Aug 17",
+    dueAt: new Date(Date.now() + 4 * 86_400_000).toISOString(),
     required: true,
     status: "In progress",
     visibility: "Coach + Client" as Visibility,
+    responseType: "checkbox",
+    responseText: "",
+    guardianShare: "private",
+    guardianLogisticsShared: false,
   },
 ];
 
-export const sessions = [
-  { time: "10:00", meridiem: "AM", client: "Maya Chen", type: "Career clarity", duration: "50 min", color: "#d9c7ff", initials: "MC" },
-  { time: "2:30", meridiem: "PM", client: "Eli Rivera", type: "Teen coaching", duration: "50 min", color: "#b9ddd2", initials: "ER" },
-  { time: "4:30", meridiem: "PM", client: "Theo Walker", type: "Discovery call", duration: "30 min", color: "#c8d9f4", initials: "TW" },
+export type PracticeSession = {
+  id: string;
+  clientId: string;
+  client: string;
+  startsAt: string;
+  endsAt: string;
+  status: "scheduled" | "attended" | "late_cancel" | "no_show" | "cancelled";
+  meetingProvider: string | null;
+  meetingUrl: string | null;
+  nextSessionAt: string | null;
+};
+
+export const sessions: PracticeSession[] = [
+  { id: "session-maya", clientId: "maya-chen", client: "Maya Chen", startsAt: "2026-08-13T10:00:00-07:00", endsAt: "2026-08-13T10:50:00-07:00", status: "scheduled", meetingProvider: "google_meet", meetingUrl: "https://meet.google.com/demo-maya", nextSessionAt: null },
+  { id: "session-eli", clientId: "eli-rivera", client: "Eli Rivera", startsAt: "2026-08-13T14:30:00-07:00", endsAt: "2026-08-13T15:20:00-07:00", status: "scheduled", meetingProvider: "google_meet", meetingUrl: "https://meet.google.com/demo-eli", nextSessionAt: null },
+  { id: "session-jonah", clientId: "jonah-brooks", client: "Jonah Brooks", startsAt: "2026-08-14T11:00:00-07:00", endsAt: "2026-08-14T11:50:00-07:00", status: "scheduled", meetingProvider: "google_meet", meetingUrl: "https://meet.google.com/demo-jonah", nextSessionAt: null },
 ];
 
 export const resources = [

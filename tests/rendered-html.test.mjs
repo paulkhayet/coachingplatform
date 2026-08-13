@@ -28,13 +28,14 @@ test("server-renders the Soli coaching workspace", async () => {
 });
 
 test("ships the privacy-aware MVP foundation", async () => {
-  const [app, data, layout, packageJson, migration, authMigration, repository] = await Promise.all([
+  const [app, data, layout, packageJson, migration, authMigration, workflowMigration, repository] = await Promise.all([
     readFile(new URL("../app/coach-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260813000000_initial.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260813010000_auth_bootstrap_and_storage.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260813020000_core_coaching_workflows.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/supabase/practice-data.ts", import.meta.url), "utf8"),
   ]);
 
@@ -50,7 +51,14 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(migration, /check \(not ai_generated or note_type = 'meeting_summary'\)/);
   assert.match(authMigration, /create or replace function public\.handle_new_user/);
   assert.match(authMigration, /soli-resources/);
+  assert.match(workflowMigration, /create table if not exists public\.assignment_responses/);
+  assert.match(workflowMigration, /automatic_assignment_updates/);
+  assert.match(workflowMigration, /guardian_can_read_assignment_logistics/);
+  assert.match(workflowMigration, /Never shares response content/);
   assert.match(repository, /supabase\.from\("clients"\)/);
+  assert.match(repository, /createSession/);
+  assert.match(repository, /completeSession/);
+  assert.match(repository, /submitAssignmentResponse/);
   assert.match(repository, /saveCoachNote/);
   assert.match(repository, /resetPasswordForEmail/);
   assert.match(repository, /signInWithOAuth/);
@@ -62,6 +70,10 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(app, /google-signin-light\.png/);
   assert.match(app, /apple-continue-white\.png/);
   assert.doesNotMatch(app, /oauth-google-mark/);
+  assert.match(app, /ScheduleSessionModal/);
+  assert.match(app, /AssignmentComposer/);
+  assert.match(app, /Guardian assignment updates/);
+  assert.match(app, /The assignment response is never automatically visible to a guardian/);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
 });
