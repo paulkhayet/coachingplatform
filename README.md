@@ -23,6 +23,12 @@ npm run dev
 
 Copy `.env.example` to `.env.local` when connecting external services. Apply the SQL in `supabase/migrations` to a new Supabase project before replacing the seed-data adapter.
 
+## Deployment
+
+The production app is linked to the Vercel project `soli-coaching-practice`. A push to the `main` branch creates a production deployment; other branches create preview deployments. Vercel stores the Supabase public URL and anon key for production, preview, and development environments.
+
+The `dev`, `build`, and `start` scripts use the native Next.js runtime for Vercel. The existing Sites/Vinext target remains available through `dev:sites`, `build:sites`, and `start:sites`.
+
 ## Supabase data integration
 
 1. Create a Supabase project and run the migrations in `supabase/migrations` in filename order.

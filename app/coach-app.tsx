@@ -4337,22 +4337,6 @@ function AuthScreen({
     }
   };
 
-  if (state === "loading" && !needsPasswordUpdate) {
-    return (
-      <main className="auth-shell">
-        <section
-          className="auth-card auth-loading"
-          role="status"
-          aria-live="polite"
-        >
-          <AppLogo />
-          <span className="auth-spinner" aria-hidden="true" />
-          <p>Securing your workspace…</p>
-        </section>
-      </main>
-    );
-  }
-
   const title =
     invitation && view === "sign_up"
       ? `Join ${invitation.clientName}’s portal`
