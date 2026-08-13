@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
+  CircleCheckBig,
   Clock3,
   Command,
   Copy,
@@ -38,6 +39,7 @@ import {
   Paperclip,
   Pause,
   PenLine,
+  Plug,
   Plus,
   Route,
   Search,
@@ -47,6 +49,7 @@ import {
   Sparkles,
   Target,
   TextCursorInput,
+  TriangleAlert,
   UserRound,
   Users,
   Video,
@@ -71,12 +74,19 @@ import {
 import { cn } from "@/lib/utils";
 import {
   usePracticeData,
+  type IntegrationConnection,
   type PortalInvitationPreview,
 } from "@/lib/supabase/practice-data";
 
 type PracticeHook = ReturnType<typeof usePracticeData>;
 
-type View = "Dashboard" | "Clients" | "Calendar" | "Resources" | "Templates";
+type View =
+  | "Dashboard"
+  | "Clients"
+  | "Calendar"
+  | "Resources"
+  | "Templates"
+  | "Integrations";
 type ClientTab = "Overview" | "Sessions" | "Notes" | "Assignments" | "Files";
 
 const navItems: { label: View; icon: typeof Home }[] = [
@@ -85,6 +95,7 @@ const navItems: { label: View; icon: typeof Home }[] = [
   { label: "Calendar", icon: CalendarDays },
   { label: "Resources", icon: FolderOpen },
   { label: "Templates", icon: LayoutTemplate },
+  { label: "Integrations", icon: Plug },
 ];
 
 const visibilityTone: Record<
@@ -235,6 +246,34 @@ export function CoachApp() {
     const timer = window.setTimeout(() => setToast(null), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const integration = url.searchParams.get("integration");
+    const status = url.searchParams.get("integration_status");
+    if (!integration || !status) return;
+    const providerName = integration === "zoom" ? "Zoom" : "Google Workspace";
+    const message =
+      status === "connected"
+        ? `${providerName} connected successfully`
+        : status === "setup_required"
+          ? `${providerName} needs app credentials before coaches can connect`
+          : status === "cancelled"
+            ? `${providerName} connection cancelled`
+            : `Could not connect ${providerName}`;
+    window.setTimeout(() => {
+      setSelectedClient(null);
+      setView("Integrations");
+      setToast(message);
+    }, 0);
+    url.searchParams.delete("integration");
+    url.searchParams.delete("integration_status");
+    window.history.replaceState(
+      {},
+      document.title,
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, []);
 
   if (practice.connectionState === "loading") {
     return (
@@ -396,9 +435,7 @@ export function CoachApp() {
             <span>Notifications</span>
             <i />
           </button>
-          <button
-            onClick={() => setToast("Settings are ready for the next build")}
-          >
+          <button onClick={() => navigate("Integrations")}>
             <Settings size={17} />
             <span>Settings</span>
           </button>
@@ -555,9 +592,17 @@ export function CoachApp() {
               onAssign={practice.assignResourceAsHomework}
               onToast={setToast}
             />
-          ) : (
+          ) : view === "Templates" ? (
             <TemplatesView
               templatesData={practiceTemplates}
+              onToast={setToast}
+            />
+          ) : (
+            <IntegrationsView
+              integrations={practice.integrations}
+              onConnect={practice.connectIntegration}
+              onUpdate={practice.updateIntegrationPreferences}
+              onDisconnect={practice.disconnectIntegration}
               onToast={setToast}
             />
           )}
@@ -2895,6 +2940,445 @@ function TemplatesView({
         })}
       </div>
     </div>
+  );
+}
+
+type IntegrationAvailability = { google: boolean; zoom: boolean };
+
+function IntegrationsView({
+  integrations,
+  onConnect,
+  onUpdate,
+  onDisconnect,
+  onToast,
+}: {
+  integrations: IntegrationConnection[];
+  onConnect: (provider: "google" | "zoom") => void;
+  onUpdate: (input: {
+    connectionId: string;
+    syncEnabled: boolean;
+    autoAddMeeting: boolean;
+    defaultForScheduling: boolean;
+  }) => Promise<void>;
+  onDisconnect: (connectionId: string) => Promise<void>;
+  onToast: (message: string) => void;
+}) {
+  const [availability, setAvailability] =
+    useState<IntegrationAvailability | null>(null);
+  const [pendingDisconnect, setPendingDisconnect] =
+    useState<IntegrationConnection | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/integrations/status")
+      .then((response) => response.json() as Promise<IntegrationAvailability>)
+      .then((result) => active && setAvailability(result))
+      .catch(() => active && setAvailability({ google: false, zoom: false }));
+    return () => {
+      active = false;
+    };
+  }, []);
+  const google = integrations.find(
+    (item) => item.provider === "google" && item.status !== "disconnected",
+  );
+  const zoom = integrations.find(
+    (item) => item.provider === "zoom" && item.status !== "disconnected",
+  );
+  const connectedCount = [google, zoom].filter(Boolean).length;
+  return (
+    <div className="integrations-page page-enter">
+      <div className="page-heading compact-heading">
+        <div>
+          <h1>Integrations</h1>
+          <p>Connect the tools that keep your calendar and sessions moving.</p>
+        </div>
+        <Badge variant={connectedCount ? "success" : "neutral"}>
+          <Plug size={11} /> {connectedCount} connected
+        </Badge>
+      </div>
+
+      <section className="integration-overview panel">
+        <span className="integration-overview-icon">
+          <Zap size={18} />
+        </span>
+        <div>
+          <p className="eyebrow">SCHEDULING AUTOMATION</p>
+          <h2>One booking, everything in sync</h2>
+          <p>
+            Soli can add sessions to your calendar, prevent double-booking, and
+            attach the right meeting link automatically.
+          </p>
+        </div>
+        <div className="integration-flow" aria-label="Integration workflow">
+          <span>Client books</span>
+          <ArrowRight size={12} />
+          <span>Calendar syncs</span>
+          <ArrowRight size={12} />
+          <span>Meeting link added</span>
+        </div>
+      </section>
+
+      <div className="integration-section-heading">
+        <div>
+          <h2>Calendar & video</h2>
+          <p>Your essential scheduling connections.</p>
+        </div>
+      </div>
+      <div className="integration-provider-grid">
+        <IntegrationProviderCard
+          key={`google-${google?.updatedAt || "none"}`}
+          provider="google"
+          connection={google}
+          configured={availability?.google ?? null}
+          onConnect={onConnect}
+          onUpdate={onUpdate}
+          onDisconnect={(connection) => setPendingDisconnect(connection)}
+          onToast={onToast}
+        />
+        <IntegrationProviderCard
+          key={`zoom-${zoom?.updatedAt || "none"}`}
+          provider="zoom"
+          connection={zoom}
+          configured={availability?.zoom ?? null}
+          onConnect={onConnect}
+          onUpdate={onUpdate}
+          onDisconnect={(connection) => setPendingDisconnect(connection)}
+          onToast={onToast}
+        />
+      </div>
+
+      <div className="integration-section-heading secondary">
+        <div>
+          <h2>More ways to connect</h2>
+          <p>Planned for the next stages of the practice workflow.</p>
+        </div>
+      </div>
+      <div className="integration-coming-grid">
+        <ComingIntegration
+          icon={<CircleDollarSign size={18} />}
+          title="Stripe"
+          copy="Packages, subscriptions, and invoices"
+          tone="stripe"
+        />
+        <ComingIntegration
+          icon={<CalendarDays size={18} />}
+          title="Outlook Calendar"
+          copy="Microsoft 365 calendar sync"
+          tone="outlook"
+        />
+        <ComingIntegration
+          icon={<MessageCircle size={18} />}
+          title="Email & SMS"
+          copy="Session reminders and follow-ups"
+          tone="messages"
+        />
+      </div>
+
+      <div className="integration-security-note">
+        <ShieldCheck size={16} />
+        <span>
+          <strong>Private by design</strong>
+          OAuth tokens are encrypted and never exposed in the coach or client
+          interface. You can disconnect an account at any time.
+        </span>
+      </div>
+
+      {pendingDisconnect && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && setPendingDisconnect(null)
+          }
+        >
+          <div className="workflow-modal integration-disconnect-modal">
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">DISCONNECT ACCOUNT</p>
+                <h2>
+                  Disconnect{" "}
+                  {pendingDisconnect.provider === "google"
+                    ? "Google Workspace"
+                    : "Zoom"}
+                  ?
+                </h2>
+              </div>
+              <button
+                onClick={() => setPendingDisconnect(null)}
+                aria-label="Close disconnect confirmation"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="modal-copy">
+              Existing sessions will remain in Soli, but new sessions will no
+              longer sync or receive meeting links from this account.
+            </p>
+            <div className="modal-actions">
+              <Button
+                variant="outline"
+                onClick={() => setPendingDisconnect(null)}
+              >
+                Keep connected
+              </Button>
+              <Button
+                variant="default"
+                disabled={disconnecting}
+                onClick={async () => {
+                  setDisconnecting(true);
+                  try {
+                    await onDisconnect(pendingDisconnect.id);
+                    onToast("Integration disconnected");
+                    setPendingDisconnect(null);
+                  } catch (error) {
+                    onToast(
+                      error instanceof Error
+                        ? error.message
+                        : "Could not disconnect integration",
+                    );
+                  } finally {
+                    setDisconnecting(false);
+                  }
+                }}
+              >
+                {disconnecting ? "Disconnecting…" : "Disconnect"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntegrationProviderCard({
+  provider,
+  connection,
+  configured,
+  onConnect,
+  onUpdate,
+  onDisconnect,
+  onToast,
+}: {
+  provider: "google" | "zoom";
+  connection?: IntegrationConnection;
+  configured: boolean | null;
+  onConnect: (provider: "google" | "zoom") => void;
+  onUpdate: (input: {
+    connectionId: string;
+    syncEnabled: boolean;
+    autoAddMeeting: boolean;
+    defaultForScheduling: boolean;
+  }) => Promise<void>;
+  onDisconnect: (connection: IntegrationConnection) => void;
+  onToast: (message: string) => void;
+}) {
+  const connected = connection?.status === "connected";
+  const [syncEnabled, setSyncEnabled] = useState(
+    connection?.syncEnabled ?? true,
+  );
+  const [autoAddMeeting, setAutoAddMeeting] = useState(
+    connection?.autoAddMeeting ?? true,
+  );
+  const [defaultForScheduling, setDefaultForScheduling] = useState(
+    connection?.defaultForScheduling ?? provider === "zoom",
+  );
+  const [saving, setSaving] = useState(false);
+  const isGoogle = provider === "google";
+  const features = isGoogle
+    ? [
+        "Two-way calendar visibility",
+        "Google Meet links",
+        "Conflict protection",
+      ]
+    : [
+        "Automatic Zoom links",
+        "Personal Meeting ID support",
+        "Session-ready invites",
+      ];
+  return (
+    <article className={cn("integration-card panel", connected && "connected")}>
+      <header>
+        <div className={cn("integration-brand", provider)}>
+          {isGoogle ? (
+            <span className="google-g">G</span>
+          ) : (
+            <span className="zoom-wordmark">zoom</span>
+          )}
+        </div>
+        <div className="integration-card-title">
+          <div>
+            <h3>{isGoogle ? "Google Workspace" : "Zoom"}</h3>
+            <p>{isGoogle ? "Calendar + Google Meet" : "Video meetings"}</p>
+          </div>
+          {connected ? (
+            <Badge variant="success">
+              <CircleCheckBig size={11} /> Connected
+            </Badge>
+          ) : configured === false ? (
+            <Badge variant="warning">
+              <TriangleAlert size={11} /> Setup required
+            </Badge>
+          ) : (
+            <Badge variant="neutral">Not connected</Badge>
+          )}
+        </div>
+      </header>
+      <ul>
+        {features.map((feature) => (
+          <li key={feature}>
+            <Check size={12} /> {feature}
+          </li>
+        ))}
+      </ul>
+      {connected && connection ? (
+        <>
+          <div className="connected-account">
+            <span className="connected-dot" />
+            <span>
+              <strong>{connection.accountEmail || "Connected account"}</strong>
+              <small>
+                Authorized{" "}
+                {new Date(connection.updatedAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </small>
+            </span>
+          </div>
+          <div className="integration-preferences">
+            <IntegrationSwitch
+              label={
+                isGoogle ? "Sync calendar availability" : "Sync Zoom meetings"
+              }
+              copy={
+                isGoogle
+                  ? "Use busy events to prevent double-booking."
+                  : "Keep meeting details attached to Soli sessions."
+              }
+              checked={syncEnabled}
+              onChange={setSyncEnabled}
+            />
+            <IntegrationSwitch
+              label={`Automatically add ${isGoogle ? "Google Meet" : "Zoom"}`}
+              copy="Create a meeting link for new online sessions."
+              checked={autoAddMeeting}
+              onChange={setAutoAddMeeting}
+            />
+            <IntegrationSwitch
+              label="Default meeting provider"
+              copy="Preselect this provider when a session is scheduled."
+              checked={defaultForScheduling}
+              onChange={setDefaultForScheduling}
+            />
+          </div>
+          <footer>
+            <button onClick={() => onDisconnect(connection)}>Disconnect</button>
+            <Button
+              variant="soft"
+              size="sm"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  await onUpdate({
+                    connectionId: connection.id,
+                    syncEnabled,
+                    autoAddMeeting,
+                    defaultForScheduling,
+                  });
+                  onToast("Integration preferences saved");
+                } catch (error) {
+                  onToast(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not save integration preferences",
+                  );
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              {saving ? "Saving…" : "Save preferences"}
+            </Button>
+          </footer>
+        </>
+      ) : (
+        <footer className="integration-connect-footer">
+          <span>
+            {configured === false
+              ? "Platform credentials need to be added once before coaches can connect."
+              : "You’ll choose an account and approve only the permissions Soli needs."}
+          </span>
+          <Button
+            variant="outline"
+            onClick={() => onConnect(provider)}
+            disabled={configured === null}
+          >
+            {configured === null
+              ? "Checking…"
+              : configured === false
+                ? "View setup status"
+                : `Connect ${isGoogle ? "Google" : "Zoom"}`}
+            <ArrowRight size={13} />
+          </Button>
+        </footer>
+      )}
+    </article>
+  );
+}
+
+function IntegrationSwitch({
+  label,
+  copy,
+  checked,
+  onChange,
+}: {
+  label: string;
+  copy: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="integration-switch-row"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+    >
+      <span>
+        <strong>{label}</strong>
+        <small>{copy}</small>
+      </span>
+      <i className={cn("integration-switch", checked && "on")}>
+        <i />
+      </i>
+    </button>
+  );
+}
+
+function ComingIntegration({
+  icon,
+  title,
+  copy,
+  tone,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  copy: string;
+  tone: string;
+}) {
+  return (
+    <article className="coming-integration panel">
+      <span className={cn("coming-integration-icon", tone)}>{icon}</span>
+      <span>
+        <strong>{title}</strong>
+        <small>{copy}</small>
+      </span>
+      <Badge variant="neutral">Coming next</Badge>
+    </article>
   );
 }
 

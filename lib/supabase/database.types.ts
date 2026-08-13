@@ -354,6 +354,64 @@ export type Database = {
         >;
         Relationships: [];
       };
+      integration_connections: {
+        Row: {
+          id: string;
+          organization_id: string;
+          profile_id: string;
+          provider: "google" | "zoom";
+          status: "connected" | "needs_attention" | "disconnected";
+          account_email: string | null;
+          external_account_id: string | null;
+          scopes: string[];
+          sync_enabled: boolean;
+          auto_add_meeting: boolean;
+          default_for_scheduling: boolean;
+          token_expires_at: string | null;
+          last_synced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          profile_id: string;
+          provider: "google" | "zoom";
+          status?: "connected" | "needs_attention" | "disconnected";
+          account_email?: string | null;
+          external_account_id?: string | null;
+          scopes?: string[];
+          sync_enabled?: boolean;
+          auto_add_meeting?: boolean;
+          default_for_scheduling?: boolean;
+          token_expires_at?: string | null;
+          last_synced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["integration_connections"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      integration_credentials: {
+        Row: {
+          connection_id: string;
+          access_token_encrypted: string;
+          refresh_token_encrypted: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          connection_id: string;
+          access_token_encrypted: string;
+          refresh_token_encrypted?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["integration_credentials"]["Insert"]
+        >;
+        Relationships: [];
+      };
       resources: {
         Row: {
           id: string;
@@ -556,6 +614,32 @@ export type Database = {
           is_completed: boolean;
         };
         Returns: string;
+      };
+      save_integration_oauth_connection: {
+        Args: {
+          target_organization: string;
+          target_provider: string;
+          target_account_email: string;
+          target_external_account_id: string;
+          target_scopes: string[];
+          encrypted_access_token: string;
+          encrypted_refresh_token: string;
+          target_token_expires_at: string | null;
+        };
+        Returns: string;
+      };
+      update_integration_preferences: {
+        Args: {
+          target_connection: string;
+          target_sync_enabled: boolean;
+          target_auto_add_meeting: boolean;
+          target_default_for_scheduling: boolean;
+        };
+        Returns: undefined;
+      };
+      disconnect_integration: {
+        Args: { target_connection: string };
+        Returns: undefined;
       };
     };
     Enums: {

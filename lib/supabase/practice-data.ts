@@ -56,6 +56,19 @@ export type PortalInvitationPreview = {
   acceptedAt: string | null;
 };
 
+export type IntegrationConnection = {
+  id: string;
+  provider: "google" | "zoom";
+  status: "connected" | "needs_attention" | "disconnected";
+  accountEmail: string | null;
+  scopes: string[];
+  syncEnabled: boolean;
+  autoAddMeeting: boolean;
+  defaultForScheduling: boolean;
+  lastSyncedAt: string | null;
+  updatedAt: string;
+};
+
 export type PracticeData = {
   clients: Client[];
   assignments: Assignment[];
@@ -64,6 +77,7 @@ export type PracticeData = {
   invitations: PortalInvitation[];
   resources: Resource[];
   templates: Template[];
+  integrations: IntegrationConnection[];
   mode: DataMode;
   connectionState: ConnectionState;
   organizationId: string | null;
@@ -85,6 +99,7 @@ const initialData: PracticeData = {
   invitations: [],
   resources: demoResources,
   templates: demoTemplates,
+  integrations: [],
   mode: "demo",
   connectionState: isSupabaseConfigured() ? "loading" : "unconfigured",
   organizationId: null,
@@ -380,6 +395,7 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
       invitations: [],
       resources: [],
       templates: [],
+      integrations: [],
       mode: "supabase",
       connectionState: "connected",
       organizationId: null,
@@ -551,6 +567,7 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
       createdAt: resource.created_at,
     })),
     templates: [],
+    integrations: [],
     mode: "supabase",
     connectionState: "connected",
     organizationId,
@@ -596,6 +613,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
     resourceAssignmentsResult,
     templatesResult,
     invitationsResult,
+    integrationsResult,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -658,6 +676,12 @@ async function loadForUser(user: User): Promise<PracticeData> {
       .select("*")
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("integration_connections")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("profile_id", user.id)
+      .order("provider"),
   ]);
 
   const firstError = [
@@ -674,6 +698,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
     resourceAssignmentsResult,
     templatesResult,
     invitationsResult,
+    integrationsResult,
   ].find((result) => result.error)?.error;
   if (firstError) throw firstError;
 
@@ -813,6 +838,18 @@ async function loadForUser(user: User): Promise<PracticeData> {
         icon: "sparkles",
       };
     }),
+    integrations: (integrationsResult.data || []).map((integration) => ({
+      id: integration.id,
+      provider: integration.provider,
+      status: integration.status,
+      accountEmail: integration.account_email,
+      scopes: integration.scopes,
+      syncEnabled: integration.sync_enabled,
+      autoAddMeeting: integration.auto_add_meeting,
+      defaultForScheduling: integration.default_for_scheduling,
+      lastSyncedAt: integration.last_synced_at,
+      updatedAt: integration.updated_at,
+    })),
     mode: "supabase",
     connectionState: "connected",
     organizationId,
@@ -1213,6 +1250,44 @@ export function usePracticeData() {
     return signed.signedUrl;
   }, []);
 
+  const connectIntegration = useCallback((provider: "google" | "zoom") => {
+    window.location.assign(`/api/integrations/${provider}/start`);
+  }, []);
+
+  const updateIntegrationPreferences = useCallback(
+    async (input: {
+      connectionId: string;
+      syncEnabled: boolean;
+      autoAddMeeting: boolean;
+      defaultForScheduling: boolean;
+    }) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { error } = await supabase.rpc("update_integration_preferences", {
+        target_connection: input.connectionId,
+        target_sync_enabled: input.syncEnabled,
+        target_auto_add_meeting: input.autoAddMeeting,
+        target_default_for_scheduling: input.defaultForScheduling,
+      });
+      if (error) throw error;
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const disconnectIntegration = useCallback(
+    async (connectionId: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { error } = await supabase.rpc("disconnect_integration", {
+        target_connection: connectionId,
+      });
+      if (error) throw error;
+      await refresh();
+    },
+    [refresh],
+  );
+
   const completeSession = useCallback(
     async (input: {
       sessionId: string | null;
@@ -1485,6 +1560,9 @@ export function usePracticeData() {
     assignResourceAsHomework,
     uploadAssignmentFile,
     getAssignmentFileUrl,
+    connectIntegration,
+    updateIntegrationPreferences,
+    disconnectIntegration,
     completeSession,
     updateGuardianAssignmentSharing,
     submitAssignmentResponse,

@@ -46,6 +46,8 @@ test("ships the privacy-aware MVP foundation", async () => {
     workflowMigration,
     portalMigration,
     storageMigration,
+    integrationMigration,
+    oauth,
     repository,
   ] = await Promise.all([
     readFile(new URL("../app/coach-app.tsx", import.meta.url), "utf8"),
@@ -87,6 +89,14 @@ test("ships the privacy-aware MVP foundation", async () => {
       ),
       "utf8",
     ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260813050000_practice_integrations.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(new URL("../lib/integrations/oauth.ts", import.meta.url), "utf8"),
     readFile(
       new URL("../lib/supabase/practice-data.ts", import.meta.url),
       "utf8",
@@ -133,6 +143,21 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(storageMigration, /clients read assigned resource files/);
   assert.match(storageMigration, /clients upload homework files/);
   assert.match(storageMigration, /Guardian access is intentionally excluded/);
+  assert.match(
+    integrationMigration,
+    /create table if not exists public\.integration_connections/,
+  );
+  assert.match(
+    integrationMigration,
+    /create table if not exists public\.integration_credentials/,
+  );
+  assert.match(integrationMigration, /save_integration_oauth_connection/);
+  assert.match(integrationMigration, /disconnect_integration/);
+  assert.match(integrationMigration, /No direct authenticated-user policy/);
+  assert.match(oauth, /AES-GCM/);
+  assert.match(oauth, /https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/);
+  assert.match(oauth, /https:\/\/zoom\.us\/oauth\/authorize/);
+  assert.match(oauth, /https:\/\/www\.googleapis\.com\/auth\/calendar\.events/);
   assert.match(repository, /supabase\s*\.from\("clients"\)/);
   assert.match(repository, /createSession/);
   assert.match(repository, /completeSession/);
@@ -140,6 +165,9 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(repository, /uploadResource/);
   assert.match(repository, /assignResourceAsHomework/);
   assert.match(repository, /uploadAssignmentFile/);
+  assert.match(repository, /connectIntegration/);
+  assert.match(repository, /updateIntegrationPreferences/);
+  assert.match(repository, /disconnectIntegration/);
   assert.match(repository, /saveCoachNote/);
   assert.match(repository, /resetPasswordForEmail/);
   assert.match(repository, /signInWithOAuth/);
@@ -163,6 +191,9 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(app, /Portal access for/);
   assert.match(app, /Create portal account/);
   assert.match(app, /Zoom is the primary meeting provider/);
+  assert.match(app, /Google Workspace/);
+  assert.match(app, /Calendar \+ Google Meet/);
+  assert.match(app, /Default meeting provider/);
 
   await assert.rejects(
     access(new URL("../app/_sites-preview", import.meta.url)),

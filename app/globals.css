@@ -2724,6 +2724,363 @@ kbd {
   font-size: 7px;
 }
 
+.integration-overview {
+  display: grid;
+  grid-template-columns: auto minmax(240px, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 21px;
+  padding: 17px;
+  border-color: #dedbfa;
+  background: linear-gradient(105deg, #f7f6ff, #fff 66%);
+}
+.integration-overview-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #eae7ff;
+  color: #5b53db;
+}
+.integration-overview h2 {
+  margin: 3px 0 4px;
+  color: #3f3e44;
+  font-size: 13px;
+  letter-spacing: -0.025em;
+}
+.integration-overview p:not(.eyebrow) {
+  max-width: 500px;
+  margin: 0;
+  color: #85838c;
+  font-size: 8.5px;
+  line-height: 1.55;
+}
+.integration-flow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #98969e;
+}
+.integration-flow span {
+  padding: 7px 8px;
+  border: 1px solid #e5e2ee;
+  border-radius: 8px;
+  background: white;
+  color: #66636f;
+  font-size: 7px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.integration-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin: 0 0 10px;
+}
+.integration-section-heading.secondary {
+  margin-top: 22px;
+}
+.integration-section-heading h2,
+.integration-section-heading p {
+  margin: 0;
+}
+.integration-section-heading h2 {
+  color: #47464c;
+  font-size: 12px;
+  letter-spacing: -0.02em;
+}
+.integration-section-heading p {
+  margin-top: 3px;
+  color: #96949c;
+  font-size: 8px;
+}
+.integration-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.integration-card {
+  overflow: hidden;
+  padding: 0;
+}
+.integration-card.connected {
+  border-color: #d8d5e8;
+}
+.integration-card > header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 15px 0;
+}
+.integration-brand {
+  display: inline-flex;
+  width: 43px;
+  height: 43px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ebe8e3;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(43, 41, 52, 0.05);
+}
+.integration-brand.zoom {
+  width: 58px;
+  border-color: #dce7ff;
+  background: #f5f8ff;
+}
+.google-g {
+  background: conic-gradient(
+    from -45deg,
+    #4285f4 0 25%,
+    #34a853 0 40%,
+    #fbbc05 0 65%,
+    #ea4335 0 82%,
+    #4285f4 0
+  );
+  background-clip: text;
+  color: transparent;
+  font-family: Arial, sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+}
+.zoom-wordmark {
+  color: #2d8cff;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.06em;
+}
+.integration-card-title {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.integration-card-title h3,
+.integration-card-title p {
+  margin: 0;
+}
+.integration-card-title h3 {
+  color: #444349;
+  font-size: 11px;
+  letter-spacing: -0.02em;
+}
+.integration-card-title p {
+  margin-top: 3px;
+  color: #929097;
+  font-size: 7.5px;
+}
+.integration-card > ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 15px;
+  padding: 0;
+  list-style: none;
+}
+.integration-card > ul li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #79777f;
+  font-size: 7.5px;
+}
+.integration-card > ul svg {
+  color: #5b8b67;
+}
+.connected-account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 15px 11px;
+  padding: 9px 10px;
+  border: 1px solid #e4e1dc;
+  border-radius: 9px;
+  background: #faf9f7;
+}
+.connected-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 2px solid #d8eddd;
+  border-radius: 50%;
+  background: #4f9460;
+  box-sizing: content-box;
+}
+.connected-account strong,
+.connected-account small {
+  display: block;
+}
+.connected-account strong {
+  color: #535157;
+  font-size: 8px;
+}
+.connected-account small {
+  margin-top: 3px;
+  color: #9a989f;
+  font-size: 7px;
+}
+.integration-preferences {
+  border-top: 1px solid #ece9e4;
+  border-bottom: 1px solid #ece9e4;
+}
+.integration-switch-row {
+  display: grid;
+  width: 100%;
+  min-height: 50px;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 15px;
+  border: 0;
+  border-bottom: 1px solid #f0eee9;
+  background: white;
+  text-align: left;
+}
+.integration-switch-row:last-child {
+  border-bottom: 0;
+}
+.integration-switch-row:hover {
+  background: #fcfbf9;
+}
+.integration-switch-row strong,
+.integration-switch-row small {
+  display: block;
+}
+.integration-switch-row strong {
+  color: #56545a;
+  font-size: 8px;
+}
+.integration-switch-row small {
+  margin-top: 3px;
+  color: #9a989f;
+  font-size: 7px;
+  line-height: 1.35;
+}
+.integration-switch {
+  position: relative;
+  display: inline-block;
+  width: 27px;
+  height: 16px;
+  border-radius: 12px;
+  background: #d8d6d2;
+  transition: background 0.16s ease;
+}
+.integration-switch > i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(35, 34, 38, 0.2);
+  transition: transform 0.16s ease;
+}
+.integration-switch.on {
+  background: #655de3;
+}
+.integration-switch.on > i {
+  transform: translateX(11px);
+}
+.integration-card > footer {
+  display: flex;
+  min-height: 55px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 15px;
+}
+.integration-card > footer > button:not(.h-8):not(.h-9) {
+  border: 0;
+  background: transparent;
+  color: #a55b66;
+  font-size: 7.5px;
+}
+.integration-connect-footer {
+  border-top: 1px solid #ece9e4;
+  background: #fcfbf9;
+}
+.integration-connect-footer > span {
+  max-width: 240px;
+  color: #96949b;
+  font-size: 7px;
+  line-height: 1.4;
+}
+.integration-coming-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.coming-integration {
+  display: grid;
+  min-height: 72px;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 11px;
+}
+.coming-integration-icon {
+  display: inline-flex;
+  width: 35px;
+  height: 35px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+.coming-integration-icon.stripe {
+  background: #eeecff;
+  color: #635bff;
+}
+.coming-integration-icon.outlook {
+  background: #eaf3ff;
+  color: #3178c6;
+}
+.coming-integration-icon.messages {
+  background: #eaf5ed;
+  color: #4f8b5f;
+}
+.coming-integration strong,
+.coming-integration small {
+  display: block;
+}
+.coming-integration strong {
+  color: #4e4d52;
+  font-size: 8.5px;
+}
+.coming-integration small {
+  margin-top: 3px;
+  color: #99979e;
+  font-size: 7px;
+}
+.integration-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border: 1px solid #e1dfda;
+  border-radius: 10px;
+  background: #faf9f7;
+  color: #85838b;
+  font-size: 7.5px;
+  line-height: 1.5;
+}
+.integration-security-note svg {
+  flex: 0 0 auto;
+  color: #5c855f;
+}
+.integration-security-note strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #56545a;
+}
+
 .template-starter {
   display: flex;
   align-items: center;
@@ -5423,6 +5780,16 @@ kbd {
 }
 
 @media (max-width: 900px) {
+  .integration-overview {
+    grid-template-columns: auto 1fr;
+  }
+  .integration-flow {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+  .integration-coming-grid {
+    grid-template-columns: 1fr;
+  }
   .drive-shell {
     grid-template-columns: 132px minmax(0, 1fr);
   }
@@ -5440,6 +5807,34 @@ kbd {
 }
 
 @media (max-width: 680px) {
+  .integration-provider-grid {
+    grid-template-columns: 1fr;
+  }
+  .integration-overview {
+    align-items: flex-start;
+  }
+  .integration-flow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .integration-flow svg {
+    align-self: center;
+    transform: rotate(90deg);
+  }
+  .integration-flow span {
+    text-align: center;
+  }
+  .integration-card-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .integration-card > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .integration-connect-footer > span {
+    max-width: none;
+  }
   .drive-shell {
     display: block;
     min-height: 0;
