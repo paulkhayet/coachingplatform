@@ -312,7 +312,7 @@ function mapClient(
   const careTeam = related.filter(
     (relationship) => relationship.role === "third_party",
   );
-  const palette = ["#d9c7ff", "#b9ddd2", "#f3c9ae", "#f0d8a9", "#c8d9f4"];
+  const palette = ["#dedbd5", "#b9ddd2", "#f3c9ae", "#f0d8a9", "#c8d9f4"];
 
   return {
     id: row.id,

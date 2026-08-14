@@ -10,7 +10,7 @@ const badgeVariants = cva(
         neutral: "bg-[#f0efec] text-[#66666c]",
         success: "bg-[#e8f6ec] text-[#2c7a46]",
         warning: "bg-[#fff3dc] text-[#986821]",
-        purple: "bg-[#eeecff] text-[#544bd6]",
+        purple: "bg-[#eeece8] text-[#28282b]",
         blue: "bg-[#eaf2ff] text-[#386bb1]",
         rose: "bg-[#ffebee] text-[#ae4e5c]",
         dark: "bg-[#292a2d] text-white",
