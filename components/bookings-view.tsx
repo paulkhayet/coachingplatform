@@ -35,7 +35,7 @@ const DAYS = [
   { value: 0, short: "S", label: "Sunday" },
 ];
 
-const COLORS = ["#28282b", "#347a5f", "#2563a8", "#a65f44", "#a24f72"];
+const COLORS = ["#2f6fed", "#347a5f", "#2563a8", "#a65f44", "#a24f72"];
 
 function makeSlug(value: string) {
   return value

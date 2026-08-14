@@ -54,7 +54,7 @@ export const clients: Client[] = [
     phone: "+1 (415) 555-0148",
     status: "Active",
     type: "Adult",
-    color: "#dedbd5",
+    color: "#e8f0fe",
     nextSession: "Today",
     nextSessionTime: "10:00 AM",
     cadence: "Weekly · Thursdays",
