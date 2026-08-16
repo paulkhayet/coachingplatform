@@ -57,6 +57,41 @@ textarea:focus-visible {
 .booking-heading > div:first-child {
   max-width: 620px;
 }
+.practice-url-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--paper);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 9.5px;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.practice-url-chip:hover {
+  border-color: var(--purple);
+  color: var(--purple);
+}
+.practice-url-chip svg:first-child {
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+.practice-url-chip:hover svg {
+  color: var(--purple);
+}
+.practice-url-chip span {
+  font-weight: 550;
+}
+.practice-url-chip svg:last-child {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
 .booking-link-strip {
   display: flex;
   align-items: center;
@@ -4318,13 +4353,23 @@ kbd {
   flex-direction: column;
   padding: 16px;
   color: inherit;
-  text-align: left;
   transition: 0.18s ease;
 }
 .booking-type-card:hover {
   transform: translateY(-2px);
   border-color: #d4d0df;
   box-shadow: 0 9px 22px rgba(39, 35, 62, 0.055);
+}
+.booking-type-card-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 .booking-type-card-top {
   display: flex;
@@ -4383,6 +4428,8 @@ kbd {
 }
 .booking-type-link {
   overflow: hidden;
+  flex: 1 1 auto;
+  min-width: 0;
   color: #6c6c71;
   font-size: 9px;
   font-weight: 550;
@@ -4393,6 +4440,23 @@ kbd {
   flex: 0 0 auto;
   color: #a0a0a5;
   font-size: 9px;
+}
+.booking-type-copy {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  color: var(--faint);
+  cursor: pointer;
+}
+.booking-type-copy:hover {
+  border-color: var(--purple);
+  color: var(--purple);
 }
 .mini-avatars {
   display: flex;

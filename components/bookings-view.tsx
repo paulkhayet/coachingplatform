@@ -339,6 +339,20 @@ function BookingsOverview({
             Give every kind of conversation its own page and link, and see who
             has booked time with you.
           </p>
+          <button
+            className="practice-url-chip"
+            onClick={async () => {
+              await navigator.clipboard.writeText(
+                `${window.location.origin}/${activeSlug}`,
+              );
+              onToast("Practice URL copied");
+            }}
+            title="Copy your practice URL"
+          >
+            <Link2 size={11} />
+            <span>{practiceUrl}</span>
+            <Copy size={10} />
+          </button>
         </div>
         <div className="heading-actions">
           <Button onClick={onCreate}>
@@ -364,58 +378,37 @@ function BookingsOverview({
 
       {tab === "types" ? (
         <>
-          <div className="booking-link-strip">
-            <span className="booking-link-icon">
-              <Link2 size={17} />
-            </span>
-            <div className="booking-link-copy">
-              <small>Your practice URL</small>
-              <strong>{practiceUrl}</strong>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                await navigator.clipboard.writeText(
-                  `${window.location.origin}/${activeSlug}`,
-                );
-                onToast("Practice URL copied");
-              }}
-            >
-              <Copy size={13} /> Copy
-            </Button>
-          </div>
-
           {bookingPages.length ? (
             <div className="booking-type-grid">
               {bookingPages.map((page) => (
-                <button
-                  key={page.id}
-                  type="button"
-                  className="panel booking-type-card"
-                  onClick={() => onEdit(page.id)}
-                >
-                  <div className="booking-type-card-top">
-                    <span
-                      className="booking-type-avatar"
-                      style={{ background: page.accentColor }}
-                    >
-                      {page.brandName.charAt(0).toUpperCase() || "?"}
-                    </span>
-                    <Badge variant={page.active ? "success" : "neutral"}>
-                      {page.active ? "Live" : "Paused"}
-                    </Badge>
-                  </div>
-                  <h3>{page.title || "Untitled booking type"}</h3>
-                  <p className="booking-type-brand">{page.brandName}</p>
-                  <div className="booking-type-meta">
-                    <span>
-                      <Clock3 size={12} /> {page.durationMinutes} min
-                    </span>
-                    <span>
-                      <MapPin size={12} /> {locationLabel(page.locationType)}
-                    </span>
-                  </div>
+                <div key={page.id} className="panel booking-type-card">
+                  <button
+                    type="button"
+                    className="booking-type-card-open"
+                    onClick={() => onEdit(page.id)}
+                  >
+                    <div className="booking-type-card-top">
+                      <span
+                        className="booking-type-avatar"
+                        style={{ background: page.accentColor }}
+                      >
+                        {page.brandName.charAt(0).toUpperCase() || "?"}
+                      </span>
+                      <Badge variant={page.active ? "success" : "neutral"}>
+                        {page.active ? "Live" : "Paused"}
+                      </Badge>
+                    </div>
+                    <h3>{page.title || "Untitled booking type"}</h3>
+                    <p className="booking-type-brand">{page.brandName}</p>
+                    <div className="booking-type-meta">
+                      <span>
+                        <Clock3 size={12} /> {page.durationMinutes} min
+                      </span>
+                      <span>
+                        <MapPin size={12} /> {locationLabel(page.locationType)}
+                      </span>
+                    </div>
+                  </button>
                   <div className="booking-type-footer">
                     <span className="booking-type-link">
                       /{activeSlug}/{page.slug}
@@ -423,8 +416,22 @@ function BookingsOverview({
                     <span className="booking-type-count">
                       {upcomingCountByPage.get(page.id) || 0} upcoming
                     </span>
+                    <button
+                      type="button"
+                      className="booking-type-copy"
+                      aria-label={`Copy link for ${page.title || "booking type"}`}
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        await navigator.clipboard.writeText(
+                          `${window.location.origin}/${activeSlug}/${page.slug}`,
+                        );
+                        onToast("Booking link copied");
+                      }}
+                    >
+                      <Copy size={12} />
+                    </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           ) : (
