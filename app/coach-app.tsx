@@ -599,9 +599,12 @@ export function CoachApp() {
           ) : view === "Bookings" ? (
             <BookingsView
               userName={practice.userName || "Your practice"}
-              bookingPage={practice.bookingPage}
+              organizationSlug={practice.organizationSlug}
+              bookingPages={practice.bookingPages}
               requests={practice.bookingRequests}
               onSave={practice.saveBookingPage}
+              onDelete={practice.deleteBookingPage}
+              onUpdateSlug={practice.updatePracticeSlug}
               onCancelRequest={practice.cancelBookingRequest}
               onToast={setToast}
             />

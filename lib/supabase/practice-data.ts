@@ -94,6 +94,7 @@ export type BookingPage = {
 
 export type BookingRequest = {
   id: string;
+  bookingPageId: string;
   guestName: string;
   guestEmail: string;
   guestPhone: string | null;
@@ -114,11 +115,12 @@ export type PracticeData = {
   resources: Resource[];
   templates: Template[];
   integrations: IntegrationConnection[];
-  bookingPage: BookingPage | null;
+  bookingPages: BookingPage[];
   bookingRequests: BookingRequest[];
   mode: DataMode;
   connectionState: ConnectionState;
   organizationId: string | null;
+  organizationSlug: string | null;
   userId: string | null;
   userEmail: string | null;
   userName: string | null;
@@ -138,11 +140,12 @@ const initialData: PracticeData = {
   resources: demoResources,
   templates: demoTemplates,
   integrations: [],
-  bookingPage: null,
+  bookingPages: [],
   bookingRequests: [],
   mode: "demo",
   connectionState: isSupabaseConfigured() ? "loading" : "unconfigured",
   organizationId: null,
+  organizationSlug: "your-practice",
   userId: null,
   userEmail: null,
   userName: null,
@@ -628,11 +631,12 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
     })),
     templates: [],
     integrations: [],
-    bookingPage: null,
+    bookingPages: [],
     bookingRequests: [],
     mode: "supabase",
     connectionState: "connected",
     organizationId,
+    organizationSlug: null,
     userId: user.id,
     userEmail: user.email || null,
     userName,
@@ -663,6 +667,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
   const organizationId = membership.organization_id;
   const [
     profileResult,
+    organizationResult,
     clientsResult,
     goalsResult,
     relationshipsResult,
@@ -676,7 +681,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
     templatesResult,
     invitationsResult,
     integrationsResult,
-    bookingPageResult,
+    bookingPagesResult,
     bookingQuestionsResult,
     bookingRequestsResult,
   ] = await Promise.all([
@@ -684,6 +689,11 @@ async function loadForUser(user: User): Promise<PracticeData> {
       .from("profiles")
       .select("full_name")
       .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("organizations")
+      .select("slug")
+      .eq("id", organizationId)
       .maybeSingle(),
     supabase
       .from("clients")
@@ -752,7 +762,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
       .select("*")
       .eq("organization_id", organizationId)
       .eq("coach_id", user.id)
-      .maybeSingle(),
+      .order("sort_order"),
     supabase
       .from("booking_questions")
       .select("*")
@@ -767,6 +777,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
 
   const firstError = [
     profileResult,
+    organizationResult,
     clientsResult,
     goalsResult,
     relationshipsResult,
@@ -780,7 +791,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
     templatesResult,
     invitationsResult,
     integrationsResult,
-    bookingPageResult,
+    bookingPagesResult,
     bookingQuestionsResult,
     bookingRequestsResult,
   ].find((result) => result.error)?.error;
@@ -934,37 +945,31 @@ async function loadForUser(user: User): Promise<PracticeData> {
       lastSyncedAt: integration.last_synced_at,
       updatedAt: integration.updated_at,
     })),
-    bookingPage: bookingPageResult.data
-      ? {
-          id: bookingPageResult.data.id,
-          slug: bookingPageResult.data.slug,
-          brandName: bookingPageResult.data.brand_name,
-          title: bookingPageResult.data.title,
-          description: bookingPageResult.data.description,
-          accentColor: bookingPageResult.data.accent_color,
-          durationMinutes: bookingPageResult.data.duration_minutes,
-          locationType: bookingPageResult.data.location_type,
-          availability: bookingAvailability(
-            bookingPageResult.data.availability,
-          ),
-          minimumNoticeHours: bookingPageResult.data.minimum_notice_hours,
-          active: bookingPageResult.data.is_active,
-          questions: (bookingQuestionsResult.data || [])
-            .filter(
-              (question) =>
-                question.booking_page_id === bookingPageResult.data?.id,
-            )
-            .map((question) => ({
-              id: question.id,
-              label: question.label,
-              type: question.question_type,
-              required: question.is_required,
-              options: stringOptions(question.options),
-            })),
-        }
-      : null,
+    bookingPages: (bookingPagesResult.data || []).map((page) => ({
+      id: page.id,
+      slug: page.slug,
+      brandName: page.brand_name,
+      title: page.title,
+      description: page.description,
+      accentColor: page.accent_color,
+      durationMinutes: page.duration_minutes,
+      locationType: page.location_type,
+      availability: bookingAvailability(page.availability),
+      minimumNoticeHours: page.minimum_notice_hours,
+      active: page.is_active,
+      questions: (bookingQuestionsResult.data || [])
+        .filter((question) => question.booking_page_id === page.id)
+        .map((question) => ({
+          id: question.id,
+          label: question.label,
+          type: question.question_type,
+          required: question.is_required,
+          options: stringOptions(question.options),
+        })),
+    })),
     bookingRequests: (bookingRequestsResult.data || []).map((request) => ({
       id: request.id,
+      bookingPageId: request.booking_page_id,
       guestName: request.guest_name,
       guestEmail: request.guest_email,
       guestPhone: request.guest_phone,
@@ -978,6 +983,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
     mode: "supabase",
     connectionState: "connected",
     organizationId,
+    organizationSlug: organizationResult.data?.slug || null,
     userId: user.id,
     userEmail: user.email || null,
     userName: coachName,
@@ -1667,12 +1673,13 @@ export function usePracticeData() {
   );
 
   const saveBookingPage = useCallback(
-    async (page: Omit<BookingPage, "id">) => {
+    async (page: Omit<BookingPage, "id">, pageId?: string) => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase || !data.organizationId)
         throw new Error("Sign in to publish a booking page.");
       const { error } = await supabase.rpc("save_booking_page", {
         target_organization: data.organizationId,
+        target_page_id: pageId || null,
         target_slug: page.slug,
         target_brand_name: page.brandName,
         target_title: page.title,
@@ -1689,6 +1696,35 @@ export function usePracticeData() {
           required: question.required,
           options: question.options,
         })),
+      });
+      if (error) throw error;
+      await refresh();
+    },
+    [data.organizationId, refresh],
+  );
+
+  const deleteBookingPage = useCallback(
+    async (pageId: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { error } = await supabase
+        .from("booking_pages")
+        .delete()
+        .eq("id", pageId);
+      if (error) throw error;
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const updatePracticeSlug = useCallback(
+    async (slug: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.organizationId)
+        throw new Error("Sign in to update your practice URL.");
+      const { error } = await supabase.rpc("update_organization_slug", {
+        target_organization: data.organizationId,
+        target_slug: slug,
       });
       if (error) throw error;
       await refresh();
@@ -1740,6 +1776,8 @@ export function usePracticeData() {
     acceptPortalInvitation,
     requestScheduleChange,
     saveBookingPage,
+    deleteBookingPage,
+    updatePracticeSlug,
     cancelBookingRequest,
   };
 }

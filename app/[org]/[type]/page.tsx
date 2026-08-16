@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 export default async function BookingRoute({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ org: string; type: string }>;
 }) {
-  const { slug } = await params;
-  return <PublicBookingPage slug={slug} />;
+  const { org, type } = await params;
+  return <PublicBookingPage orgSlug={org} typeSlug={type} />;
 }

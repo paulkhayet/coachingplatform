@@ -4053,6 +4053,93 @@ kbd {
   flex: 1;
   margin-left: 7px;
 }
+.booking-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.booking-type-card {
+  display: flex;
+  min-height: 175px;
+  flex-direction: column;
+  padding: 16px;
+  color: inherit;
+  text-align: left;
+  transition: 0.18s ease;
+}
+.booking-type-card:hover {
+  transform: translateY(-2px);
+  border-color: #d4d0df;
+  box-shadow: 0 9px 22px rgba(39, 35, 62, 0.055);
+}
+.booking-type-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.booking-type-avatar {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.booking-type-card h3 {
+  margin: 12px 0 2px;
+  overflow: hidden;
+  color: #29292d;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.booking-type-brand {
+  margin: 0;
+  overflow: hidden;
+  color: #9b9ba0;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.booking-type-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 11px;
+  color: #77777d;
+  font-size: 9.5px;
+}
+.booking-type-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.booking-type-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #efede9;
+}
+.booking-type-link {
+  overflow: hidden;
+  color: #6c6c71;
+  font-size: 9px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.booking-type-count {
+  flex: 0 0 auto;
+  color: #a0a0a5;
+  font-size: 9px;
+}
 .mini-avatars {
   display: flex;
 }
@@ -6275,7 +6362,8 @@ kbd {
     grid-template-columns: minmax(220px, 1.3fr) 110px 75px 20px;
   }
   .resource-grid,
-  .template-grid {
+  .template-grid,
+  .booking-type-grid {
     grid-template-columns: repeat(2, 1fr);
   }
   .member-portal-header {
@@ -6469,7 +6557,8 @@ kbd {
     overflow-x: auto;
   }
   .resource-grid,
-  .template-grid {
+  .template-grid,
+  .booking-type-grid {
     grid-template-columns: 1fr;
   }
   .resource-cover {

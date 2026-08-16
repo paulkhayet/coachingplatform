@@ -48,6 +48,7 @@ test("ships the privacy-aware MVP foundation", async () => {
     storageMigration,
     integrationMigration,
     bookingMigration,
+    multiBookingTypesMigration,
     bookingsView,
     publicBookingPage,
     oauth,
@@ -106,9 +107,16 @@ test("ships the privacy-aware MVP foundation", async () => {
       ),
       "utf8",
     ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260814000000_multiple_booking_types.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
     readFile(new URL("../components/bookings-view.tsx", import.meta.url), "utf8"),
     readFile(
-      new URL("../app/book/[slug]/public-booking-page.tsx", import.meta.url),
+      new URL("../app/[org]/[type]/public-booking-page.tsx", import.meta.url),
       "utf8",
     ),
     readFile(new URL("../lib/integrations/oauth.ts", import.meta.url), "utf8"),
@@ -174,9 +182,21 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(bookingMigration, /create or replace function public\.submit_public_booking/);
   assert.match(bookingMigration, /availableSlots/);
   assert.match(bookingMigration, /#variable_conflict use_variable/);
+  assert.match(
+    multiBookingTypesMigration,
+    /add constraint booking_pages_org_slug_key unique \(organization_id, slug\)/,
+  );
+  assert.match(
+    multiBookingTypesMigration,
+    /create or replace function public\.update_organization_slug/,
+  );
+  assert.match(
+    multiBookingTypesMigration,
+    /create or replace function public\.get_public_booking_page\(org_slug text, type_slug text\)/,
+  );
   assert.match(bookingsView, /Intake questionnaire/);
   assert.match(bookingsView, /Choices separated by commas/);
-  assert.match(bookingsView, /Your consultation link/);
+  assert.match(bookingsView, /Your practice URL/);
   assert.match(publicBookingPage, /Book consultation/);
   assert.match(publicBookingPage, /availableSlots/);
   assert.match(app, /Bookings/);

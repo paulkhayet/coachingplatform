@@ -27,6 +27,7 @@ type PublicQuestion = {
 
 type PublicPage = {
   slug: string;
+  orgSlug: string;
   brandName: string;
   coachName: string;
   title: string;
@@ -62,7 +63,13 @@ function isPublicPage(value: Json) {
   );
 }
 
-export function PublicBookingPage({ slug }: { slug: string }) {
+export function PublicBookingPage({
+  orgSlug,
+  typeSlug,
+}: {
+  orgSlug: string;
+  typeSlug: string;
+}) {
   const configured = isSupabaseConfigured();
   const [page, setPage] = useState<PublicPage | null>(null);
   const [loading, setLoading] = useState(configured);
@@ -84,14 +91,14 @@ export function PublicBookingPage({ slug }: { slug: string }) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     void supabase
-      .rpc("get_public_booking_page", { page_slug: slug })
+      .rpc("get_public_booking_page", { org_slug: orgSlug, type_slug: typeSlug })
       .then(({ data, error }) => {
         if (error || !isPublicPage(data))
           setLoadError("This booking page is not available.");
         else setPage(data as unknown as PublicPage);
         setLoading(false);
       });
-  }, [slug]);
+  }, [orgSlug, typeSlug]);
 
   const slots = useMemo(() => (page ? slotsFor(page) : []), [page]);
   const days = useMemo(() => {
@@ -113,7 +120,8 @@ export function PublicBookingPage({ slug }: { slug: string }) {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) throw new Error("Booking is temporarily unavailable.");
       const { error } = await supabase.rpc("submit_public_booking", {
-        page_slug: page.slug,
+        org_slug: page.orgSlug,
+        type_slug: page.slug,
         guest_name: name,
         guest_email: email,
         guest_phone: phone,
@@ -152,7 +160,7 @@ export function PublicBookingPage({ slug }: { slug: string }) {
       </main>
     );
 
-  const locationLabel =
+  const meetingLabel =
     page.locationType === "zoom"
       ? "Zoom"
       : page.locationType === "google_meet"
@@ -173,7 +181,7 @@ export function PublicBookingPage({ slug }: { slug: string }) {
           <p>{page.description}</p>
           <div className="public-booking-meta">
             <span><Clock3 size={15} /> {page.durationMinutes} minutes</span>
-            <span><MapPin size={15} /> {locationLabel}</span>
+            <span><MapPin size={15} /> {meetingLabel}</span>
           </div>
           <div className="public-booking-trust">
             <ShieldCheck size={15} />
@@ -270,7 +278,7 @@ export function PublicBookingPage({ slug }: { slug: string }) {
               <small>YOU’RE BOOKED</small>
               <h2>Looking forward to meeting you, {name.split(" ")[0]}.</h2>
               <p>A confirmation is ready for <strong>{email}</strong>. {page.coachName} will follow up with the meeting details.</p>
-              <div><CalendarDays size={17} /><p><strong>{selectedSlot?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</strong><span>{selectedSlot?.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · {locationLabel}</span></p></div>
+              <div><CalendarDays size={17} /><p><strong>{selectedSlot?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</strong><span>{selectedSlot?.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · {meetingLabel}</span></p></div>
               <span className="public-success-note"><Sparkles size={14} /> You can close this page.</span>
             </div>
           )}

@@ -599,6 +599,7 @@ export type Database = {
           availability: Json;
           minimum_notice_hours: number;
           is_active: boolean;
+          sort_order: number;
           created_at: string;
           updated_at: string;
         };
@@ -616,6 +617,7 @@ export type Database = {
           availability?: Json;
           minimum_notice_hours?: number;
           is_active?: boolean;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -745,6 +747,7 @@ export type Database = {
       save_booking_page: {
         Args: {
           target_organization: string;
+          target_page_id: string | null;
           target_slug: string;
           target_brand_name: string;
           target_title: string;
@@ -760,12 +763,13 @@ export type Database = {
         Returns: string;
       };
       get_public_booking_page: {
-        Args: { page_slug: string };
+        Args: { org_slug: string; type_slug: string };
         Returns: Json;
       };
       submit_public_booking: {
         Args: {
-          page_slug: string;
+          org_slug: string;
+          type_slug: string;
           guest_name: string;
           guest_email: string;
           guest_phone: string;
@@ -775,6 +779,10 @@ export type Database = {
           website?: string;
         };
         Returns: string;
+      };
+      update_organization_slug: {
+        Args: { target_organization: string; target_slug: string };
+        Returns: undefined;
       };
     };
     Enums: {
