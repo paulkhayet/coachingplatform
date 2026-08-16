@@ -64,13 +64,13 @@ import { BookingsView } from "@/components/bookings-view";
 import {
   assignments,
   clients,
-  sessions,
   templates,
   type Assignment,
   type Client,
   type PracticeSession,
   type PortalInvitation,
   type Resource,
+  type SharedNote,
   type Visibility,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
@@ -120,6 +120,18 @@ function formatPracticeTime(value: string) {
     minute: "2-digit",
     timeZone: practiceTimeZone,
   });
+}
+
+function formatRelativeTime(value: string) {
+  const diffMs = Date.now() - new Date(value).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return "yesterday";
+  return `${days}d ago`;
 }
 
 function formatPracticeDate(
@@ -553,6 +565,9 @@ export function CoachApp() {
             <Dashboard
               clientData={practiceClients}
               assignmentData={practiceAssignments}
+              sessionData={practice.sessions}
+              notesData={practice.notes}
+              userName={practice.userName}
               onClient={openClient}
               onNavigate={navigate}
               onSession={() => startSession()}
@@ -797,6 +812,9 @@ export function CoachApp() {
 function Dashboard({
   clientData,
   assignmentData,
+  sessionData,
+  notesData,
+  userName,
   onClient,
   onNavigate,
   onSession,
@@ -806,6 +824,9 @@ function Dashboard({
 }: {
   clientData: Client[];
   assignmentData: typeof assignments;
+  sessionData: PracticeSession[];
+  notesData: SharedNote[];
+  userName?: string | null;
   onClient: (client: Client) => void;
   onNavigate: (view: View) => void;
   onSession: () => void;
@@ -813,17 +834,154 @@ function Dashboard({
   onToggleAssignment: (id: string) => void;
   onToast: (message: string) => void;
 }) {
+  const now = new Date();
+  const firstName = userName?.split(" ")[0] || "there";
+  const todayLabel = now
+    .toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    })
+    .toUpperCase();
+  const greetingHour = now.getHours();
+  const timeOfDay =
+    greetingHour < 12 ? "morning" : greetingHour < 18 ? "afternoon" : "evening";
+
+  const todaysSessions = useMemo(
+    () =>
+      sessionData
+        .filter(
+          (session) =>
+            new Date(session.startsAt).toDateString() === now.toDateString(),
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+        ),
+    [sessionData],
+  );
+  const nextSession = todaysSessions.find(
+    (session) => new Date(session.startsAt).getTime() > now.getTime(),
+  );
+  const submittedAssignments = assignmentData.filter(
+    (assignment) => assignment.status === "Submitted",
+  );
+  const dueTodayAssignments = assignmentData.filter(
+    (assignment) => assignment.due === "Today",
+  );
+  const needsAttentionAssignments = assignmentData.filter(
+    (assignment) =>
+      assignment.status === "Submitted" || assignment.status === "Overdue",
+  );
+  const activeClients = clientData.filter(
+    (client) => client.status === "Active",
+  );
+  const dayProgress = Math.min(
+    100,
+    Math.max(0, ((now.getHours() + now.getMinutes() / 60 - 9) / 8) * 100),
+  );
+  const attentionItems = useMemo(() => {
+    const items: {
+      key: string;
+      icon: "rose" | "amber" | "blue";
+      title: string;
+      description: string;
+      client: Client;
+      badge?: string;
+    }[] = [];
+    const paymentDue = clientData.find((client) => client.payment !== "Paid");
+    if (paymentDue) {
+      items.push({
+        key: `payment-${paymentDue.id}`,
+        icon: "rose",
+        title:
+          paymentDue.payment === "Past due" ? "Payment past due" : "Invoice due soon",
+        description: `${paymentDue.name.split(" ")[0]}'s payment needs review`,
+        client: paymentDue,
+        badge: "Review",
+      });
+    }
+    const overdue = assignmentData.find(
+      (assignment) => assignment.status === "Overdue",
+    );
+    if (overdue) {
+      const client = clientData.find((item) => item.name === overdue.client);
+      if (client) {
+        items.push({
+          key: `overdue-${overdue.id}`,
+          icon: "amber",
+          title: "Homework overdue",
+          description: `${overdue.title} · ${client.name.split(" ")[0]}`,
+          client,
+        });
+      }
+    }
+    const submitted = assignmentData.find(
+      (assignment) => assignment.status === "Submitted",
+    );
+    if (submitted) {
+      const client = clientData.find((item) => item.name === submitted.client);
+      if (client) {
+        items.push({
+          key: `submitted-${submitted.id}`,
+          icon: "blue",
+          title: `Review ${client.name.split(" ")[0]}'s homework`,
+          description: submitted.title,
+          client,
+        });
+      }
+    }
+    return items.slice(0, 3);
+  }, [clientData, assignmentData]);
+  const latestNote = [...notesData].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )[0];
+  const recentActivity = useMemo(() => {
+    const noteEvents = notesData.map((note) => ({
+      key: `note-${note.id}`,
+      icon: "purple" as const,
+      title: `${
+        clientData.find((client) => client.id === note.clientId)?.name ||
+        "A client"
+      }'s ${note.type.toLowerCase()} was added`,
+      detail: note.body.length > 60 ? `${note.body.slice(0, 60)}…` : note.body,
+      at: note.createdAt,
+    }));
+    const sessionEvents = sessionData
+      .filter(
+        (session) =>
+          session.status !== "scheduled" &&
+          new Date(session.endsAt).getTime() <= now.getTime(),
+      )
+      .map((session) => ({
+        key: `session-${session.id}`,
+        icon: "blue" as const,
+        title: `Session with ${session.client} · ${session.status.replace("_", " ")}`,
+        detail: formatPracticeDate(session.startsAt, {
+          month: "short",
+          day: "numeric",
+        }),
+        at: session.endsAt,
+      }));
+    return [...noteEvents, ...sessionEvents]
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 5);
+  }, [notesData, sessionData, clientData]);
+
   return (
     <div className="dashboard page-enter">
       <div className="page-heading dashboard-heading">
         <div>
-          <p className="eyebrow">THURSDAY, AUGUST 13</p>
+          <p className="eyebrow">{todayLabel}</p>
           <h1>
-            Good morning, Alex <span>✦</span>
+            Good {timeOfDay}, {firstName} <span>✦</span>
           </h1>
           <p>
-            You have a steady day ahead—three sessions and a little space to
-            breathe.
+            {todaysSessions.length === 0
+              ? "You have a clear day ahead—plenty of space to catch up."
+              : `You have ${todaysSessions.length} session${
+                  todaysSessions.length === 1 ? "" : "s"
+                } today${nextSession ? `, starting at ${formatPracticeTime(nextSession.startsAt)}` : ""}.`}
           </p>
         </div>
         <div className="heading-actions">
@@ -847,42 +1005,48 @@ function Dashboard({
             <CalendarDays size={17} />
           </span>
           <p>
-            <strong>3</strong>
+            <strong>{todaysSessions.length}</strong>
             <span>Sessions today</span>
           </p>
-          <small>Next at 10:00 AM</small>
+          <small>
+            {nextSession
+              ? `Next at ${formatPracticeTime(nextSession.startsAt)}`
+              : "None remaining"}
+          </small>
         </div>
         <div className="metric-card">
           <span className="metric-icon amber">
             <Clock3 size={17} />
           </span>
           <p>
-            <strong>4</strong>
+            <strong>{submittedAssignments.length}</strong>
             <span>Follow-ups</span>
           </p>
-          <small>2 due today</small>
+          <small>{dueTodayAssignments.length} due today</small>
         </div>
         <div className="metric-card">
           <span className="metric-icon green">
             <ListChecks size={17} />
           </span>
           <p>
-            <strong>3</strong>
+            <strong>{needsAttentionAssignments.length}</strong>
             <span>Homework items</span>
           </p>
-          <small>Need your attention</small>
+          <small>
+            {needsAttentionAssignments.length > 0
+              ? "Need your attention"
+              : "All caught up"}
+          </small>
         </div>
         <div className="metric-card">
           <span className="metric-icon blue">
-            <CircleDollarSign size={17} />
+            <Users size={17} />
           </span>
           <p>
-            <strong>$4.8k</strong>
-            <span>August revenue</span>
+            <strong>{activeClients.length}</strong>
+            <span>Active clients</span>
           </p>
-          <small>
-            <b>↑ 12%</b> from July
-          </small>
+          <small>{clientData.length} total</small>
         </div>
       </div>
 
@@ -903,12 +1067,15 @@ function Dashboard({
           <div className="day-progress">
             <span>9 AM</span>
             <div>
-              <i style={{ width: "38%" }} />
+              <i style={{ width: `${dayProgress}%` }} />
             </div>
             <span>5 PM</span>
           </div>
           <div className="session-list">
-            {sessions.map((session, index) => {
+            {todaysSessions.length === 0 && (
+              <p className="empty-hint">No sessions scheduled today.</p>
+            )}
+            {todaysSessions.map((session) => {
               const client = clientData.find(
                 (item) => item.id === session.clientId,
               );
@@ -917,6 +1084,9 @@ function Dashboard({
                 (new Date(session.endsAt).getTime() - starts.getTime()) /
                   60_000,
               );
+              const isCurrent =
+                starts.getTime() <= now.getTime() &&
+                new Date(session.endsAt).getTime() > now.getTime();
               return (
                 <button
                   className="session-row"
@@ -931,7 +1101,7 @@ function Dashboard({
                       {formatPracticeTime(session.startsAt).split(" ")[1]}
                     </span>
                   </div>
-                  <div className={cn("timeline-pin", index === 0 && "current")}>
+                  <div className={cn("timeline-pin", isCurrent && "current")}>
                     <i />
                   </div>
                   <Avatar
@@ -945,23 +1115,20 @@ function Dashboard({
                       {client?.headline || "Coaching session"} · {minutes} min
                     </span>
                   </div>
-                  {index < 2 ? (
+                  {session.meetingProvider ? (
                     <span className="video-pill">
-                      <Video size={12} /> Zoom
+                      <Video size={12} />{" "}
+                      {session.meetingProvider.charAt(0).toUpperCase() +
+                        session.meetingProvider.slice(1)}
                     </span>
                   ) : (
-                    <Badge>Discovery</Badge>
+                    <Badge>{session.status}</Badge>
                   )}
                   <ChevronRight size={15} />
                 </button>
               );
             })}
           </div>
-          <button className="open-slot" onClick={() => onNavigate("Calendar")}>
-            <Plus size={14} />
-            <span>Open time</span>
-            <small>12:00–2:00 PM</small>
-          </button>
         </section>
 
         <section className="panel focus-panel">
@@ -975,59 +1142,50 @@ function Dashboard({
             Needs attention
           </SectionTitle>
           <div className="attention-list">
-            {clientData[2] && (
-              <button onClick={() => onClient(clientData[2])}>
-                <span className="attention-icon rose">
-                  <CircleDollarSign size={16} />
+            {attentionItems.length === 0 && (
+              <p className="empty-hint">Nothing needs your attention right now.</p>
+            )}
+            {attentionItems.map((item) => (
+              <button key={item.key} onClick={() => onClient(item.client)}>
+                <span className={cn("attention-icon", item.icon)}>
+                  {item.icon === "rose" ? (
+                    <CircleDollarSign size={16} />
+                  ) : item.icon === "amber" ? (
+                    <FileCheck2 size={16} />
+                  ) : (
+                    <MessageCircle size={16} />
+                  )}
                 </span>
                 <p>
-                  <strong>Invoice due soon</strong>
-                  <span>
-                    {clientData[2].name.split(" ")[0]}’s payment needs review
-                  </span>
+                  <strong>{item.title}</strong>
+                  <span>{item.description}</span>
                 </p>
-                <Badge variant="rose">Review</Badge>
+                {item.badge ? (
+                  <Badge variant="rose">{item.badge}</Badge>
+                ) : (
+                  <ChevronRight size={14} />
+                )}
               </button>
-            )}
-            {clientData[1] && (
-              <button onClick={() => onClient(clientData[1])}>
-                <span className="attention-icon amber">
-                  <FileCheck2 size={16} />
-                </span>
-                <p>
-                  <strong>
-                    {clientData[1].type === "Teen"
-                      ? "Guardian signature"
-                      : "Agreement signature"}
-                  </strong>
-                  <span>
-                    {clientData[1].name.split(" ")[0]}’s agreement is waiting
-                  </span>
-                </p>
-                <ChevronRight size={14} />
-              </button>
-            )}
-            {clientData[0] && (
-              <button onClick={() => onClient(clientData[0])}>
-                <span className="attention-icon blue">
-                  <MessageCircle size={16} />
-                </span>
-                <p>
-                  <strong>
-                    Follow up with {clientData[0].name.split(" ")[0]}
-                  </strong>
-                  <span>Send a check-in before 5 PM</span>
-                </p>
-                <ChevronRight size={14} />
-              </button>
-            )}
+            ))}
           </div>
           <div className="calm-callout">
             <span>✦</span>
             <p>
-              <strong>You’re all caught up on notes.</strong>
-              <br />
-              Last session note finished 18 hours ago.
+              {latestNote ? (
+                <>
+                  <strong>Latest note added {formatRelativeTime(latestNote.createdAt)}</strong>
+                  <br />
+                  {clientData.find((client) => client.id === latestNote.clientId)
+                    ?.name || "A client"}{" "}
+                  · {latestNote.type}
+                </>
+              ) : (
+                <>
+                  <strong>You’re all caught up on notes.</strong>
+                  <br />
+                  No session notes yet.
+                </>
+              )}
             </p>
           </div>
         </section>
@@ -1106,36 +1264,25 @@ function Dashboard({
             Recent activity
           </SectionTitle>
           <div className="activity-list">
-            <div>
-              <span className="activity-dot green">
-                <Check size={11} />
-              </span>
-              <p>
-                <strong>Maya completed a reflection</strong>
-                <span>“What I want from my next role”</span>
-                <small>42 min ago</small>
-              </p>
-            </div>
-            <div>
-              <span className="activity-dot purple">
-                <PenLine size={11} />
-              </span>
-              <p>
-                <strong>Jamie added a shared note</strong>
-                <span>Ava Thompson · Viewable by parent</span>
-                <small>3h ago</small>
-              </p>
-            </div>
-            <div>
-              <span className="activity-dot blue">
-                <CalendarDays size={11} />
-              </span>
-              <p>
-                <strong>Jonah rescheduled a session</strong>
-                <span>Moved to Friday at 11:00 AM</span>
-                <small>Yesterday</small>
-              </p>
-            </div>
+            {recentActivity.length === 0 && (
+              <p className="empty-hint">No recent activity yet.</p>
+            )}
+            {recentActivity.map((event) => (
+              <div key={event.key}>
+                <span className={cn("activity-dot", event.icon)}>
+                  {event.icon === "purple" ? (
+                    <PenLine size={11} />
+                  ) : (
+                    <CalendarDays size={11} />
+                  )}
+                </span>
+                <p>
+                  <strong>{event.title}</strong>
+                  <span>{event.detail}</span>
+                  <small>{formatRelativeTime(event.at)}</small>
+                </p>
+              </div>
+            ))}
           </div>
         </section>
       </div>

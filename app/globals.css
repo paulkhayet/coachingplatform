@@ -1461,6 +1461,11 @@ kbd {
 .session-list {
   position: relative;
 }
+.empty-hint {
+  padding: 14px 4px;
+  font-size: 13px;
+  color: var(--muted, #8a8f98);
+}
 .session-list::before {
   content: "";
   position: absolute;
