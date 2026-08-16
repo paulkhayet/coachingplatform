@@ -6,6 +6,8 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   MapPin,
   ShieldCheck,
@@ -43,12 +45,11 @@ type PublicPage = {
   availableSlots: string[];
 };
 
+/** How many days of the calendar are shown at once. */
+const DAY_WINDOW = 7;
+
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-function slotsFor(page: PublicPage) {
-  return page.availableSlots.map((value) => new Date(value));
 }
 
 function isPublicPage(value: Json) {
@@ -78,7 +79,10 @@ export function PublicBookingPage({
   );
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
-  const [step, setStep] = useState<"time" | "details" | "success">("time");
+  const [dayOffset, setDayOffset] = useState(0);
+  const [step, setStep] = useState<
+    "time" | "details" | "questions" | "success"
+  >("time");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -100,16 +104,24 @@ export function PublicBookingPage({
       });
   }, [orgSlug, typeSlug]);
 
-  const slots = useMemo(() => (page ? slotsFor(page) : []), [page]);
+  const slots = useMemo(
+    () => (page ? page.availableSlots.map((value) => new Date(value)) : []),
+    [page],
+  );
+  /** Every day that has at least one open slot, across the whole horizon. */
   const days = useMemo(() => {
     const unique = new Map<string, Date>();
     for (const slot of slots) unique.set(dateKey(slot), slot);
-    return [...unique.values()].slice(0, 7);
+    return [...unique.values()];
   }, [slots]);
-  const effectiveSelectedDay = selectedDay || (days[0] ? dateKey(days[0]) : null);
+
+  const visibleDays = days.slice(dayOffset, dayOffset + DAY_WINDOW);
+  const effectiveSelectedDay =
+    selectedDay || (visibleDays[0] ? dateKey(visibleDays[0]) : null);
   const visibleSlots = effectiveSelectedDay
-    ? slots.filter((slot) => dateKey(slot) === effectiveSelectedDay).slice(0, 8)
+    ? slots.filter((slot) => dateKey(slot) === effectiveSelectedDay)
     : [];
+  const hasQuestions = Boolean(page?.questions.length);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -134,7 +146,9 @@ export function PublicBookingPage({
       setStep("success");
     } catch (error) {
       setSubmitError(
-        error instanceof Error ? error.message : "We couldn’t complete the booking.",
+        error instanceof Error
+          ? error.message
+          : "We couldn’t complete the booking.",
       );
     } finally {
       setSubmitting(false);
@@ -166,6 +180,29 @@ export function PublicBookingPage({
       : page.locationType === "google_meet"
         ? "Google Meet"
         : "Phone call";
+  const totalSteps = hasQuestions ? 3 : 2;
+  const stepNumber = step === "time" ? 1 : step === "details" ? 2 : 3;
+  const selectionSummary = selectedSlot ? (
+    <div className="public-selection-summary">
+      <CalendarDays size={17} />
+      <p>
+        <strong>
+          {selectedSlot.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          })}
+        </strong>
+        <span>
+          {selectedSlot.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          })}{" "}
+          · {page.durationMinutes} min
+        </span>
+      </p>
+    </div>
+  ) : null;
 
   return (
     <main
@@ -180,111 +217,355 @@ export function PublicBookingPage({
           <h1>{page.title}</h1>
           <p>{page.description}</p>
           <div className="public-booking-meta">
-            <span><Clock3 size={15} /> {page.durationMinutes} minutes</span>
-            <span><MapPin size={15} /> {meetingLabel}</span>
+            <span>
+              <Clock3 size={15} /> {page.durationMinutes} minutes
+            </span>
+            <span>
+              <MapPin size={15} /> {meetingLabel}
+            </span>
           </div>
           <div className="public-booking-trust">
             <ShieldCheck size={15} />
-            <span><strong>Your information stays private.</strong> It is shared only with {page.coachName}.</span>
+            <span>
+              <strong>Your information stays private.</strong> It is shared only
+              with {page.coachName}.
+            </span>
           </div>
         </aside>
 
         <div className="public-booking-flow">
+          {step !== "success" ? (
+            <div className="public-flow-heading">
+              <div>
+                <span>{stepNumber}</span>
+                <p>
+                  <strong>
+                    {step === "time"
+                      ? "Choose a time"
+                      : step === "details"
+                        ? "Your details"
+                        : "A few questions"}
+                  </strong>
+                  <small>
+                    {step === "time"
+                      ? `Times shown in ${Intl.DateTimeFormat()
+                          .resolvedOptions()
+                          .timeZone.replaceAll("_", " ")}`
+                      : `Step ${stepNumber} of ${totalSteps}`}
+                  </small>
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           {step === "time" ? (
             <>
-              <div className="public-flow-heading">
-                <div><span>1</span><p><strong>Choose a time</strong><small>Times shown in {Intl.DateTimeFormat().resolvedOptions().timeZone.replaceAll("_", " ")}</small></p></div>
-              </div>
-              <div className="public-day-row">
-                {days.map((day) => {
-                  const key = dateKey(day);
-                  return (
+              {days.length ? (
+                <>
+                  <div className="public-day-nav">
                     <button
-                      key={key}
-                      className={effectiveSelectedDay === key ? "selected" : ""}
                       onClick={() => {
-                        setSelectedDay(key);
+                        setDayOffset(Math.max(0, dayOffset - DAY_WINDOW));
+                        setSelectedDay(null);
                         setSelectedSlot(null);
                       }}
+                      disabled={dayOffset === 0}
+                      aria-label="Earlier days"
                     >
-                      <small>{day.toLocaleDateString("en-US", { weekday: "short" })}</small>
-                      <strong>{day.getDate()}</strong>
-                      <span>{day.toLocaleDateString("en-US", { month: "short" })}</span>
+                      <ChevronLeft size={15} />
                     </button>
-                  );
-                })}
-              </div>
-              <div className="public-time-grid">
-                {visibleSlots.map((slot) => (
+                    <span>
+                      {visibleDays[0]?.toLocaleDateString("en-US", {
+                        month: "long",
+                      })}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setDayOffset(dayOffset + DAY_WINDOW);
+                        setSelectedDay(null);
+                        setSelectedSlot(null);
+                      }}
+                      disabled={dayOffset + DAY_WINDOW >= days.length}
+                      aria-label="Later days"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                  <div className="public-day-row">
+                    {visibleDays.map((day) => {
+                      const key = dateKey(day);
+                      return (
+                        <button
+                          key={key}
+                          className={effectiveSelectedDay === key ? "selected" : ""}
+                          onClick={() => {
+                            setSelectedDay(key);
+                            setSelectedSlot(null);
+                          }}
+                        >
+                          <small>
+                            {day.toLocaleDateString("en-US", {
+                              weekday: "short",
+                            })}
+                          </small>
+                          <strong>{day.getDate()}</strong>
+                          <span>
+                            {day.toLocaleDateString("en-US", { month: "short" })}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="public-time-grid">
+                    {visibleSlots.map((slot) => (
+                      <button
+                        key={slot.toISOString()}
+                        className={
+                          selectedSlot?.getTime() === slot.getTime()
+                            ? "selected"
+                            : ""
+                        }
+                        onClick={() => setSelectedSlot(slot)}
+                      >
+                        {slot.toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        {selectedSlot?.getTime() === slot.getTime() ? (
+                          <Check size={14} />
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                  {!visibleSlots.length ? (
+                    <p className="public-no-times">
+                      No open times on this day — try another.
+                    </p>
+                  ) : null}
                   <button
-                    key={slot.toISOString()}
-                    className={selectedSlot?.getTime() === slot.getTime() ? "selected" : ""}
-                    onClick={() => setSelectedSlot(slot)}
+                    className="public-primary-button"
+                    disabled={!selectedSlot}
+                    onClick={() => setStep("details")}
                   >
-                    {slot.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                    {selectedSlot?.getTime() === slot.getTime() ? <Check size={14} /> : null}
+                    Continue <ArrowRight size={15} />
                   </button>
-                ))}
-              </div>
-              {!visibleSlots.length ? <p className="public-no-times">No open times on this day.</p> : null}
-              <button
-                className="public-primary-button"
-                disabled={!selectedSlot}
-                onClick={() => setStep("details")}
-              >
-                Continue <ArrowRight size={15} />
-              </button>
+                </>
+              ) : (
+                <div className="public-no-availability">
+                  <CalendarDays size={22} />
+                  <p>
+                    <strong>No open times right now.</strong>
+                    <span>
+                      {page.coachName} is fully booked for the next few weeks.
+                      Check back soon or reach out directly.
+                    </span>
+                  </p>
+                </div>
+              )}
             </>
           ) : step === "details" ? (
-            <form onSubmit={submit}>
-              <button className="public-back-button" type="button" onClick={() => setStep("time")}>
+            <form
+              onSubmit={
+                hasQuestions
+                  ? (event) => {
+                      event.preventDefault();
+                      setStep("questions");
+                    }
+                  : submit
+              }
+            >
+              <button
+                className="public-back-button"
+                type="button"
+                onClick={() => setStep("time")}
+              >
                 <ArrowLeft size={14} /> Change time
               </button>
-              <div className="public-selection-summary">
-                <CalendarDays size={17} />
-                <p><strong>{selectedSlot?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</strong><span>{selectedSlot?.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · {page.durationMinutes} min</span></p>
-              </div>
+              {selectionSummary}
               <div className="public-form-fields">
-                <label>Full name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-                <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
-                <label>Phone <small>Optional</small><input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-                <label className="booking-honeypot" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} /></label>
+                <label>
+                  Full name
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Email address
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Phone <small>Optional</small>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                  />
+                </label>
+                <label className="booking-honeypot" aria-hidden="true">
+                  Website
+                  <input
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={website}
+                    onChange={(event) => setWebsite(event.target.value)}
+                  />
+                </label>
+              </div>
+              {submitError ? (
+                <div className="data-error" role="alert">
+                  {submitError}
+                </div>
+              ) : null}
+              <button
+                className="public-primary-button"
+                type="submit"
+                disabled={submitting}
+              >
+                {hasQuestions
+                  ? "Continue"
+                  : submitting
+                    ? "Booking…"
+                    : "Book consultation"}{" "}
+                <ArrowRight size={15} />
+              </button>
+            </form>
+          ) : step === "questions" ? (
+            <form onSubmit={submit}>
+              <button
+                className="public-back-button"
+                type="button"
+                onClick={() => setStep("details")}
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
+              {selectionSummary}
+              <p className="public-questions-intro">
+                This helps {page.coachName} make the most of your time together.
+              </p>
+              <div className="public-form-fields">
                 {page.questions.map((question) => (
                   <label key={question.id}>
-                    {question.label} {!question.required ? <small>Optional</small> : null}
+                    {question.label}{" "}
+                    {!question.required ? <small>Optional</small> : null}
                     {question.type === "long_text" ? (
-                      <textarea rows={3} required={question.required} value={answers[question.id] || ""} onChange={(event) => setAnswers((current) => ({ ...current, [question.id]: event.target.value }))} />
+                      <textarea
+                        rows={3}
+                        required={question.required}
+                        value={answers[question.id] || ""}
+                        onChange={(event) =>
+                          setAnswers((current) => ({
+                            ...current,
+                            [question.id]: event.target.value,
+                          }))
+                        }
+                      />
                     ) : question.type === "select" ? (
-                      <select required={question.required} value={answers[question.id] || ""} onChange={(event) => setAnswers((current) => ({ ...current, [question.id]: event.target.value }))}>
+                      <select
+                        required={question.required}
+                        value={answers[question.id] || ""}
+                        onChange={(event) =>
+                          setAnswers((current) => ({
+                            ...current,
+                            [question.id]: event.target.value,
+                          }))
+                        }
+                      >
                         <option value="">Choose one…</option>
-                        {question.options.map((option) => <option key={option}>{option}</option>)}
+                        {question.options.map((option) => (
+                          <option key={option}>{option}</option>
+                        ))}
                       </select>
                     ) : question.type === "checkbox" ? (
-                      <span className="public-checkbox"><input type="checkbox" required={question.required} checked={answers[question.id] === "Yes"} onChange={(event) => setAnswers((current) => ({ ...current, [question.id]: event.target.checked ? "Yes" : "" }))} /> Yes</span>
+                      <span className="public-checkbox">
+                        <input
+                          type="checkbox"
+                          required={question.required}
+                          checked={answers[question.id] === "Yes"}
+                          onChange={(event) =>
+                            setAnswers((current) => ({
+                              ...current,
+                              [question.id]: event.target.checked ? "Yes" : "",
+                            }))
+                          }
+                        />{" "}
+                        Yes
+                      </span>
                     ) : (
-                      <input required={question.required} value={answers[question.id] || ""} onChange={(event) => setAnswers((current) => ({ ...current, [question.id]: event.target.value }))} />
+                      <input
+                        required={question.required}
+                        value={answers[question.id] || ""}
+                        onChange={(event) =>
+                          setAnswers((current) => ({
+                            ...current,
+                            [question.id]: event.target.value,
+                          }))
+                        }
+                      />
                     )}
                   </label>
                 ))}
               </div>
-              {submitError ? <div className="data-error" role="alert">{submitError}</div> : null}
-              <button className="public-primary-button" type="submit" disabled={submitting}>
-                {submitting ? "Booking…" : "Book consultation"} <ArrowRight size={15} />
+              {submitError ? (
+                <div className="data-error" role="alert">
+                  {submitError}
+                </div>
+              ) : null}
+              <button
+                className="public-primary-button"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting ? "Booking…" : "Book consultation"}{" "}
+                <ArrowRight size={15} />
               </button>
             </form>
           ) : (
             <div className="public-booking-success">
-              <span><Check size={25} /></span>
+              <span>
+                <Check size={25} />
+              </span>
               <small>YOU’RE BOOKED</small>
               <h2>Looking forward to meeting you, {name.split(" ")[0]}.</h2>
-              <p>A confirmation is ready for <strong>{email}</strong>. {page.coachName} will follow up with the meeting details.</p>
-              <div><CalendarDays size={17} /><p><strong>{selectedSlot?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</strong><span>{selectedSlot?.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · {meetingLabel}</span></p></div>
-              <span className="public-success-note"><Sparkles size={14} /> You can close this page.</span>
+              <p>
+                A confirmation is ready for <strong>{email}</strong>.{" "}
+                {page.coachName} will follow up with the meeting details.
+              </p>
+              <div>
+                <CalendarDays size={17} />
+                <p>
+                  <strong>
+                    {selectedSlot?.toLocaleDateString("en-US", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </strong>
+                  <span>
+                    {selectedSlot?.toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}{" "}
+                    · {meetingLabel}
+                  </span>
+                </p>
+              </div>
+              <span className="public-success-note">
+                <Sparkles size={14} /> You can close this page.
+              </span>
             </div>
           )}
         </div>
       </section>
-      <footer className="public-booking-footer">Powered by <strong>Soli</strong></footer>
+      <footer className="public-booking-footer">
+        Powered by <strong>Soli</strong>
+      </footer>
     </main>
   );
 }

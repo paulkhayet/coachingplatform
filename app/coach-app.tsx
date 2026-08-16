@@ -35,6 +35,7 @@ import {
   MessageCircle,
   Mic2,
   MoreHorizontal,
+  Pencil,
   NotebookPen,
   Paperclip,
   Pause,
@@ -68,6 +69,7 @@ import {
   type SharedNote,
   type Visibility,
 } from "@/lib/data";
+import { useOrigin } from "@/lib/use-origin";
 import { cn } from "@/lib/utils";
 import {
   usePracticeData,
@@ -597,17 +599,19 @@ export function CoachApp() {
             <BookingsView
               userName={practice.userName || "Your practice"}
               organizationSlug={practice.organizationSlug}
+              organizationTimezone={practice.organizationTimezone}
               bookingPages={practice.bookingPages}
               requests={practice.bookingRequests}
               onSave={practice.saveBookingPage}
               onDelete={practice.deleteBookingPage}
-              onUpdateSlug={practice.updatePracticeSlug}
               onCancelRequest={practice.cancelBookingRequest}
               onToast={setToast}
             />
           ) : (
             <IntegrationsView
               integrations={practice.integrations}
+              organizationSlug={practice.organizationSlug}
+              onUpdateSlug={practice.updatePracticeSlug}
               onConnect={practice.connectIntegration}
               onUpdate={practice.updateIntegrationPreferences}
               onDisconnect={practice.disconnectIntegration}
@@ -2975,6 +2979,109 @@ function AssignResourceModal({
   );
 }
 
+function PracticeUrlCard({
+  organizationSlug,
+  onUpdateSlug,
+  onToast,
+}: {
+  organizationSlug: string | null;
+  onUpdateSlug: (slug: string) => Promise<void>;
+  onToast: (message: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(organizationSlug || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const origin = useOrigin();
+  const activeSlug = organizationSlug || "your-practice";
+
+  const save = async () => {
+    const cleaned = draft
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 54);
+    if (!cleaned) {
+      setError("Enter a practice URL.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onUpdateSlug(cleaned);
+      setEditing(false);
+      onToast("Practice URL updated");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "That practice URL could not be saved.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="booking-link-strip">
+        <span className="booking-link-icon">
+          <Link2 size={17} />
+        </span>
+        <div className="booking-link-copy">
+          <small>Your practice URL</small>
+          {editing ? (
+            <div className="slug-field">
+              <span>{origin.replace(/^https?:\/\//, "")}/</span>
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && save()}
+              />
+            </div>
+          ) : (
+            <strong>{`${origin.replace(/^https?:\/\//, "")}/${activeSlug}`}</strong>
+          )}
+        </div>
+        {editing ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEditing(false);
+                setError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setDraft(activeSlug);
+              setEditing(true);
+            }}
+          >
+            <Pencil size={13} /> Edit
+          </Button>
+        )}
+      </div>
+      {error ? (
+        <div className="data-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 type IntegrationAvailability = { google: boolean; zoom: boolean };
 
 function IntegrationsView({
@@ -2982,9 +3089,13 @@ function IntegrationsView({
   onConnect,
   onUpdate,
   onDisconnect,
+  organizationSlug,
+  onUpdateSlug,
   onToast,
 }: {
   integrations: IntegrationConnection[];
+  organizationSlug: string | null;
+  onUpdateSlug: (slug: string) => Promise<void>;
   onConnect: (provider: "google" | "zoom") => void;
   onUpdate: (input: {
     connectionId: string;
@@ -3021,13 +3132,19 @@ function IntegrationsView({
     <div className="integrations-page page-enter">
       <div className="page-heading compact-heading">
         <div>
-          <h1>Integrations</h1>
-          <p>Connect the tools that keep your calendar and sessions moving.</p>
+          <h1>Settings</h1>
+          <p>Your practice address and the tools that keep sessions moving.</p>
         </div>
         <Badge variant={connectedCount ? "success" : "neutral"}>
           <Plug size={11} /> {connectedCount} connected
         </Badge>
       </div>
+
+      <PracticeUrlCard
+        organizationSlug={organizationSlug}
+        onUpdateSlug={onUpdateSlug}
+        onToast={onToast}
+      />
 
       <section className="integration-overview panel">
         <span className="integration-overview-icon">

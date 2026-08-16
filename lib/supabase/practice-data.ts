@@ -121,6 +121,7 @@ export type PracticeData = {
   connectionState: ConnectionState;
   organizationId: string | null;
   organizationSlug: string | null;
+  organizationTimezone: string | null;
   userId: string | null;
   userEmail: string | null;
   userName: string | null;
@@ -146,6 +147,7 @@ const initialData: PracticeData = {
   connectionState: isSupabaseConfigured() ? "loading" : "unconfigured",
   organizationId: null,
   organizationSlug: "your-practice",
+  organizationTimezone: null,
   userId: null,
   userEmail: null,
   userName: null,
@@ -637,6 +639,7 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
     connectionState: "connected",
     organizationId,
     organizationSlug: null,
+    organizationTimezone: null,
     userId: user.id,
     userEmail: user.email || null,
     userName,
@@ -692,7 +695,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
       .maybeSingle(),
     supabase
       .from("organizations")
-      .select("slug")
+      .select("slug, timezone")
       .eq("id", organizationId)
       .maybeSingle(),
     supabase
@@ -984,6 +987,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
     connectionState: "connected",
     organizationId,
     organizationSlug: organizationResult.data?.slug || null,
+    organizationTimezone: organizationResult.data?.timezone || null,
     userId: user.id,
     userEmail: user.email || null,
     userName: coachName,
