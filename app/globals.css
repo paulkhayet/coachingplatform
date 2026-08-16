@@ -94,6 +94,19 @@ textarea:focus-visible {
   flex: 0 0 auto;
   gap: 8px;
 }
+.settings-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 17px;
+}
+.settings-avatar-row .field-hint {
+  display: block;
+  margin: 6px 0 0;
+}
+.settings-avatar-input {
+  display: none;
+}
 .booking-link-strip {
   display: flex;
   align-items: center;
@@ -247,6 +260,11 @@ textarea:focus-visible {
 .public-form-fields select:focus {
   border-color: #2f6fed;
   box-shadow: 0 0 0 3px rgba(47, 111, 237, .08);
+}
+.booking-form-grid input:disabled {
+  background: #f8f7f5;
+  color: #9d9da2;
+  cursor: not-allowed;
 }
 .booking-field-wide {
   grid-column: 1 / -1;
@@ -1896,6 +1914,10 @@ kbd {
   color: #343438;
   font-weight: 650;
   letter-spacing: -0.03em;
+}
+.avatar-photo {
+  object-fit: cover;
+  background: #ebe9e4;
 }
 .avatar-sm {
   width: 26px;
@@ -5532,8 +5554,8 @@ kbd {
 .agenda-session > svg {
   color: #adacb1;
 }
-.calendar-week-preview {
-  opacity: 0.55;
+.calendar-week-grid .calendar-controls {
+  border-bottom: 1px solid var(--line);
 }
 .session-private {
   margin: 0 !important;

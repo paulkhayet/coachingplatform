@@ -40,6 +40,8 @@ const HOMEWORK_MIME_TYPES = new Set(
     (mime) => mime !== "video/mp4" && mime !== "audio/mpeg",
   ),
 );
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const AVATAR_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export type DataMode = "demo" | "supabase";
 export type ConnectionState =
@@ -120,11 +122,14 @@ export type PracticeData = {
   mode: DataMode;
   connectionState: ConnectionState;
   organizationId: string | null;
+  organizationName: string | null;
   organizationSlug: string | null;
   organizationTimezone: string | null;
   userId: string | null;
   userEmail: string | null;
   userName: string | null;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
   accountRole: AccountRole;
   portalClientId: string | null;
   portalRelationshipId: string | null;
@@ -146,11 +151,14 @@ const initialData: PracticeData = {
   mode: "demo",
   connectionState: isSupabaseConfigured() ? "loading" : "unconfigured",
   organizationId: null,
+  organizationName: null,
   organizationSlug: "your-practice",
   organizationTimezone: null,
   userId: null,
   userEmail: null,
   userName: null,
+  userPhone: null,
+  userAvatarUrl: null,
   accountRole: "coach",
   portalClientId: null,
   portalRelationshipId: null,
@@ -638,11 +646,14 @@ async function loadPortalForUser(user: User): Promise<PracticeData> {
     mode: "supabase",
     connectionState: "connected",
     organizationId,
+    organizationName: null,
     organizationSlug: null,
     organizationTimezone: null,
     userId: user.id,
     userEmail: user.email || null,
     userName,
+    userPhone: null,
+    userAvatarUrl: null,
     accountRole,
     portalClientId: clientRow.id,
     portalRelationshipId: relationship?.id || null,
@@ -690,12 +701,12 @@ async function loadForUser(user: User): Promise<PracticeData> {
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name")
+      .select("full_name, phone, avatar_url")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
       .from("organizations")
-      .select("slug, timezone")
+      .select("name, slug, timezone")
       .eq("id", organizationId)
       .maybeSingle(),
     supabase
@@ -986,11 +997,14 @@ async function loadForUser(user: User): Promise<PracticeData> {
     mode: "supabase",
     connectionState: "connected",
     organizationId,
+    organizationName: organizationResult.data?.name || null,
     organizationSlug: organizationResult.data?.slug || null,
     organizationTimezone: organizationResult.data?.timezone || null,
     userId: user.id,
     userEmail: user.email || null,
     userName: coachName,
+    userPhone: profileResult.data?.phone || null,
+    userAvatarUrl: profileResult.data?.avatar_url || null,
     accountRole: "coach",
     portalClientId: null,
     portalRelationshipId: null,
@@ -1736,6 +1750,90 @@ export function usePracticeData() {
     [data.organizationId, refresh],
   );
 
+  const updateOrganizationName = useCallback(
+    async (name: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.organizationId)
+        throw new Error("Sign in to update your practice name.");
+      const { error } = await supabase
+        .from("organizations")
+        .update({ name })
+        .eq("id", data.organizationId);
+      if (error) throw error;
+      await refresh();
+    },
+    [data.organizationId, refresh],
+  );
+
+  const updateOrganizationTimezone = useCallback(
+    async (timezone: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.organizationId)
+        throw new Error("Sign in to update your practice timezone.");
+      const { error } = await supabase
+        .from("organizations")
+        .update({ timezone })
+        .eq("id", data.organizationId);
+      if (error) throw error;
+      await refresh();
+    },
+    [data.organizationId, refresh],
+  );
+
+  const updateProfile = useCallback(
+    async (input: { fullName: string; phone: string }) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.userId)
+        throw new Error("Sign in to update your profile.");
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: input.fullName.trim(),
+          phone: input.phone.trim() || null,
+        })
+        .eq("id", data.userId);
+      if (error) throw error;
+      await refresh();
+    },
+    [data.userId, refresh],
+  );
+
+  const uploadAvatar = useCallback(
+    async (file: File) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !data.userId)
+        throw new Error("Sign in to update your photo.");
+      if (!file.size) throw new Error("Choose a photo that is not empty.");
+      if (file.size > MAX_AVATAR_BYTES)
+        throw new Error("Photos must be 5 MB or smaller.");
+      if (!AVATAR_MIME_TYPES.has(file.type))
+        throw new Error("Use a PNG, JPEG, or WEBP image.");
+      // Fixed path per user (no extension) so re-uploads overwrite the same
+      // object instead of accumulating orphaned files in the bucket.
+      const storagePath = `${data.userId}/avatar`;
+      const { error: uploadError } = await supabase.storage
+        .from("soli-avatars")
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: true,
+        });
+      if (uploadError) throw uploadError;
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("soli-avatars").getPublicUrl(storagePath);
+      // Cache-bust so the new photo shows immediately instead of a stale
+      // CDN-cached copy at the same URL.
+      const versionedUrl = `${publicUrl}?v=${Date.now()}`;
+      const { error } = await supabase
+        .from("profiles")
+        .update({ avatar_url: versionedUrl })
+        .eq("id", data.userId);
+      if (error) throw error;
+      await refresh();
+    },
+    [data.userId, refresh],
+  );
+
   const cancelBookingRequest = useCallback(
     async (requestId: string) => {
       const supabase = getSupabaseBrowserClient();
@@ -1782,6 +1880,10 @@ export function usePracticeData() {
     saveBookingPage,
     deleteBookingPage,
     updatePracticeSlug,
+    updateOrganizationName,
+    updateOrganizationTimezone,
+    updateProfile,
+    uploadAvatar,
     cancelBookingRequest,
   };
 }

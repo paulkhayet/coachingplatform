@@ -1,15 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  Building2,
+  Camera,
   CalendarDays,
   CalendarPlus2,
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   CircleCheckBig,
@@ -35,7 +46,6 @@ import {
   MessageCircle,
   Mic2,
   MoreHorizontal,
-  Pencil,
   NotebookPen,
   Paperclip,
   Pause,
@@ -105,13 +115,19 @@ const visibilityTone: Record<
   Everyone: "success",
 };
 
-const practiceTimeZone = "America/Los_Angeles";
+const TimeZoneContext = createContext("America/Los_Angeles");
 
-function formatPracticeTime(value: string) {
+// Reads the practice's organization timezone, provided once at the root by
+// CoachApp so formatPracticeTime/Date callers don't each need it as a prop.
+function usePracticeTimeZone() {
+  return useContext(TimeZoneContext);
+}
+
+function formatPracticeTime(value: string, timeZone: string) {
   return new Date(value).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: practiceTimeZone,
+    timeZone,
   });
 }
 
@@ -130,22 +146,35 @@ function formatRelativeTime(value: string) {
 function formatPracticeDate(
   value: string,
   options: Intl.DateTimeFormatOptions,
+  timeZone: string,
 ) {
   return new Date(value).toLocaleDateString("en-US", {
     ...options,
-    timeZone: practiceTimeZone,
+    timeZone,
   });
 }
 
 function Avatar({
   initials,
   color,
+  imageUrl,
   size = "md",
 }: {
   initials: string;
   color?: string;
+  imageUrl?: string | null;
   size?: "sm" | "md" | "lg" | "xl";
 }) {
+  if (imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- external/user-uploaded URL, not a static asset
+      <img
+        src={imageUrl}
+        alt=""
+        className={cn("avatar", "avatar-photo", `avatar-${size}`)}
+      />
+    );
+  }
   return (
     <span
       className={cn("avatar", `avatar-${size}`)}
@@ -194,6 +223,7 @@ function AppLogo() {
 
 export function CoachApp() {
   const practice = usePracticeData();
+  const timeZone = practice.organizationTimezone || "America/Los_Angeles";
   const practiceClients = practice.clients;
   const practiceAssignments = practice.assignments;
   const practiceResources = practice.resources;
@@ -343,7 +373,11 @@ export function CoachApp() {
     practice.connectionState === "connected" &&
     practice.accountRole !== "coach"
   ) {
-    return <PortalApp practice={practice} />;
+    return (
+      <TimeZoneContext.Provider value={timeZone}>
+        <PortalApp practice={practice} />
+      </TimeZoneContext.Provider>
+    );
   }
 
   const navigate = (nextView: View) => {
@@ -375,6 +409,7 @@ export function CoachApp() {
   };
 
   return (
+    <TimeZoneContext.Provider value={timeZone}>
     <div className="app-shell">
       <aside className={cn("sidebar", mobileMenuOpen && "sidebar-mobile-open")}>
         <div className="sidebar-top">
@@ -398,6 +433,7 @@ export function CoachApp() {
               .slice(0, 2)
               .map((part) => part[0])
               .join("")}
+            imageUrl={practice.userAvatarUrl}
             color="#f1c8ab"
             size="sm"
           />
@@ -519,6 +555,7 @@ export function CoachApp() {
                   .slice(0, 2)
                   .map((part) => part[0])
                   .join("")}
+                imageUrl={practice.userAvatarUrl}
                 color="#f1c8ab"
                 size="sm"
               />
@@ -610,9 +647,19 @@ export function CoachApp() {
             />
           ) : (
             <SettingsView
+              organizationName={practice.organizationName}
               organizationSlug={practice.organizationSlug}
               organizationTimezone={practice.organizationTimezone}
+              onUpdateName={practice.updateOrganizationName}
               onUpdateSlug={practice.updatePracticeSlug}
+              onUpdateTimezone={practice.updateOrganizationTimezone}
+              userName={practice.userName}
+              userEmail={practice.userEmail}
+              userPhone={practice.userPhone}
+              userAvatarUrl={practice.userAvatarUrl}
+              onUpdateProfile={practice.updateProfile}
+              onUpdatePassword={practice.updatePassword}
+              onUploadAvatar={practice.uploadAvatar}
               integrations={practice.integrations}
               onConnect={practice.connectIntegration}
               onUpdate={practice.updateIntegrationPreferences}
@@ -789,6 +836,7 @@ export function CoachApp() {
         </div>
       )}
     </div>
+    </TimeZoneContext.Provider>
   );
 }
 
@@ -817,6 +865,7 @@ function Dashboard({
   onToggleAssignment: (id: string) => void;
   onToast: (message: string) => void;
 }) {
+  const timeZone = usePracticeTimeZone();
   const now = new Date();
   const firstName = userName?.split(" ")[0] || "there";
   const todayLabel = now
@@ -940,16 +989,17 @@ function Dashboard({
         key: `session-${session.id}`,
         icon: "blue" as const,
         title: `Session with ${session.client} · ${session.status.replace("_", " ")}`,
-        detail: formatPracticeDate(session.startsAt, {
-          month: "short",
-          day: "numeric",
-        }),
+        detail: formatPracticeDate(
+          session.startsAt,
+          { month: "short", day: "numeric" },
+          timeZone,
+        ),
         at: session.endsAt,
       }));
     return [...noteEvents, ...sessionEvents]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 5);
-  }, [notesData, sessionData, clientData]);
+  }, [notesData, sessionData, clientData, timeZone]);
 
   return (
     <div className="dashboard page-enter">
@@ -964,7 +1014,7 @@ function Dashboard({
               ? "You have a clear day ahead—plenty of space to catch up."
               : `You have ${todaysSessions.length} session${
                   todaysSessions.length === 1 ? "" : "s"
-                } today${nextSession ? `, starting at ${formatPracticeTime(nextSession.startsAt)}` : ""}.`}
+                } today${nextSession ? `, starting at ${formatPracticeTime(nextSession.startsAt, timeZone)}` : ""}.`}
           </p>
         </div>
         <div className="heading-actions">
@@ -993,7 +1043,7 @@ function Dashboard({
           </p>
           <small>
             {nextSession
-              ? `Next at ${formatPracticeTime(nextSession.startsAt)}`
+              ? `Next at ${formatPracticeTime(nextSession.startsAt, timeZone)}`
               : "None remaining"}
           </small>
         </div>
@@ -1078,10 +1128,10 @@ function Dashboard({
                 >
                   <div className="session-time">
                     <strong>
-                      {formatPracticeTime(session.startsAt).split(" ")[0]}
+                      {formatPracticeTime(session.startsAt, timeZone).split(" ")[0]}
                     </strong>
                     <span>
-                      {formatPracticeTime(session.startsAt).split(" ")[1]}
+                      {formatPracticeTime(session.startsAt, timeZone).split(" ")[1]}
                     </span>
                   </div>
                   <div className={cn("timeline-pin", isCurrent && "current")}>
@@ -1945,6 +1995,7 @@ function ClientSessions({
   onSession: (sessionId: string | null) => void;
   onSchedule: () => void;
 }) {
+  const timeZone = usePracticeTimeZone();
   const ordered = [...sessionData].sort((a, b) =>
     b.startsAt.localeCompare(a.startsAt),
   );
@@ -1981,15 +2032,25 @@ function ClientSessions({
               >
                 <div className="timeline-date">
                   <strong>
-                    {formatPracticeDate(session.startsAt, { day: "numeric" })}
+                    {formatPracticeDate(
+                      session.startsAt,
+                      { day: "numeric" },
+                      timeZone,
+                    )}
                   </strong>
                   <span>
-                    {formatPracticeDate(session.startsAt, { month: "short" })}
+                    {formatPracticeDate(
+                      session.startsAt,
+                      { month: "short" },
+                      timeZone,
+                    )}
                   </span>
                 </div>
                 <div>
                   <div className="timeline-card-title">
-                    <strong>{formatPracticeTime(session.startsAt)}</strong>
+                    <strong>
+                      {formatPracticeTime(session.startsAt, timeZone)}
+                    </strong>
                     <Badge
                       variant={
                         session.status === "scheduled"
@@ -2279,6 +2340,39 @@ function ClientFiles({
   );
 }
 
+const CALENDAR_START_HOUR = 8;
+const CALENDAR_END_HOUR = 18; // exclusive
+const CALENDAR_ROW_HEIGHT = 55; // px, must match .time-label/.calendar-cell height
+const CALENDAR_HOURS = Array.from(
+  { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR },
+  (_, index) => CALENDAR_START_HOUR + index,
+);
+const CALENDAR_EVENT_COLORS = ["purple", "blue", "green", "peach"] as const;
+
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function hourLabel(hour: number) {
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${display} ${suffix}`;
+}
+
+/** Monday..Friday of the week `weekOffset` weeks from the current one. */
+function weekdaysForOffset(weekOffset: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const mondayOffset = today.getDay() === 0 ? -6 : 1 - today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset + weekOffset * 7);
+  return Array.from({ length: 5 }, (_, index) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + index);
+    return day;
+  });
+}
+
 function CalendarView({
   clientData,
   sessionData,
@@ -2292,16 +2386,41 @@ function CalendarView({
   onSession: (client: Client, sessionId: string) => void;
   onToast: (message: string) => void;
 }) {
-  const days = ["MON 10", "TUE 11", "WED 12", "THU 13", "FRI 14"];
+  const timeZone = usePracticeTimeZone();
+  const timeZoneLabel = timeZone.replaceAll("_", " ").split("/").at(-1);
   const visibleSessions = sessionData
     .filter((session) => session.status === "scheduled")
     .slice(0, 5);
+
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekDays = useMemo(() => weekdaysForOffset(weekOffset), [weekOffset]);
+  const todayKey = dateKey(new Date());
+  const weekLabel = `${weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekDays[4].toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+
+  const eventsByCell = useMemo(() => {
+    const map = new Map<string, PracticeSession[]>();
+    const weekKeys = new Set(weekDays.map(dateKey));
+    for (const session of sessionData) {
+      if (session.status === "cancelled") continue;
+      const start = new Date(session.startsAt);
+      const key = dateKey(start);
+      if (!weekKeys.has(key)) continue;
+      const hour = start.getHours();
+      if (hour < CALENDAR_START_HOUR || hour >= CALENDAR_END_HOUR) continue;
+      const cellKey = `${key}-${hour}`;
+      const existing = map.get(cellKey) || [];
+      existing.push(session);
+      map.set(cellKey, existing);
+    }
+    return map;
+  }, [sessionData, weekDays]);
+
   return (
     <div className="calendar-page page-enter">
       <div className="page-heading compact-heading">
         <div>
           <h1>Calendar</h1>
-          <p>Your coaching week · Pacific Time</p>
+          <p>Your coaching week · {timeZoneLabel} Time</p>
         </div>
         <div className="heading-actions">
           <Button
@@ -2356,10 +2475,18 @@ function CalendarView({
               >
                 <div className="agenda-date">
                   <strong>
-                    {formatPracticeDate(session.startsAt, { day: "numeric" })}
+                    {formatPracticeDate(
+                      session.startsAt,
+                      { day: "numeric" },
+                      timeZone,
+                    )}
                   </strong>
                   <span>
-                    {formatPracticeDate(session.startsAt, { month: "short" })}
+                    {formatPracticeDate(
+                      session.startsAt,
+                      { month: "short" },
+                      timeZone,
+                    )}
                   </span>
                 </div>
                 {client && (
@@ -2372,7 +2499,7 @@ function CalendarView({
                 <p>
                   <strong>{session.client}</strong>
                   <span>
-                    {formatPracticeTime(session.startsAt)} ·{" "}
+                    {formatPracticeTime(session.startsAt, timeZone)} ·{" "}
                     {session.meetingProvider === "google_meet"
                       ? "Google Meet"
                       : session.meetingProvider === "zoom"
@@ -2396,28 +2523,93 @@ function CalendarView({
           </div>
         )}
       </div>
-      <div className="calendar-shell panel calendar-week-preview">
+      <div className="calendar-shell panel calendar-week-grid">
+        <div className="calendar-controls">
+          <button className="today-button" onClick={() => setWeekOffset(0)}>
+            Today
+          </button>
+          <button
+            aria-label="Previous week"
+            onClick={() => setWeekOffset((current) => current - 1)}
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <button
+            aria-label="Next week"
+            onClick={() => setWeekOffset((current) => current + 1)}
+          >
+            <ChevronRight size={13} />
+          </button>
+          <strong>{weekLabel}</strong>
+          <span />
+        </div>
         <div className="week-grid">
           <div className="time-column header" />
-          {days.map((day) => (
+          {weekDays.map((day) => (
             <div
-              className={cn("day-header", day.includes("13") && "today")}
-              key={day}
+              className={cn(
+                "day-header",
+                dateKey(day) === todayKey && "today",
+              )}
+              key={dateKey(day)}
             >
-              {day.split(" ")[0]}
-              <strong>{day.split(" ")[1]}</strong>
+              {day.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}
+              <strong>{day.getDate()}</strong>
             </div>
           ))}
-          {["9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM"].map(
-            (time) => (
-              <div className="calendar-row" key={time}>
-                <div className="time-label">{time}</div>
-                {days.map((day) => (
-                  <div className="calendar-cell" key={day + time} />
-                ))}
-              </div>
-            ),
-          )}
+          {CALENDAR_HOURS.map((hour) => (
+            <div className="calendar-row" key={hour}>
+              <div className="time-label">{hourLabel(hour)}</div>
+              {weekDays.map((day) => {
+                const cellSessions =
+                  eventsByCell.get(`${dateKey(day)}-${hour}`) || [];
+                return (
+                  <div className="calendar-cell" key={dateKey(day)}>
+                    {cellSessions.map((session, index) => {
+                      const start = new Date(session.startsAt);
+                      const end = new Date(session.endsAt);
+                      const durationMinutes = Math.max(
+                        15,
+                        (end.getTime() - start.getTime()) / 60_000,
+                      );
+                      const top =
+                        (start.getMinutes() / 60) * CALENDAR_ROW_HEIGHT + 3;
+                      const height = Math.max(
+                        26,
+                        (durationMinutes / 60) * CALENDAR_ROW_HEIGHT - 6,
+                      );
+                      const client = clientData.find(
+                        (item) => item.id === session.clientId,
+                      );
+                      const color =
+                        session.status === "attended"
+                          ? "green"
+                          : session.status === "late_cancel" ||
+                              session.status === "no_show"
+                            ? "peach"
+                            : CALENDAR_EVENT_COLORS[
+                                index % CALENDAR_EVENT_COLORS.length
+                              ];
+                      return (
+                        <button
+                          type="button"
+                          key={session.id}
+                          className={cn("calendar-event", color)}
+                          style={{ top, height }}
+                          onClick={() => client && onSession(client, session.id)}
+                        >
+                          <strong>{session.client}</strong>
+                          <span>
+                            {formatPracticeTime(session.startsAt, timeZone)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -2982,21 +3174,41 @@ function AssignResourceModal({
 }
 
 type IntegrationAvailability = { google: boolean; zoom: boolean };
-type SettingsTab = "general" | "integrations";
+type SettingsTab = "general" | "profile" | "integrations";
 
 function SettingsView({
+  organizationName,
   organizationSlug,
   organizationTimezone,
+  onUpdateName,
   onUpdateSlug,
+  onUpdateTimezone,
+  userName,
+  userEmail,
+  userPhone,
+  userAvatarUrl,
+  onUpdateProfile,
+  onUpdatePassword,
+  onUploadAvatar,
   integrations,
   onConnect,
   onUpdate,
   onDisconnect,
   onToast,
 }: {
+  organizationName: string | null;
   organizationSlug: string | null;
   organizationTimezone: string | null;
+  onUpdateName: (name: string) => Promise<void>;
   onUpdateSlug: (slug: string) => Promise<void>;
+  onUpdateTimezone: (timezone: string) => Promise<void>;
+  userName: string | null;
+  userEmail: string | null;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
+  onUpdateProfile: (input: { fullName: string; phone: string }) => Promise<void>;
+  onUpdatePassword: (password: string) => Promise<void>;
+  onUploadAvatar: (file: File) => Promise<void>;
   integrations: IntegrationConnection[];
   onConnect: (provider: "google" | "zoom") => void;
   onUpdate: (input: {
@@ -3030,6 +3242,12 @@ function SettingsView({
           General
         </button>
         <button
+          className={cn(tab === "profile" && "active")}
+          onClick={() => setTab("profile")}
+        >
+          Profile
+        </button>
+        <button
           className={cn(tab === "integrations" && "active")}
           onClick={() => setTab("integrations")}
         >
@@ -3039,9 +3257,23 @@ function SettingsView({
 
       {tab === "general" ? (
         <GeneralSettings
+          organizationName={organizationName}
           organizationSlug={organizationSlug}
           organizationTimezone={organizationTimezone}
+          onUpdateName={onUpdateName}
           onUpdateSlug={onUpdateSlug}
+          onUpdateTimezone={onUpdateTimezone}
+          onToast={onToast}
+        />
+      ) : tab === "profile" ? (
+        <ProfileSettings
+          userName={userName}
+          userEmail={userEmail}
+          userPhone={userPhone}
+          userAvatarUrl={userAvatarUrl}
+          onUpdateProfile={onUpdateProfile}
+          onUpdatePassword={onUpdatePassword}
+          onUploadAvatar={onUploadAvatar}
           onToast={onToast}
         />
       ) : (
@@ -3057,47 +3289,128 @@ function SettingsView({
   );
 }
 
+function sanitizeSlug(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 54);
+}
+
+const FALLBACK_TIMEZONES = [
+  "America/Los_Angeles",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Africa/Cairo",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+  "UTC",
+];
+
+let cachedTimezones: string[] | null = null;
+function allTimezones(): string[] {
+  if (!cachedTimezones) {
+    try {
+      cachedTimezones = Intl.supportedValuesOf("timeZone");
+    } catch {
+      cachedTimezones = FALLBACK_TIMEZONES;
+    }
+  }
+  return cachedTimezones;
+}
+
+const timezoneListSubscribe = () => () => {};
+const timezoneServerSnapshot = () => FALLBACK_TIMEZONES;
+
+// Intl.supportedValuesOf can return a different list (order/coverage) between
+// the Node SSR runtime and the browser, so we render the fixed fallback list
+// on the server and first client paint, then switch to the full list once
+// mounted — same trick as useOrigin, to avoid a hydration mismatch.
+function useTimezoneList(): string[] {
+  return useSyncExternalStore(
+    timezoneListSubscribe,
+    allTimezones,
+    timezoneServerSnapshot,
+  );
+}
+
+function timezoneOptions(current: string, zones: string[]): string[] {
+  return zones.includes(current) ? zones : [current, ...zones];
+}
+
 function GeneralSettings({
+  organizationName,
   organizationSlug,
   organizationTimezone,
+  onUpdateName,
   onUpdateSlug,
+  onUpdateTimezone,
   onToast,
 }: {
+  organizationName: string | null;
   organizationSlug: string | null;
   organizationTimezone: string | null;
+  onUpdateName: (name: string) => Promise<void>;
   onUpdateSlug: (slug: string) => Promise<void>;
+  onUpdateTimezone: (timezone: string) => Promise<void>;
   onToast: (message: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(organizationSlug || "");
+  const activeSlug = organizationSlug || "your-practice";
+  const activeTimezone = organizationTimezone || "America/Los_Angeles";
+  const [nameDraft, setNameDraft] = useState(organizationName || "");
+  const [slugDraft, setSlugDraft] = useState(activeSlug);
+  const [timezoneDraft, setTimezoneDraft] = useState(activeTimezone);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const origin = useOrigin();
-  const activeSlug = organizationSlug || "your-practice";
-  const displayUrl = `${origin.replace(/^https?:\/\//, "")}/${activeSlug}`;
+  const availableTimezones = useTimezoneList();
+  const zones = useMemo(
+    () => timezoneOptions(activeTimezone, availableTimezones),
+    [activeTimezone, availableTimezones],
+  );
+
+  const dirty =
+    nameDraft.trim() !== (organizationName || "") ||
+    slugDraft !== activeSlug ||
+    timezoneDraft !== activeTimezone;
+
+  const cancel = () => {
+    setNameDraft(organizationName || "");
+    setSlugDraft(activeSlug);
+    setTimezoneDraft(activeTimezone);
+    setError(null);
+  };
 
   const save = async () => {
-    const cleaned = draft
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 54);
-    if (!cleaned) {
-      setError("Enter a practice URL.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
-      await onUpdateSlug(cleaned);
-      setEditing(false);
-      onToast("Practice URL updated");
+      const cleanedSlug = sanitizeSlug(slugDraft);
+      if (!cleanedSlug) throw new Error("Enter a practice URL.");
+      if (nameDraft.trim() !== (organizationName || "")) {
+        if (!nameDraft.trim()) throw new Error("Enter a practice name.");
+        await onUpdateName(nameDraft.trim());
+      }
+      if (cleanedSlug !== activeSlug) await onUpdateSlug(cleanedSlug);
+      if (timezoneDraft !== activeTimezone) {
+        await onUpdateTimezone(timezoneDraft);
+      }
+      onToast("Practice details updated");
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : "That practice URL could not be saved.",
+          : "Those changes could not be saved.",
       );
     } finally {
       setSaving(false);
@@ -3108,82 +3421,339 @@ function GeneralSettings({
     <section className="panel booking-settings-card">
       <div className="booking-section-heading">
         <span>
-          <Link2 size={16} />
+          <Building2 size={16} />
         </span>
         <div>
-          <h2>Practice URL</h2>
-          <p>The link clients use to reach any of your booking pages.</p>
+          <h2>Practice details</h2>
+          <p>Your practice name, booking link, and timezone.</p>
         </div>
       </div>
-      <div className="settings-url-row">
-        {editing ? (
-          <div className="slug-field settings-url-field">
+      <div className="booking-form-grid">
+        <label className="booking-field-wide">
+          Practice name
+          <input
+            value={nameDraft}
+            placeholder="Your Coaching Practice"
+            onChange={(event) => setNameDraft(event.target.value)}
+          />
+        </label>
+        <label className="booking-field-wide">
+          Practice URL
+          <div className="slug-field">
             <span>{origin.replace(/^https?:\/\//, "")}/</span>
             <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && save()}
+              value={slugDraft}
+              onChange={(event) => setSlugDraft(sanitizeSlug(event.target.value))}
             />
           </div>
-        ) : (
-          <div className="settings-url-value">{displayUrl}</div>
-        )}
-        <div className="settings-field-actions">
-          {editing ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditing(false);
-                  setError(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={save} disabled={saving}>
-                {saving ? "Saving…" : "Save"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(
-                    `${origin}/${activeSlug}`,
-                  );
-                  onToast("Practice URL copied");
-                }}
-              >
-                <Copy size={13} /> Copy
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setDraft(activeSlug);
-                  setEditing(true);
-                }}
-              >
-                <Pencil size={13} /> Edit
-              </Button>
-            </>
-          )}
-        </div>
+        </label>
+        <label>
+          Timezone
+          <select
+            value={timezoneDraft}
+            onChange={(event) => setTimezoneDraft(event.target.value)}
+          >
+            {zones.map((zone) => (
+              <option key={zone} value={zone}>
+                {zone.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+          <small className="field-hint">
+            Booking availability windows are interpreted in this timezone.
+          </small>
+        </label>
       </div>
       {error ? (
         <div className="data-error" role="alert">
           {error}
         </div>
       ) : null}
-      {organizationTimezone ? (
-        <p className="settings-hint">
-          Your practice timezone is{" "}
-          <strong>{organizationTimezone.replaceAll("_", " ")}</strong>.
-          Booking availability windows are interpreted using this timezone.
-        </p>
+      <div className="settings-field-actions">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            await navigator.clipboard.writeText(`${origin}/${activeSlug}`);
+            onToast("Practice URL copied");
+          }}
+        >
+          <Copy size={13} /> Copy URL
+        </Button>
+        {dirty ? (
+          <>
+            <Button variant="outline" size="sm" onClick={cancel}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ProfileSettings({
+  userName,
+  userEmail,
+  userPhone,
+  userAvatarUrl,
+  onUpdateProfile,
+  onUpdatePassword,
+  onUploadAvatar,
+  onToast,
+}: {
+  userName: string | null;
+  userEmail: string | null;
+  userPhone: string | null;
+  userAvatarUrl: string | null;
+  onUpdateProfile: (input: { fullName: string; phone: string }) => Promise<void>;
+  onUpdatePassword: (password: string) => Promise<void>;
+  onUploadAvatar: (file: File) => Promise<void>;
+  onToast: (message: string) => void;
+}) {
+  const [nameDraft, setNameDraft] = useState(userName || "");
+  const [phoneDraft, setPhoneDraft] = useState(userPhone || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const dirty =
+    nameDraft.trim() !== (userName || "") ||
+    phoneDraft.trim() !== (userPhone || "");
+
+  const save = async () => {
+    if (!nameDraft.trim()) {
+      setError("Enter your name.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onUpdateProfile({
+        fullName: nameDraft.trim(),
+        phone: phoneDraft.trim(),
+      });
+      onToast("Profile updated");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Your profile could not be saved.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pickPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      await onUploadAvatar(file);
+      onToast("Photo updated");
+    } catch (uploadError) {
+      onToast(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Could not upload that photo.",
+      );
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  return (
+    <>
+      <section className="panel booking-settings-card">
+        <div className="booking-section-heading">
+          <span>
+            <UserRound size={16} />
+          </span>
+          <div>
+            <h2>Your profile</h2>
+            <p>How you appear to clients and teammates.</p>
+          </div>
+        </div>
+        <div className="settings-avatar-row">
+          <Avatar
+            initials={(userName || "You")
+              .split(/\s+/)
+              .slice(0, 2)
+              .map((part) => part[0])
+              .join("")}
+            imageUrl={userAvatarUrl}
+            color="#f1c8ab"
+            size="xl"
+          />
+          <div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="settings-avatar-input"
+              onChange={pickPhoto}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={uploadingAvatar}
+              onClick={() => avatarInputRef.current?.click()}
+            >
+              <Camera size={13} />
+              {uploadingAvatar ? "Uploading…" : "Upload photo"}
+            </Button>
+            <p className="field-hint">PNG, JPEG, or WEBP. Up to 5 MB.</p>
+          </div>
+        </div>
+        <div className="booking-form-grid">
+          <label className="booking-field-wide">
+            Full name
+            <input
+              value={nameDraft}
+              onChange={(event) => setNameDraft(event.target.value)}
+            />
+          </label>
+          <label>
+            Email
+            <input value={userEmail || ""} disabled />
+            <small className="field-hint">Contact support to change your email.</small>
+          </label>
+          <label>
+            Phone <small>Optional</small>
+            <input
+              type="tel"
+              value={phoneDraft}
+              onChange={(event) => setPhoneDraft(event.target.value)}
+            />
+          </label>
+        </div>
+        {error ? (
+          <div className="data-error" role="alert">
+            {error}
+          </div>
+        ) : null}
+        {dirty ? (
+          <div className="settings-field-actions">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setNameDraft(userName || "");
+                setPhoneDraft(userPhone || "");
+                setError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        ) : null}
+      </section>
+      <PasswordCard onUpdatePassword={onUpdatePassword} onToast={onToast} />
+    </>
+  );
+}
+
+function PasswordCard({
+  onUpdatePassword,
+  onToast,
+}: {
+  onUpdatePassword: (password: string) => Promise<void>;
+  onToast: (message: string) => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    if (password.length < 8) {
+      setError("Use at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords don't match.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onUpdatePassword(password);
+      setPassword("");
+      setConfirm("");
+      onToast("Password updated");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Your password could not be updated.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="panel booking-settings-card">
+      <div className="booking-section-heading">
+        <span>
+          <LockKeyhole size={16} />
+        </span>
+        <div>
+          <h2>Password</h2>
+          <p>Choose a new password for signing in.</p>
+        </div>
+      </div>
+      <div className="booking-form-grid">
+        <label>
+          New password
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="new-password"
+          />
+        </label>
+        <label>
+          Confirm password
+          <input
+            type="password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+            autoComplete="new-password"
+          />
+        </label>
+      </div>
+      {error ? (
+        <div className="data-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+      {password || confirm ? (
+        <div className="settings-field-actions">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setPassword("");
+              setConfirm("");
+              setError(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Update password"}
+          </Button>
+        </div>
       ) : null}
     </section>
   );
@@ -3793,6 +4363,7 @@ function InviteAcceptanceScreen({
 }
 
 function PortalApp({ practice }: { practice: PracticeHook }) {
+  const timeZone = usePracticeTimeZone();
   const client = practice.clients[0];
   const [assignmentDetail, setAssignmentDetail] = useState<Assignment | null>(
     null,
@@ -3894,12 +4465,12 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
             {nextSession ? (
               <>
                 <h2>
-                  {formatPracticeDate(nextSession.startsAt, {
-                    weekday: "long",
-                    month: "long",
-                    day: "numeric",
-                  })}{" "}
-                  at {formatPracticeTime(nextSession.startsAt)}
+                  {formatPracticeDate(
+                    nextSession.startsAt,
+                    { weekday: "long", month: "long", day: "numeric" },
+                    timeZone,
+                  )}{" "}
+                  at {formatPracticeTime(nextSession.startsAt, timeZone)}
                 </h2>
                 <span>50 minutes · Zoom</span>
               </>
@@ -4034,10 +4605,11 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
                     <VisibilityBadge visibility={note.visibility} />
                     <p>{note.body}</p>
                     <span>
-                      {formatPracticeDate(note.createdAt, {
-                        month: "short",
-                        day: "numeric",
-                      })}
+                      {formatPracticeDate(
+                        note.createdAt,
+                        { month: "short", day: "numeric" },
+                        timeZone,
+                      )}
                     </span>
                   </article>
                 ))
@@ -4337,6 +4909,7 @@ function SchedulingRequestModal({
     message: string;
   }) => Promise<void>;
 }) {
+  const timeZone = usePracticeTimeZone();
   const [requestType, setRequestType] = useState<
     "reschedule" | "cancel" | "new_session"
   >(session ? "reschedule" : "new_session");
@@ -4400,12 +4973,12 @@ function SchedulingRequestModal({
             <div>
               <strong>Current session</strong>
               <span>
-                {formatPracticeDate(session.startsAt, {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                })}{" "}
-                at {formatPracticeTime(session.startsAt)} · Zoom
+                {formatPracticeDate(
+                  session.startsAt,
+                  { weekday: "long", month: "short", day: "numeric" },
+                  timeZone,
+                )}{" "}
+                at {formatPracticeTime(session.startsAt, timeZone)} · Zoom
               </span>
             </div>
           </div>
