@@ -40,7 +40,6 @@ import {
   Paperclip,
   Pause,
   PenLine,
-  Plug,
   Plus,
   Search,
   Send,
@@ -85,7 +84,7 @@ type View =
   | "Calendar"
   | "Bookings"
   | "Resources"
-  | "Integrations";
+  | "Settings";
 type ClientTab = "Overview" | "Sessions" | "Notes" | "Assignments" | "Files";
 
 const navItems: { label: View; icon: typeof Home }[] = [
@@ -94,7 +93,6 @@ const navItems: { label: View; icon: typeof Home }[] = [
   { label: "Calendar", icon: CalendarDays },
   { label: "Bookings", icon: CalendarPlus2 },
   { label: "Resources", icon: FolderOpen },
-  { label: "Integrations", icon: Plug },
 ];
 
 const visibilityTone: Record<
@@ -273,7 +271,7 @@ export function CoachApp() {
             : `Could not connect ${providerName}`;
     window.setTimeout(() => {
       setSelectedClient(null);
-      setView("Integrations");
+      setView("Settings");
       setToast(message);
     }, 0);
     url.searchParams.delete("integration");
@@ -435,7 +433,10 @@ export function CoachApp() {
             <span>Notifications</span>
             <i />
           </button>
-          <button onClick={() => navigate("Integrations")}>
+          <button
+            className={cn(view === "Settings" && !selectedClient && "active")}
+            onClick={() => navigate("Settings")}
+          >
             <Settings size={17} />
             <span>Settings</span>
           </button>
@@ -608,10 +609,11 @@ export function CoachApp() {
               onToast={setToast}
             />
           ) : (
-            <IntegrationsView
-              integrations={practice.integrations}
+            <SettingsView
               organizationSlug={practice.organizationSlug}
+              organizationTimezone={practice.organizationTimezone}
               onUpdateSlug={practice.updatePracticeSlug}
+              integrations={practice.integrations}
               onConnect={practice.connectIntegration}
               onUpdate={practice.updateIntegrationPreferences}
               onDisconnect={practice.disconnectIntegration}
@@ -2979,12 +2981,90 @@ function AssignResourceModal({
   );
 }
 
-function PracticeUrlCard({
+type IntegrationAvailability = { google: boolean; zoom: boolean };
+type SettingsTab = "general" | "integrations";
+
+function SettingsView({
   organizationSlug,
+  organizationTimezone,
+  onUpdateSlug,
+  integrations,
+  onConnect,
+  onUpdate,
+  onDisconnect,
+  onToast,
+}: {
+  organizationSlug: string | null;
+  organizationTimezone: string | null;
+  onUpdateSlug: (slug: string) => Promise<void>;
+  integrations: IntegrationConnection[];
+  onConnect: (provider: "google" | "zoom") => void;
+  onUpdate: (input: {
+    connectionId: string;
+    syncEnabled: boolean;
+    autoAddMeeting: boolean;
+    defaultForScheduling: boolean;
+  }) => Promise<void>;
+  onDisconnect: (connectionId: string) => Promise<void>;
+  onToast: (message: string) => void;
+}) {
+  const [tab, setTab] = useState<SettingsTab>("general");
+  const connectedCount = integrations.filter(
+    (item) => item.status !== "disconnected",
+  ).length;
+
+  return (
+    <div className="integrations-page page-enter">
+      <div className="page-heading compact-heading">
+        <div>
+          <h1>Settings</h1>
+          <p>Your practice details and the tools that keep sessions moving.</p>
+        </div>
+      </div>
+
+      <div className="segmented-tabs">
+        <button
+          className={cn(tab === "general" && "active")}
+          onClick={() => setTab("general")}
+        >
+          General
+        </button>
+        <button
+          className={cn(tab === "integrations" && "active")}
+          onClick={() => setTab("integrations")}
+        >
+          Integrations <span>{connectedCount}</span>
+        </button>
+      </div>
+
+      {tab === "general" ? (
+        <GeneralSettings
+          organizationSlug={organizationSlug}
+          organizationTimezone={organizationTimezone}
+          onUpdateSlug={onUpdateSlug}
+          onToast={onToast}
+        />
+      ) : (
+        <IntegrationsSettings
+          integrations={integrations}
+          onConnect={onConnect}
+          onUpdate={onUpdate}
+          onDisconnect={onDisconnect}
+          onToast={onToast}
+        />
+      )}
+    </div>
+  );
+}
+
+function GeneralSettings({
+  organizationSlug,
+  organizationTimezone,
   onUpdateSlug,
   onToast,
 }: {
   organizationSlug: string | null;
+  organizationTimezone: string | null;
   onUpdateSlug: (slug: string) => Promise<void>;
   onToast: (message: string) => void;
 }) {
@@ -2994,6 +3074,7 @@ function PracticeUrlCard({
   const [error, setError] = useState<string | null>(null);
   const origin = useOrigin();
   const activeSlug = organizationSlug || "your-practice";
+  const displayUrl = `${origin.replace(/^https?:\/\//, "")}/${activeSlug}`;
 
   const save = async () => {
     const cleaned = draft
@@ -3024,78 +3105,98 @@ function PracticeUrlCard({
   };
 
   return (
-    <>
-      <div className="booking-link-strip">
-        <span className="booking-link-icon">
-          <Link2 size={17} />
+    <section className="panel booking-settings-card">
+      <div className="booking-section-heading">
+        <span>
+          <Link2 size={16} />
         </span>
-        <div className="booking-link-copy">
-          <small>Your practice URL</small>
+        <div>
+          <h2>Practice URL</h2>
+          <p>The link clients use to reach any of your booking pages.</p>
+        </div>
+      </div>
+      <div className="settings-url-row">
+        {editing ? (
+          <div className="slug-field settings-url-field">
+            <span>{origin.replace(/^https?:\/\//, "")}/</span>
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && save()}
+            />
+          </div>
+        ) : (
+          <div className="settings-url-value">{displayUrl}</div>
+        )}
+        <div className="settings-field-actions">
           {editing ? (
-            <div className="slug-field">
-              <span>{origin.replace(/^https?:\/\//, "")}/</span>
-              <input
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && save()}
-              />
-            </div>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditing(false);
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" onClick={save} disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            </>
           ) : (
-            <strong>{`${origin.replace(/^https?:\/\//, "")}/${activeSlug}`}</strong>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(
+                    `${origin}/${activeSlug}`,
+                  );
+                  onToast("Practice URL copied");
+                }}
+              >
+                <Copy size={13} /> Copy
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDraft(activeSlug);
+                  setEditing(true);
+                }}
+              >
+                <Pencil size={13} /> Edit
+              </Button>
+            </>
           )}
         </div>
-        {editing ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEditing(false);
-                setError(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button size="sm" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setDraft(activeSlug);
-              setEditing(true);
-            }}
-          >
-            <Pencil size={13} /> Edit
-          </Button>
-        )}
       </div>
       {error ? (
         <div className="data-error" role="alert">
           {error}
         </div>
       ) : null}
-    </>
+      {organizationTimezone ? (
+        <p className="settings-hint">
+          Your practice timezone is{" "}
+          <strong>{organizationTimezone.replaceAll("_", " ")}</strong>.
+          Booking availability windows are interpreted using this timezone.
+        </p>
+      ) : null}
+    </section>
   );
 }
 
-type IntegrationAvailability = { google: boolean; zoom: boolean };
-
-function IntegrationsView({
+function IntegrationsSettings({
   integrations,
   onConnect,
   onUpdate,
   onDisconnect,
-  organizationSlug,
-  onUpdateSlug,
   onToast,
 }: {
   integrations: IntegrationConnection[];
-  organizationSlug: string | null;
-  onUpdateSlug: (slug: string) => Promise<void>;
   onConnect: (provider: "google" | "zoom") => void;
   onUpdate: (input: {
     connectionId: string;
@@ -3127,25 +3228,8 @@ function IntegrationsView({
   const zoom = integrations.find(
     (item) => item.provider === "zoom" && item.status !== "disconnected",
   );
-  const connectedCount = [google, zoom].filter(Boolean).length;
   return (
-    <div className="integrations-page page-enter">
-      <div className="page-heading compact-heading">
-        <div>
-          <h1>Settings</h1>
-          <p>Your practice address and the tools that keep sessions moving.</p>
-        </div>
-        <Badge variant={connectedCount ? "success" : "neutral"}>
-          <Plug size={11} /> {connectedCount} connected
-        </Badge>
-      </div>
-
-      <PracticeUrlCard
-        organizationSlug={organizationSlug}
-        onUpdateSlug={onUpdateSlug}
-        onToast={onToast}
-      />
-
+    <>
       <section className="integration-overview panel">
         <span className="integration-overview-icon">
           <Zap size={18} />
@@ -3296,7 +3380,7 @@ function IntegrationsView({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

@@ -300,9 +300,7 @@ function BookingsOverview({
 }) {
   const [tab, setTab] = useState<"types" | "upcoming">("types");
   const [loadedAt] = useState(() => Date.now());
-  const origin = useOrigin();
   const activeSlug = organizationSlug || "your-practice";
-  const practiceUrl = `${origin.replace(/^https?:\/\//, "")}/${activeSlug}`;
 
   const upcoming = useMemo(
     () =>
@@ -339,20 +337,6 @@ function BookingsOverview({
             Give every kind of conversation its own page and link, and see who
             has booked time with you.
           </p>
-          <button
-            className="practice-url-chip"
-            onClick={async () => {
-              await navigator.clipboard.writeText(
-                `${window.location.origin}/${activeSlug}`,
-              );
-              onToast("Practice URL copied");
-            }}
-            title="Copy your practice URL"
-          >
-            <Link2 size={11} />
-            <span>{practiceUrl}</span>
-            <Copy size={10} />
-          </button>
         </div>
         <div className="heading-actions">
           <Button onClick={onCreate}>
