@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -484,14 +485,13 @@ export function PublicBookingPage({
                       </select>
                     ) : question.type === "checkbox" ? (
                       <span className="public-checkbox">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           required={question.required}
                           checked={answers[question.id] === "Yes"}
-                          onChange={(event) =>
+                          onCheckedChange={(checked) =>
                             setAnswers((current) => ({
                               ...current,
-                              [question.id]: event.target.checked ? "Yes" : "",
+                              [question.id]: checked === true ? "Yes" : "",
                             }))
                           }
                         />{" "}

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   BookingPage,
@@ -1269,12 +1270,11 @@ function BookingTypeEditor({
                       <option value="checkbox">Checkbox</option>
                     </select>
                     <label className="required-toggle">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={question.required}
-                        onChange={(event) =>
+                        onCheckedChange={(checked) =>
                           updateQuestion(question.id, {
-                            required: event.target.checked,
+                            required: checked === true,
                           })
                         }
                       />

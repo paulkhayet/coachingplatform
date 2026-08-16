@@ -448,10 +448,6 @@ textarea:focus-visible {
   color: #77767b;
   font-size: 9.5px;
 }
-.required-toggle input {
-  width: 13px;
-  height: 13px;
-}
 .question-delete {
   display: inline-flex;
   width: 27px;
@@ -945,7 +941,6 @@ textarea:focus-visible {
 .public-form-fields label { font-size: 9px; }
 .public-form-fields label > small { margin-left: 4px; color: #aaa8ad; font-weight: 450; }
 .public-checkbox { display: flex; height: 37px; align-items: center; gap: 7px; color: #66646a; font-size: 10px; }
-.public-checkbox input { width: 15px; height: 15px; }
 .booking-honeypot { position: absolute !important; left: -10000px !important; }
 .public-booking-success {
   display: flex;
@@ -5648,12 +5643,6 @@ kbd {
   gap: 7px;
   font-weight: 500 !important;
 }
-.check-control input {
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  accent-color: #2f6fed;
-}
 .workflow-modal {
   width: min(520px, calc(100vw - 28px));
   max-height: 88vh;
@@ -5808,12 +5797,6 @@ kbd {
   display: flex;
   align-items: center;
   gap: 9px;
-}
-.completion-check input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: #2f6fed;
 }
 .completion-check strong,
 .completion-check small {

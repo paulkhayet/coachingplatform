@@ -35,6 +35,15 @@ const eslintConfig = defineConfig([
         version: "detect",
       },
     },
+    rules: {
+      // shadcn/Radix form controls (Checkbox, Switch, etc.) render as
+      // <button role="..."> under the hood, so the default heuristic can't
+      // see them as a nested control when wrapped in a <label>.
+      "jsx-a11y/label-has-associated-control": [
+        "error",
+        { controlComponents: ["Checkbox"] },
+      ],
+    },
   },
 ]);
 

@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { BookingsView } from "@/components/bookings-view";
@@ -3134,10 +3135,9 @@ function AssignResourceModal({
             />
           </label>
           <label className="check-control">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={required}
-              onChange={(event) => setRequired(event.target.checked)}
+              onCheckedChange={(checked) => setRequired(checked === true)}
             />
             Make this mandatory
           </label>
@@ -5803,10 +5803,9 @@ function SessionPanel({
                 </label>
               </div>
               <label className="check-control">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={required}
-                  onChange={(event) => setRequired(event.target.checked)}
+                  onCheckedChange={(checked) => setRequired(checked === true)}
                 />
                 Required to complete
               </label>
@@ -6132,10 +6131,9 @@ function AssignmentComposer({
             />
           </label>
           <label className="check-control">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={required}
-              onChange={(event) => setRequired(event.target.checked)}
+              onCheckedChange={(checked) => setRequired(checked === true)}
             />
             Make this mandatory
           </label>
@@ -6352,10 +6350,9 @@ function AssignmentDetail({
               className="completion-check"
               aria-label="Mark assignment complete"
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={checked}
-                onChange={(event) => setChecked(event.target.checked)}
+                onCheckedChange={(value) => setChecked(value === true)}
               />
               <span>
                 <strong>Mark this assignment complete</strong>
