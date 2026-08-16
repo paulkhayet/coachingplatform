@@ -67,6 +67,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { BookingsView } from "@/components/bookings-view";
@@ -3075,10 +3082,9 @@ function AssignResourceModal({
         <div className="form-stack">
           <label>
             Client
-            <select
+            <Select
               value={clientId}
-              onChange={(event) => {
-                const nextId = event.target.value;
+              onValueChange={(nextId) => {
                 setClientId(nextId);
                 setGuardianShare(
                   clients.find((item) => item.id === nextId)?.type === "Teen"
@@ -3087,12 +3093,17 @@ function AssignResourceModal({
                 );
               }}
             >
-              {clients.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((item) => (
+                  <SelectItem value={item.id} key={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             Instructions <span className="optional">Optional</span>
@@ -3437,16 +3448,18 @@ function GeneralSettings({
         </label>
         <label>
           Timezone
-          <select
-            value={timezoneDraft}
-            onChange={(event) => setTimezoneDraft(event.target.value)}
-          >
-            {zones.map((zone) => (
-              <option key={zone} value={zone}>
-                {zone.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
+          <Select value={timezoneDraft} onValueChange={setTimezoneDraft}>
+            <SelectTrigger className="h-[37px] w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {zones.map((zone) => (
+                <SelectItem key={zone} value={zone}>
+                  {zone.replaceAll("_", " ")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <small className="field-hint">
             Booking availability windows are interpreted in this timezone.
           </small>
@@ -4962,19 +4975,24 @@ function SchedulingRequestModal({
         <div className="form-stack">
           <label>
             Request
-            <select
+            <Select
               value={requestType}
-              onChange={(event) =>
-                setRequestType(
-                  event.target.value as "reschedule" | "cancel" | "new_session",
-                )
+              onValueChange={(value) =>
+                setRequestType(value as "reschedule" | "cancel" | "new_session")
               }
             >
-              <option value={session ? "reschedule" : "new_session"}>
-                {session ? "Reschedule" : "New session"}
-              </option>
-              {session && <option value="cancel">Cancel this session</option>}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={session ? "reschedule" : "new_session"}>
+                  {session ? "Reschedule" : "New session"}
+                </SelectItem>
+                {session && (
+                  <SelectItem value="cancel">Cancel this session</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </label>
           {requestType !== "cancel" && (
             <label>
@@ -5783,15 +5801,22 @@ function SessionPanel({
               <div className="form-grid">
                 <label>
                   Response
-                  <select
+                  <Select
                     value={responseType}
-                    onChange={(event) =>
-                      setResponseType(event.target.value as "checkbox" | "text")
+                    onValueChange={(value) =>
+                      setResponseType(value as "checkbox" | "text")
                     }
                   >
-                    <option value="checkbox">Completion checkbox</option>
-                    <option value="text">Written response</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="checkbox">
+                        Completion checkbox
+                      </SelectItem>
+                      <SelectItem value="text">Written response</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <label>
                   Due
@@ -5903,17 +5928,22 @@ function ScheduleSessionModal({
         <div className="form-stack">
           <label>
             Client
-            <select
+            <Select
               value={clientId}
-              onChange={(event) => setClientId(event.target.value)}
+              onValueChange={setClientId}
               required
             >
-              {clientData.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {clientData.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <div className="form-grid">
             <label>
@@ -5927,33 +5957,41 @@ function ScheduleSessionModal({
             </label>
             <label>
               Duration
-              <select
-                value={durationMinutes}
-                onChange={(event) =>
-                  setDurationMinutes(Number(event.target.value))
-                }
+              <Select
+                value={String(durationMinutes)}
+                onValueChange={(value) => setDurationMinutes(Number(value))}
               >
-                <option value={30}>30 minutes</option>
-                <option value={50}>50 minutes</option>
-                <option value={60}>60 minutes</option>
-                <option value={90}>90 minutes</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="50">50 minutes</SelectItem>
+                  <SelectItem value="60">60 minutes</SelectItem>
+                  <SelectItem value="90">90 minutes</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
           </div>
           <label>
             Meeting location
-            <select
+            <Select
               value={meetingProvider || "other"}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 setMeetingProvider(
-                  event.target.value as "google_meet" | "zoom" | "other",
+                  value as "google_meet" | "zoom" | "other",
                 )
               }
             >
-              <option value="zoom">Zoom</option>
-              <option value="google_meet">Google Meet (later)</option>
-              <option value="other">Other / in person</option>
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zoom">Zoom</SelectItem>
+                <SelectItem value="google_meet">Google Meet (later)</SelectItem>
+                <SelectItem value="other">Other / in person</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
           <div className="privacy-callout neutral">
             <Video size={16} />
@@ -5987,18 +6025,25 @@ function GuardianShareSelect({
   return (
     <label>
       Guardian logistics
-      <select
+      <Select
         value={value}
-        onChange={(event) =>
-          onChange(event.target.value as "client_default" | "share" | "private")
+        onValueChange={(next) =>
+          onChange(next as "client_default" | "share" | "private")
         }
       >
-        <option value="client_default">
-          Use this client’s guardian settings
-        </option>
-        <option value="share">Share logistics for this assignment</option>
-        <option value="private">Keep this assignment private</option>
-      </select>
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="client_default">
+            Use this client’s guardian settings
+          </SelectItem>
+          <SelectItem value="share">
+            Share logistics for this assignment
+          </SelectItem>
+          <SelectItem value="private">Keep this assignment private</SelectItem>
+        </SelectContent>
+      </Select>
       <span className="field-hint">
         Only title, due date, required status, and completion can be shared.
         Responses stay private.

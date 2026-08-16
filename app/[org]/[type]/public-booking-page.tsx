@@ -15,6 +15,13 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
@@ -468,21 +475,27 @@ export function PublicBookingPage({
                         }
                       />
                     ) : question.type === "select" ? (
-                      <select
+                      <Select
                         required={question.required}
-                        value={answers[question.id] || ""}
-                        onChange={(event) =>
+                        value={answers[question.id] || undefined}
+                        onValueChange={(value) =>
                           setAnswers((current) => ({
                             ...current,
-                            [question.id]: event.target.value,
+                            [question.id]: value,
                           }))
                         }
                       >
-                        <option value="">Choose one…</option>
-                        {question.options.map((option) => (
-                          <option key={option}>{option}</option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Choose one…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {question.options.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     ) : question.type === "checkbox" ? (
                       <span className="public-checkbox">
                         <Checkbox

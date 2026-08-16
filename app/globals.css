@@ -260,12 +260,9 @@ textarea:focus-visible {
 }
 .booking-form-grid input,
 .booking-form-grid textarea,
-.booking-form-grid select,
 .question-fields input,
-.question-fields select,
 .public-form-fields input,
-.public-form-fields textarea,
-.public-form-fields select {
+.public-form-fields textarea {
   width: 100%;
   border: 1px solid #dfddd8;
   border-radius: 9px;
@@ -276,11 +273,8 @@ textarea:focus-visible {
   transition: border-color .18s, box-shadow .18s;
 }
 .booking-form-grid input,
-.booking-form-grid select,
 .question-fields input,
-.question-fields select,
-.public-form-fields input,
-.public-form-fields select {
+.public-form-fields input {
   height: 37px;
   padding: 0 10px;
 }
@@ -292,12 +286,9 @@ textarea:focus-visible {
 }
 .booking-form-grid input:focus,
 .booking-form-grid textarea:focus,
-.booking-form-grid select:focus,
 .question-fields input:focus,
-.question-fields select:focus,
 .public-form-fields input:focus,
-.public-form-fields textarea:focus,
-.public-form-fields select:focus {
+.public-form-fields textarea:focus {
   border-color: #2f6fed;
   box-shadow: 0 0 0 3px rgba(47, 111, 237, .08);
 }
@@ -430,11 +421,6 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.question-fields select {
-  width: 145px;
-  height: 30px;
-  font-size: 9.5px;
 }
 .question-fields .question-options {
   height: 32px;
@@ -4298,8 +4284,7 @@ kbd {
   font-size: 9.5px;
   font-weight: 600;
 }
-.wizard-fields input,
-.wizard-fields select {
+.wizard-fields input {
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -4308,8 +4293,7 @@ kbd {
   font-family: inherit;
   font-size: 11px;
 }
-.wizard-fields input:focus,
-.wizard-fields select:focus {
+.wizard-fields input:focus {
   border-color: var(--purple);
   outline: none;
 }
@@ -5552,9 +5536,7 @@ kbd {
   min-height: 74px;
 }
 .session-form input,
-.session-form select,
 .workflow-modal input,
-.workflow-modal select,
 .workflow-modal textarea {
   width: 100%;
   margin-top: 7px;
@@ -5567,9 +5549,7 @@ kbd {
   font-size: 9.5px;
 }
 .session-form input:focus,
-.session-form select:focus,
 .workflow-modal input:focus,
-.workflow-modal select:focus,
 .workflow-modal textarea:focus {
   border-color: #2f6fed;
   box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.08);

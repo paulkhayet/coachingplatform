@@ -24,6 +24,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   BookingPage,
@@ -800,34 +807,44 @@ function CreateBookingFlow({
               </label>
               <label>
                 Call length
-                <select
-                  value={draft.durationMinutes}
-                  onChange={(event) =>
-                    update("durationMinutes", Number(event.target.value))
+                <Select
+                  value={String(draft.durationMinutes)}
+                  onValueChange={(value) =>
+                    update("durationMinutes", Number(value))
                   }
                 >
-                  <option value={20}>20 minutes</option>
-                  <option value={30}>30 minutes</option>
-                  <option value={45}>45 minutes</option>
-                  <option value={50}>50 minutes</option>
-                  <option value={60}>60 minutes</option>
-                </select>
+                  <SelectTrigger className="h-[37px] w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="20">20 minutes</SelectItem>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="45">45 minutes</SelectItem>
+                    <SelectItem value="50">50 minutes</SelectItem>
+                    <SelectItem value="60">60 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
               <label>
                 Where does it happen?
-                <select
+                <Select
                   value={draft.locationType}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     update(
                       "locationType",
-                      event.target.value as BookingPage["locationType"],
+                      value as BookingPage["locationType"],
                     )
                   }
                 >
-                  <option value="zoom">Zoom</option>
-                  <option value="google_meet">Google Meet</option>
-                  <option value="phone">Phone call</option>
-                </select>
+                  <SelectTrigger className="h-[37px] w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zoom">Zoom</SelectItem>
+                    <SelectItem value="google_meet">Google Meet</SelectItem>
+                    <SelectItem value="phone">Phone call</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
             </div>
             <div className="wizard-actions">
@@ -1165,49 +1182,64 @@ function BookingTypeEditor({
             </label>
             <label>
               Call length
-              <select
-                value={draft.durationMinutes}
-                onChange={(event) =>
-                  update("durationMinutes", Number(event.target.value))
+              <Select
+                value={String(draft.durationMinutes)}
+                onValueChange={(value) =>
+                  update("durationMinutes", Number(value))
                 }
               >
-                <option value={20}>20 minutes</option>
-                <option value={30}>30 minutes</option>
-                <option value={45}>45 minutes</option>
-                <option value={50}>50 minutes</option>
-                <option value={60}>60 minutes</option>
-              </select>
+                <SelectTrigger className="h-[37px] w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20 minutes</SelectItem>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="45">45 minutes</SelectItem>
+                  <SelectItem value="50">50 minutes</SelectItem>
+                  <SelectItem value="60">60 minutes</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <label>
               Meeting
-              <select
+              <Select
                 value={draft.locationType}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   update(
                     "locationType",
-                    event.target.value as BookingPage["locationType"],
+                    value as BookingPage["locationType"],
                   )
                 }
               >
-                <option value="zoom">Zoom</option>
-                <option value="google_meet">Google Meet</option>
-                <option value="phone">Phone call</option>
-              </select>
+                <SelectTrigger className="h-[37px] w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="zoom">Zoom</SelectItem>
+                  <SelectItem value="google_meet">Google Meet</SelectItem>
+                  <SelectItem value="phone">Phone call</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <label>
               Shortest notice
-              <select
-                value={draft.minimumNoticeHours}
-                onChange={(event) =>
-                  update("minimumNoticeHours", Number(event.target.value))
+              <Select
+                value={String(draft.minimumNoticeHours)}
+                onValueChange={(value) =>
+                  update("minimumNoticeHours", Number(value))
                 }
               >
-                {NOTICE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-[37px] w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {NOTICE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={String(option.value)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <small className="field-hint">
                 How far ahead someone must book.
               </small>
@@ -1256,19 +1288,24 @@ function BookingTypeEditor({
                     }
                   />
                   <div>
-                    <select
+                    <Select
                       value={question.type}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         updateQuestion(question.id, {
-                          type: event.target.value as BookingQuestion["type"],
+                          type: value as BookingQuestion["type"],
                         })
                       }
                     >
-                      <option value="short_text">Short answer</option>
-                      <option value="long_text">Long answer</option>
-                      <option value="select">Multiple choice</option>
-                      <option value="checkbox">Checkbox</option>
-                    </select>
+                      <SelectTrigger className="h-[37px] w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="short_text">Short answer</SelectItem>
+                        <SelectItem value="long_text">Long answer</SelectItem>
+                        <SelectItem value="select">Multiple choice</SelectItem>
+                        <SelectItem value="checkbox">Checkbox</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <label className="required-toggle">
                       <Checkbox
                         checked={question.required}
