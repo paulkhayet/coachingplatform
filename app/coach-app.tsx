@@ -25,7 +25,6 @@ import {
   HardDrive,
   Home,
   KeyRound,
-  LayoutTemplate,
   Link2,
   List,
   ListChecks,
@@ -42,19 +41,16 @@ import {
   PenLine,
   Plug,
   Plus,
-  Route,
   Search,
   Send,
   Settings,
   ShieldCheck,
-  Sparkles,
   Target,
   TextCursorInput,
   TriangleAlert,
   UserRound,
   Users,
   Video,
-  WandSparkles,
   X,
   Zap,
 } from "lucide-react";
@@ -64,7 +60,6 @@ import { BookingsView } from "@/components/bookings-view";
 import {
   assignments,
   clients,
-  templates,
   type Assignment,
   type Client,
   type PracticeSession,
@@ -88,7 +83,6 @@ type View =
   | "Calendar"
   | "Bookings"
   | "Resources"
-  | "Templates"
   | "Integrations";
 type ClientTab = "Overview" | "Sessions" | "Notes" | "Assignments" | "Files";
 
@@ -98,7 +92,6 @@ const navItems: { label: View; icon: typeof Home }[] = [
   { label: "Calendar", icon: CalendarDays },
   { label: "Bookings", icon: CalendarPlus2 },
   { label: "Resources", icon: FolderOpen },
-  { label: "Templates", icon: LayoutTemplate },
   { label: "Integrations", icon: Plug },
 ];
 
@@ -204,7 +197,6 @@ export function CoachApp() {
   const practiceClients = practice.clients;
   const practiceAssignments = practice.assignments;
   const practiceResources = practice.resources;
-  const practiceTemplates = practice.templates;
   const [view, setView] = useState<View>("Dashboard");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientTab, setClientTab] = useState<ClientTab>("Overview");
@@ -435,16 +427,6 @@ export function CoachApp() {
         </nav>
 
         <div className="sidebar-spacer" />
-        <div className="sidebar-insight">
-          <div className="insight-icon">
-            <Zap size={14} />
-          </div>
-          <p>
-            <strong>Your week is 74% booked</strong>
-            <span>3 open session slots remain</span>
-          </p>
-          <ChevronRight size={14} />
-        </div>
         <div className="sidebar-footer">
           <button onClick={() => setToast("No new notifications")}>
             <Bell size={17} />
@@ -621,11 +603,6 @@ export function CoachApp() {
               onDelete={practice.deleteBookingPage}
               onUpdateSlug={practice.updatePracticeSlug}
               onCancelRequest={practice.cancelBookingRequest}
-              onToast={setToast}
-            />
-          ) : view === "Templates" ? (
-            <TemplatesView
-              templatesData={practiceTemplates}
               onToast={setToast}
             />
           ) : (
@@ -2994,114 +2971,6 @@ function AssignResourceModal({
           </Button>
         </div>
       </form>
-    </div>
-  );
-}
-
-function TemplatesView({
-  templatesData,
-  onToast,
-}: {
-  templatesData: typeof templates;
-  onToast: (message: string) => void;
-}) {
-  const icons = {
-    sparkles: Sparkles,
-    shield: ShieldCheck,
-    route: Route,
-    notes: NotebookPen,
-    check: ListChecks,
-    file: FileCheck2,
-  };
-  return (
-    <div className="templates-page page-enter">
-      <div className="page-heading compact-heading">
-        <div>
-          <h1>Templates</h1>
-          <p>
-            Create it once. Deliver a thoughtful, consistent client experience
-            every time.
-          </p>
-        </div>
-        <Button
-          variant="accent"
-          onClick={() => onToast("New template builder opened")}
-        >
-          <Plus size={15} />
-          New template
-        </Button>
-      </div>
-      <div className="template-starter">
-        <div>
-          <span>
-            <WandSparkles size={19} />
-          </span>
-          <div>
-            <h3>Build a complete coaching flow</h3>
-            <p>
-              Combine forms, agreements, sessions, assignments, and payment
-              steps into one reusable program.
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="soft"
-          onClick={() => onToast("Program builder opened")}
-        >
-          Build a program <ArrowRight size={13} />
-        </Button>
-      </div>
-      <div className="template-tabs">
-        <button className="active">
-          All templates <span>{templatesData.length}</span>
-        </button>
-        <button>Onboarding</button>
-        <button>Programs</button>
-        <button>Sessions</button>
-        <button>Assignments</button>
-      </div>
-      <div className="template-grid">
-        {templatesData.map((template) => {
-          const Icon = icons[template.icon as keyof typeof icons] || Sparkles;
-          return (
-            <button
-              className="template-card panel"
-              key={template.title}
-              onClick={() => onToast(`${template.title} opened`)}
-            >
-              <div className={cn("template-icon", template.type.toLowerCase())}>
-                <Icon size={18} />
-              </div>
-              <span className="icon-button">
-                <MoreHorizontal size={16} />
-              </span>
-              <Badge
-                variant={
-                  template.type === "Onboarding"
-                    ? "purple"
-                    : template.type === "Program"
-                      ? "success"
-                      : "neutral"
-                }
-              >
-                {template.type}
-              </Badge>
-              <h3>{template.title}</h3>
-              <p>
-                {template.steps} steps · Updated {template.updated}
-              </p>
-              <div className="template-footer">
-                <span className="mini-avatars">
-                  <i>AM</i>
-                  <i>JL</i>
-                </span>
-                <span>Used {template.steps * 3 + 2} times</span>
-                <ChevronRight size={14} />
-              </div>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
