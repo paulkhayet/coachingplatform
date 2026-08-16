@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   BookingPage,
   BookingQuestion,
@@ -345,23 +346,26 @@ function BookingsOverview({
         </div>
       </div>
 
-      <div className="segmented-tabs">
-        <button
-          className={cn(tab === "types" && "active")}
-          onClick={() => setTab("types")}
-        >
-          Booking types <span>{bookingPages.length}</span>
-        </button>
-        <button
-          className={cn(tab === "upcoming" && "active")}
-          onClick={() => setTab("upcoming")}
-        >
-          Upcoming <span>{upcoming.length}</span>
-        </button>
-      </div>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as "types" | "upcoming")}
+      >
+        <TabsList variant="line">
+          <TabsTrigger value="types">
+            Booking types
+            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-normal text-muted-foreground">
+              {bookingPages.length}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="upcoming">
+            Upcoming
+            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-normal text-muted-foreground">
+              {upcoming.length}
+            </span>
+          </TabsTrigger>
+        </TabsList>
 
-      {tab === "types" ? (
-        <>
+        <TabsContent value="types" className="mt-3.5">
           {bookingPages.length ? (
             <div className="booking-type-grid">
               {bookingPages.map((page) => (
@@ -433,15 +437,17 @@ function BookingsOverview({
               </Button>
             </div>
           )}
-        </>
-      ) : (
-        <UpcomingConsultations
-          bookingPages={bookingPages}
-          upcoming={upcoming}
-          onCancelRequest={onCancelRequest}
-          onToast={onToast}
-        />
-      )}
+        </TabsContent>
+
+        <TabsContent value="upcoming" className="mt-3.5">
+          <UpcomingConsultations
+            bookingPages={bookingPages}
+            upcoming={upcoming}
+            onCancelRequest={onCancelRequest}
+            onToast={onToast}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -1069,28 +1075,26 @@ function BookingTypeEditor({
         </div>
       ) : null}
 
-      <div className="segmented-tabs">
-        <button
-          className={cn(tab === "setup" && "active")}
-          onClick={() => setTab("setup")}
-        >
-          <Clock3 size={13} /> Setup
-        </button>
-        <button
-          className={cn(tab === "questions" && "active")}
-          onClick={() => setTab("questions")}
-        >
-          <UserRound size={13} /> Questions <span>{draft.questions.length}</span>
-        </button>
-        <button
-          className={cn(tab === "appearance" && "active")}
-          onClick={() => setTab("appearance")}
-        >
-          <Palette size={13} /> Appearance
-        </button>
-      </div>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as EditorTab)}
+      >
+        <TabsList variant="line">
+          <TabsTrigger value="setup">
+            <Clock3 size={13} /> Setup
+          </TabsTrigger>
+          <TabsTrigger value="questions">
+            <UserRound size={13} /> Questions
+            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-normal text-muted-foreground">
+              {draft.questions.length}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="appearance">
+            <Palette size={13} /> Appearance
+          </TabsTrigger>
+        </TabsList>
 
-      {tab === "setup" ? (
+      <TabsContent value="setup" className="mt-3.5">
         <section className="panel booking-settings-card">
           <div className="booking-section-heading">
             <span>
@@ -1221,9 +1225,9 @@ function BookingTypeEditor({
             </label>
           </div>
         </section>
-      ) : null}
+      </TabsContent>
 
-      {tab === "questions" ? (
+      <TabsContent value="questions" className="mt-3.5">
         <section className="panel booking-settings-card">
           <div className="booking-section-heading questionnaire-heading">
             <span>
@@ -1315,9 +1319,9 @@ function BookingTypeEditor({
             ) : null}
           </div>
         </section>
-      ) : null}
+      </TabsContent>
 
-      {tab === "appearance" ? (
+      <TabsContent value="appearance" className="mt-3.5">
         <div className="booking-builder-grid">
           <section className="panel booking-settings-card">
             <div className="booking-section-heading">
@@ -1385,7 +1389,8 @@ function BookingTypeEditor({
             <BookingPagePreview draft={draft} />
           </aside>
         </div>
-      ) : null}
+      </TabsContent>
+      </Tabs>
 
       <div className="editor-danger-row">
         <Button variant="outline" onClick={() => setConfirmDelete(true)}>

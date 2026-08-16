@@ -66,6 +66,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 import { BookingsView } from "@/components/bookings-view";
 import {
   assignments,
@@ -250,7 +252,6 @@ export function CoachApp() {
   const [portalClient, setPortalClient] = useState<Client | null>(null);
   const [dataPanelOpen, setDataPanelOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [doneAssignments, setDoneAssignments] = useState<string[]>([]);
   const [clientFilter, setClientFilter] = useState<"All" | "Adult" | "Teen">(
     "All",
@@ -280,12 +281,6 @@ export function CoachApp() {
   }, []);
 
   useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  useEffect(() => {
     const url = new URL(window.location.href);
     const integration = url.searchParams.get("integration");
     const status = url.searchParams.get("integration_status");
@@ -302,7 +297,7 @@ export function CoachApp() {
     window.setTimeout(() => {
       setSelectedClient(null);
       setView("Settings");
-      setToast(message);
+      toast(message);
     }, 0);
     url.searchParams.delete("integration");
     url.searchParams.delete("integration_status");
@@ -464,7 +459,7 @@ export function CoachApp() {
 
         <div className="sidebar-spacer" />
         <div className="sidebar-footer">
-          <button onClick={() => setToast("No new notifications")}>
+          <button onClick={() => toast("No new notifications")}>
             <Bell size={17} />
             <span>Notifications</span>
             <i />
@@ -581,7 +576,7 @@ export function CoachApp() {
               onPortal={() => setPortalClient(currentSelectedClient)}
               onAccess={() => setPortalAccessClient(currentSelectedClient)}
               onOpenAssignment={setAssignmentDetail}
-              onToast={setToast}
+              onToast={toast}
             />
           ) : view === "Dashboard" ? (
             <Dashboard
@@ -601,7 +596,7 @@ export function CoachApp() {
                     : [...current, id],
                 )
               }
-              onToast={setToast}
+              onToast={toast}
             />
           ) : view === "Clients" ? (
             <ClientsView
@@ -619,7 +614,7 @@ export function CoachApp() {
               sessionData={practice.sessions}
               onSchedule={() => openSchedule()}
               onSession={(client, sessionId) => startSession(client, sessionId)}
-              onToast={setToast}
+              onToast={toast}
             />
           ) : view === "Resources" ? (
             <ResourcesView
@@ -631,7 +626,7 @@ export function CoachApp() {
                 window.open(url, "_blank", "noopener,noreferrer");
               }}
               onAssign={practice.assignResourceAsHomework}
-              onToast={setToast}
+              onToast={toast}
             />
           ) : view === "Bookings" ? (
             <BookingsView
@@ -643,7 +638,7 @@ export function CoachApp() {
               onSave={practice.saveBookingPage}
               onDelete={practice.deleteBookingPage}
               onCancelRequest={practice.cancelBookingRequest}
-              onToast={setToast}
+              onToast={toast}
             />
           ) : (
             <SettingsView
@@ -664,7 +659,7 @@ export function CoachApp() {
               onConnect={practice.connectIntegration}
               onUpdate={practice.updateIntegrationPreferences}
               onDisconnect={practice.disconnectIntegration}
-              onToast={setToast}
+              onToast={toast}
             />
           )}
         </div>
@@ -714,7 +709,7 @@ export function CoachApp() {
           }}
           onToast={(message) => {
             setQuickAddOpen(false);
-            setToast(message);
+            toast(message);
           }}
         />
       )}
@@ -734,7 +729,7 @@ export function CoachApp() {
           onComplete={async (input) => {
             await practice.completeSession(input);
             setSessionContext(null);
-            setToast("Session completed and follow-up saved");
+            toast("Session completed and follow-up saved");
           }}
         />
       )}
@@ -746,7 +741,7 @@ export function CoachApp() {
           onSave={async (input) => {
             await practice.createSession(input);
             setScheduleOpen(false);
-            setToast("Session scheduled");
+            toast("Session scheduled");
           }}
         />
       )}
@@ -760,7 +755,7 @@ export function CoachApp() {
               ...input,
             });
             setAssignmentClient(null);
-            setToast("Assignment published to the client portal");
+            toast("Assignment published to the client portal");
           }}
         />
       )}
@@ -775,12 +770,12 @@ export function CoachApp() {
               completed,
             );
             setAssignmentDetail(null);
-            setToast("Client response saved");
+            toast("Client response saved");
           }}
           onReview={async () => {
             await practice.reviewAssignment(assignmentDetail.id);
             setAssignmentDetail(null);
-            setToast("Assignment marked reviewed");
+            toast("Assignment marked reviewed");
           }}
           onOpenFile={async (storagePath) => {
             const url = await practice.getAssignmentFileUrl(storagePath);
@@ -794,7 +789,7 @@ export function CoachApp() {
           onClose={() => setSharingClient(null)}
           onChange={async (guardianId, enabled) => {
             await practice.updateGuardianAssignmentSharing(guardianId, enabled);
-            setToast(
+            toast(
               enabled
                 ? "Automatic logistics sharing enabled"
                 : "Automatic sharing turned off",
@@ -828,12 +823,6 @@ export function CoachApp() {
             openSchedule(portalClient);
           }}
         />
-      )}
-      {toast && (
-        <div className="toast">
-          <CheckCircle2 size={17} />
-          <span>{toast}</span>
-        </div>
       )}
     </div>
     </TimeZoneContext.Provider>
@@ -3234,57 +3223,56 @@ function SettingsView({
         </div>
       </div>
 
-      <div className="segmented-tabs">
-        <button
-          className={cn(tab === "general" && "active")}
-          onClick={() => setTab("general")}
-        >
-          General
-        </button>
-        <button
-          className={cn(tab === "profile" && "active")}
-          onClick={() => setTab("profile")}
-        >
-          Profile
-        </button>
-        <button
-          className={cn(tab === "integrations" && "active")}
-          onClick={() => setTab("integrations")}
-        >
-          Integrations <span>{connectedCount}</span>
-        </button>
-      </div>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as SettingsTab)}
+      >
+        <TabsList variant="line">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="integrations">
+            Integrations
+            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-normal text-muted-foreground">
+              {connectedCount}
+            </span>
+          </TabsTrigger>
+        </TabsList>
 
-      {tab === "general" ? (
-        <GeneralSettings
-          organizationName={organizationName}
-          organizationSlug={organizationSlug}
-          organizationTimezone={organizationTimezone}
-          onUpdateName={onUpdateName}
-          onUpdateSlug={onUpdateSlug}
-          onUpdateTimezone={onUpdateTimezone}
-          onToast={onToast}
-        />
-      ) : tab === "profile" ? (
-        <ProfileSettings
-          userName={userName}
-          userEmail={userEmail}
-          userPhone={userPhone}
-          userAvatarUrl={userAvatarUrl}
-          onUpdateProfile={onUpdateProfile}
-          onUpdatePassword={onUpdatePassword}
-          onUploadAvatar={onUploadAvatar}
-          onToast={onToast}
-        />
-      ) : (
-        <IntegrationsSettings
-          integrations={integrations}
-          onConnect={onConnect}
-          onUpdate={onUpdate}
-          onDisconnect={onDisconnect}
-          onToast={onToast}
-        />
-      )}
+        <TabsContent value="general" className="mt-3.5">
+          <GeneralSettings
+            organizationName={organizationName}
+            organizationSlug={organizationSlug}
+            organizationTimezone={organizationTimezone}
+            onUpdateName={onUpdateName}
+            onUpdateSlug={onUpdateSlug}
+            onUpdateTimezone={onUpdateTimezone}
+            onToast={onToast}
+          />
+        </TabsContent>
+
+        <TabsContent value="profile" className="mt-3.5">
+          <ProfileSettings
+            userName={userName}
+            userEmail={userEmail}
+            userPhone={userPhone}
+            userAvatarUrl={userAvatarUrl}
+            onUpdateProfile={onUpdateProfile}
+            onUpdatePassword={onUpdatePassword}
+            onUploadAvatar={onUploadAvatar}
+            onToast={onToast}
+          />
+        </TabsContent>
+
+        <TabsContent value="integrations" className="mt-3.5">
+          <IntegrationsSettings
+            integrations={integrations}
+            onConnect={onConnect}
+            onUpdate={onUpdate}
+            onDisconnect={onDisconnect}
+            onToast={onToast}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -4371,12 +4359,6 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
   const [scheduleRequest, setScheduleRequest] = useState<
     PracticeSession | "new" | null
   >(null);
-  const [toast, setToast] = useState<string | null>(null);
-  useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
   if (!client)
     return (
       <InviteAcceptanceScreen
@@ -4632,7 +4614,7 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
                           const url = await practice.getResourceUrl(resource);
                           window.open(url, "_blank", "noopener,noreferrer");
                         } catch (error) {
-                          setToast(
+                          toast(
                             error instanceof Error
                               ? error.message
                               : "Resource unavailable",
@@ -4676,7 +4658,7 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
               completed,
             );
             setAssignmentDetail(null);
-            setToast("Your response was saved");
+            toast("Your response was saved");
           }}
           onReview={async () => {}}
           onUploadFile={(file) =>
@@ -4695,15 +4677,9 @@ function PortalApp({ practice }: { practice: PracticeHook }) {
           onSubmit={async (input) => {
             await practice.requestScheduleChange(input);
             setScheduleRequest(null);
-            setToast("Your coach received the request");
+            toast("Your coach received the request");
           }}
         />
-      )}
-      {toast && (
-        <div className="toast">
-          <CheckCircle2 size={17} />
-          <span>{toast}</span>
-        </div>
       )}
     </div>
   );
