@@ -79,6 +79,32 @@ export type BookingQuestion = {
   options: string[];
 };
 
+import {
+  bookingAvailability,
+  type BookingAvailability,
+} from "@/lib/booking-availability";
+
+export {
+  BOOKING_DAY_KEYS,
+  bookingAvailability,
+  bookingDayKey,
+  bookingMinutes,
+  defaultBookingAvailability,
+  describeAvailabilityProblem,
+  emptyBookingWindows,
+  hasAnyWindow,
+  windowSlotMinutes,
+  type BookingAvailability,
+  type BookingDayKey,
+  type BookingWindow,
+} from "@/lib/booking-availability";
+
+export type BookingLocationType =
+  | "zoom"
+  | "google_meet"
+  | "phone"
+  | "in_person";
+
 export type BookingPage = {
   id: string;
   slug: string;
@@ -87,8 +113,10 @@ export type BookingPage = {
   description: string;
   accentColor: string;
   durationMinutes: number;
-  locationType: "zoom" | "google_meet" | "phone";
-  availability: { days: number[]; start: string; end: string };
+  locationType: BookingLocationType;
+  /** Street address. Only meaningful when locationType is "in_person". */
+  locationDetails: string;
+  availability: BookingAvailability;
   minimumNoticeHours: number;
   active: boolean;
   questions: BookingQuestion[];
@@ -277,20 +305,6 @@ function permissionLabels(value: Json): string[] {
   return Object.entries(value)
     .filter(([, enabled]) => enabled === true)
     .map(([key]) => labels[key] ?? key);
-}
-
-function bookingAvailability(value: Json) {
-  const fallback = { days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" };
-  if (!value || Array.isArray(value) || typeof value !== "object")
-    return fallback;
-  const days = Array.isArray(value.days)
-    ? value.days.filter((day): day is number => typeof day === "number")
-    : fallback.days;
-  return {
-    days,
-    start: typeof value.start === "string" ? value.start : fallback.start,
-    end: typeof value.end === "string" ? value.end : fallback.end,
-  };
 }
 
 function stringOptions(value: Json) {
@@ -968,6 +982,7 @@ async function loadForUser(user: User): Promise<PracticeData> {
       accentColor: page.accent_color,
       durationMinutes: page.duration_minutes,
       locationType: page.location_type,
+      locationDetails: page.location_details,
       availability: bookingAvailability(page.availability),
       minimumNoticeHours: page.minimum_notice_hours,
       active: page.is_active,
@@ -1705,6 +1720,7 @@ export function usePracticeData() {
         target_accent_color: page.accentColor,
         target_duration_minutes: page.durationMinutes,
         target_location_type: page.locationType,
+        target_location_details: page.locationDetails,
         target_availability: page.availability,
         target_minimum_notice_hours: page.minimumNoticeHours,
         target_is_active: page.active,

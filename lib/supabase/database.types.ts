@@ -595,7 +595,8 @@ export type Database = {
           description: string;
           accent_color: string;
           duration_minutes: number;
-          location_type: "zoom" | "google_meet" | "phone";
+          location_type: "zoom" | "google_meet" | "phone" | "in_person";
+          location_details: string;
           availability: Json;
           minimum_notice_hours: number;
           is_active: boolean;
@@ -613,7 +614,8 @@ export type Database = {
           description?: string;
           accent_color?: string;
           duration_minutes?: number;
-          location_type?: "zoom" | "google_meet" | "phone";
+          location_type?: "zoom" | "google_meet" | "phone" | "in_person";
+          location_details?: string;
           availability?: Json;
           minimum_notice_hours?: number;
           is_active?: boolean;
@@ -755,6 +757,7 @@ export type Database = {
           target_accent_color: string;
           target_duration_minutes: number;
           target_location_type: string;
+          target_location_details: string;
           target_availability: Json;
           target_minimum_notice_hours: number;
           target_is_active: boolean;

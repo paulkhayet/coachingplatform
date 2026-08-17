@@ -49,6 +49,7 @@ test("ships the privacy-aware MVP foundation", async () => {
     integrationMigration,
     bookingMigration,
     multiBookingTypesMigration,
+    availabilityWindowsMigration,
     bookingsView,
     publicBookingPage,
     oauth,
@@ -110,6 +111,13 @@ test("ships the privacy-aware MVP foundation", async () => {
     readFile(
       new URL(
         "../supabase/migrations/20260814000000_multiple_booking_types.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../supabase/migrations/20260817020000_booking_availability_windows.sql",
         import.meta.url,
       ),
       "utf8",
@@ -194,9 +202,38 @@ test("ships the privacy-aware MVP foundation", async () => {
     multiBookingTypesMigration,
     /create or replace function public\.get_public_booking_page\(org_slug text, type_slug text\)/,
   );
+  // Per-day availability windows, free-form call lengths, in-person meetings.
+  assert.match(
+    availabilityWindowsMigration,
+    /create or replace function public\.booking_page_slots/,
+  );
+  // Both public RPCs must go through the shared generator, or the calendar a
+  // visitor sees and the grid the server re-validates against can drift.
+  assert.match(
+    availabilityWindowsMigration,
+    /public\.booking_page_slots\(page\.id, 21\)/,
+  );
+  assert.match(
+    availabilityWindowsMigration,
+    /public\.booking_page_slots\(target_page\.id, 91\)/,
+  );
+  // DST spring-forward collapses two local starts onto one instant.
+  assert.match(availabilityWindowsMigration, /select distinct/);
+  // The helper is an availability oracle; it must not be reachable by anon.
+  assert.match(
+    availabilityWindowsMigration,
+    /revoke all on function public\.booking_page_slots\(uuid, integer\) from public/,
+  );
+  assert.doesNotMatch(
+    availabilityWindowsMigration,
+    /grant execute on function public\.booking_page_slots/,
+  );
+  assert.match(availabilityWindowsMigration, /duration_minutes between 5 and 480/);
+  assert.match(availabilityWindowsMigration, /'zoom', 'google_meet', 'phone', 'in_person'/);
+
   assert.match(bookingsView, /Intake questionnaire/);
   assert.match(bookingsView, /Choices separated by commas/);
-  assert.match(bookingsView, /Your practice URL/);
+  assert.match(bookingsView, /Booking link/);
   assert.match(publicBookingPage, /Book consultation/);
   assert.match(publicBookingPage, /availableSlots/);
   assert.match(app, /Bookings/);

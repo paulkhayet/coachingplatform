@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUpRight,
   CalendarCheck2,
   Check,
   ChevronDown,
@@ -15,15 +14,19 @@ import {
   Link2,
   MapPin,
   Palette,
+  Phone,
   Plus,
   Sparkles,
   Trash2,
   UserRound,
+  Video,
   X,
 } from "lucide-react";
 import { Avatar } from "@/components/avatar";
+import { AvailabilityEditor } from "@/components/availability-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -48,7 +51,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  bookingDayKey,
+  defaultBookingAvailability,
+  describeAvailabilityProblem,
+  formatBookingTime,
+  windowSlotMinutes,
+  type BookingAvailability,
+} from "@/lib/booking-availability";
 import type {
+  BookingLocationType,
   BookingPage,
   BookingQuestion,
   BookingRequest,
@@ -56,17 +68,20 @@ import type {
 import { useOrigin } from "@/lib/use-origin";
 import { cn } from "@/lib/utils";
 
-const DAYS = [
-  { value: 0, short: "S", label: "Sunday" },
-  { value: 1, short: "M", label: "Monday" },
-  { value: 2, short: "T", label: "Tuesday" },
-  { value: 3, short: "W", label: "Wednesday" },
-  { value: 4, short: "T", label: "Thursday" },
-  { value: 5, short: "F", label: "Friday" },
-  { value: 6, short: "S", label: "Saturday" },
-];
-
 const COLORS = ["#2f6fed", "#347a5f", "#2563a8", "#a65f44", "#a24f72"];
+
+/** Common call lengths. Any whole number of minutes from 5 to 480 is allowed —
+ * see the "Custom" branch in `DurationField`. */
+const DURATION_PRESETS = [15, 20, 30, 45, 60, 90, 120];
+const MIN_DURATION = 5;
+const MAX_DURATION = 480;
+
+const LOCATION_OPTIONS: { value: BookingLocationType; label: string }[] = [
+  { value: "zoom", label: "Zoom" },
+  { value: "google_meet", label: "Google Meet" },
+  { value: "phone", label: "Phone call" },
+  { value: "in_person", label: "In person" },
+];
 
 const NOTICE_OPTIONS = [
   { value: 0, label: "No minimum" },
@@ -86,8 +101,11 @@ function makeSlug(value: string) {
     .slice(0, 54);
 }
 
-function locationLabel(type: BookingPage["locationType"]) {
-  return type === "phone" ? "Phone" : type === "zoom" ? "Zoom" : "Google Meet";
+function locationLabel(type: BookingLocationType) {
+  return (
+    LOCATION_OPTIONS.find((option) => option.value === type)?.label ||
+    "Google Meet"
+  );
 }
 
 function timezoneLabel(timezone: string | null) {
@@ -95,61 +113,42 @@ function timezoneLabel(timezone: string | null) {
   return timezone.replaceAll("_", " ").split("/").at(-1) || timezone;
 }
 
-function minutesFromTime(value: string) {
-  const [hours, minutes] = value.split(":").map(Number);
-  return (hours || 0) * 60 + (minutes || 0);
-}
-
-function formatMinutes(totalMinutes: number) {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  const suffix = hours >= 12 ? "PM" : "AM";
-  const display = hours % 12 === 0 ? 12 : hours % 12;
-  return `${display}:${String(minutes).padStart(2, "0")} ${suffix}`;
-}
-
-/** Every half-hour of the day, as "HH:MM" values with a friendly label. */
-const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
-  const totalMinutes = index * 30;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return {
-    value: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
-    label: formatMinutes(totalMinutes),
-  };
-});
-
-/** Next `count` calendar days that fall on one of the selected weekdays. */
-function upcomingDays(days: number[], count: number) {
+/** Next `count` calendar days that have at least one availability window. */
+function upcomingDays(availability: BookingAvailability, count: number) {
   const result: Date[] = [];
-  if (!days.length) return result;
   const cursor = new Date();
   cursor.setHours(0, 0, 0, 0);
   for (let offset = 0; offset < 60 && result.length < count; offset += 1) {
     const candidate = new Date(cursor);
     candidate.setDate(cursor.getDate() + offset);
-    if (days.includes(candidate.getDay())) result.push(candidate);
+    const key = bookingDayKey(candidate.getDay());
+    if (key && availability.windows[key].length) result.push(candidate);
   }
   return result;
 }
 
-/** Slot start times implied by the availability window and call length. */
-function slotTimes(
-  availability: BookingPage["availability"],
+/**
+ * Slot start labels for one calendar day, re-anchored per window so the preview
+ * shows the same grid `booking_page_slots` will generate on the live page.
+ */
+function slotTimesForDay(
+  availability: BookingAvailability,
   durationMinutes: number,
+  day: Date,
   limit: number,
 ) {
-  const start = minutesFromTime(availability.start);
-  const end = minutesFromTime(availability.end);
-  const result: string[] = [];
-  for (
-    let cursor = start;
-    cursor + durationMinutes <= end && result.length < limit;
-    cursor += durationMinutes
-  ) {
-    result.push(formatMinutes(cursor));
-  }
-  return result;
+  const key = bookingDayKey(day.getDay());
+  if (!key) return [];
+  return availability.windows[key]
+    .flatMap((window) => windowSlotMinutes(window, durationMinutes))
+    .slice(0, limit)
+    .map((minutes) =>
+      formatBookingTime(
+        `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(
+          minutes % 60,
+        ).padStart(2, "0")}`,
+      ),
+    );
 }
 
 function defaultPage(
@@ -164,11 +163,133 @@ function defaultPage(
     accentColor: COLORS[colorIndex % COLORS.length],
     durationMinutes: 30,
     locationType: "zoom",
-    availability: { days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" },
+    locationDetails: "",
+    availability: defaultBookingAvailability(),
     minimumNoticeHours: 24,
     active: true,
     questions: [],
   };
+}
+
+/**
+ * Call length as a preset dropdown that falls back to a free-form number, so
+ * the common cases stay one click but any length from 5 to 480 minutes is
+ * reachable. `custom` is tracked separately from the value so the input stays
+ * open while the coach is mid-edit on a number that happens to be a preset.
+ */
+function DurationField({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (minutes: number) => void;
+}) {
+  const [custom, setCustom] = useState(() => !DURATION_PRESETS.includes(value));
+  const selectId = useId();
+
+  return (
+    <div className="booking-field-stack">
+      <Label htmlFor={selectId}>Call length</Label>
+      <Select
+        value={custom ? "custom" : String(value)}
+        onValueChange={(next) => {
+          if (next === "custom") {
+            setCustom(true);
+            return;
+          }
+          setCustom(false);
+          onChange(Number(next));
+        }}
+      >
+        <SelectTrigger id={selectId} className="h-[37px] w-full">
+          <SelectValue>{`${value} minutes`}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {DURATION_PRESETS.map((minutes) => (
+            <SelectItem key={minutes} value={String(minutes)}>
+              {minutes} minutes
+            </SelectItem>
+          ))}
+          <SelectItem value="custom">Custom…</SelectItem>
+        </SelectContent>
+      </Select>
+      {custom ? (
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={MIN_DURATION}
+            max={MAX_DURATION}
+            step={5}
+            value={value}
+            aria-label="Call length in minutes"
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              if (Number.isFinite(next)) onChange(next);
+            }}
+            onBlur={(event) => {
+              const next = Number(event.target.value);
+              onChange(
+                Math.min(
+                  MAX_DURATION,
+                  Math.max(MIN_DURATION, Number.isFinite(next) ? next : 30),
+                ),
+              );
+            }}
+          />
+          <span className="text-xs text-muted-foreground">minutes</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Meeting location, plus the address field in-person sessions need. */
+function LocationFields({
+  locationType,
+  locationDetails,
+  onChangeType,
+  onChangeDetails,
+}: {
+  locationType: BookingLocationType;
+  locationDetails: string;
+  onChangeType: (type: BookingLocationType) => void;
+  onChangeDetails: (details: string) => void;
+}) {
+  return (
+    <>
+      <Label>
+        Where does it happen?
+        <Select
+          value={locationType}
+          onValueChange={(value) => onChangeType(value as BookingLocationType)}
+        >
+          <SelectTrigger className="h-[37px] w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LOCATION_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Label>
+      {locationType === "in_person" ? (
+        <Label className="booking-field-wide">
+          Address
+          <Input
+            value={locationDetails}
+            placeholder="12 Bridge Street, Suite 4, Portland"
+            onChange={(event) => onChangeDetails(event.target.value)}
+          />
+          <small className="field-hint">
+            Shown to guests once they book, and on the confirmation screen.
+          </small>
+        </Label>
+      ) : null}
+    </>
+  );
 }
 
 export function BookingsView({
@@ -299,7 +420,6 @@ function BookingsOverview({
     <div className="bookings-page page-enter">
       <div className="page-heading booking-heading">
         <div>
-          <p className="eyebrow">CONSULTATION BOOKINGS</p>
           <h1>Bookings</h1>
           <p>
             Give every kind of conversation its own page and link, and see who
@@ -336,45 +456,57 @@ function BookingsOverview({
           {bookingPages.length ? (
             <div className="booking-type-grid">
               {bookingPages.map((page) => (
-                <div key={page.id} className="panel booking-type-card">
-                  <button
-                    type="button"
-                    className="booking-type-card-open"
-                    onClick={() => onEdit(page.id)}
-                  >
-                    <div className="booking-type-card-top">
-                      <Avatar
-                        initials={page.brandName.charAt(0).toUpperCase() || "?"}
-                        color={page.accentColor}
-                        shape="square"
-                      />
-                      <Badge variant={page.active ? "success" : "neutral"}>
-                        {page.active ? "Live" : "Paused"}
-                      </Badge>
-                    </div>
-                    <h3>{page.title || "Untitled booking type"}</h3>
-                    <p className="booking-type-brand">{page.brandName}</p>
-                    <div className="booking-type-meta">
-                      <span>
-                        <Clock3 size={12} /> {page.durationMinutes} min
-                      </span>
-                      <span>
-                        <MapPin size={12} /> {locationLabel(page.locationType)}
-                      </span>
-                    </div>
-                  </button>
-                  <div className="booking-type-footer">
-                    <span className="booking-type-link">
+                <Card
+                  key={page.id}
+                  className="gap-0 py-0 transition-shadow hover:ring-foreground/20"
+                >
+                  <CardContent className="px-0">
+                    <button
+                      type="button"
+                      className="flex w-full flex-col items-start gap-2 p-4 text-left"
+                      onClick={() => onEdit(page.id)}
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <Avatar
+                          initials={
+                            page.brandName.charAt(0).toUpperCase() || "?"
+                          }
+                          color={page.accentColor}
+                          shape="square"
+                        />
+                        <Badge variant={page.active ? "success" : "neutral"}>
+                          {page.active ? "Live" : "Paused"}
+                        </Badge>
+                      </div>
+                      <h3 className="font-heading text-[15px] leading-snug font-medium">
+                        {page.title || "Untitled booking type"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {page.brandName}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock3 size={12} /> {page.durationMinutes} min
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <MapPin size={12} /> {locationLabel(page.locationType)}
+                        </span>
+                      </div>
+                    </button>
+                  </CardContent>
+                  <CardFooter className="gap-2 px-4 py-2.5 text-xs text-muted-foreground">
+                    <span className="truncate font-medium">
                       /{activeSlug}/{page.slug}
                     </span>
-                    <span className="booking-type-count">
+                    <span className="ml-auto shrink-0">
                       {upcomingCountByPage.get(page.id) || 0} upcoming
                     </span>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button
+                        <Button
                           type="button"
-                          className="booking-type-copy"
+                          variant="ghost"
+                          size="icon-sm"
                           aria-label={`Copy link for ${page.title || "booking type"}`}
                           onClick={async (event) => {
                             event.stopPropagation();
@@ -385,28 +517,32 @@ function BookingsOverview({
                           }}
                         >
                           <Copy size={12} />
-                        </button>
+                        </Button>
                       </TooltipTrigger>
                       <TooltipContent>Copy link</TooltipContent>
                     </Tooltip>
-                  </div>
-                </div>
+                  </CardFooter>
+                </Card>
               ))}
             </div>
           ) : (
-            <div className="panel empty-state">
-              <span>
-                <CalendarCheck2 size={22} />
-              </span>
-              <h3>Create your first booking type</h3>
-              <p>
-                Discovery calls, ongoing sessions, focused consults — each gets
-                its own page and link.
-              </p>
-              <Button onClick={onCreate}>
-                <Plus size={14} /> New booking type
-              </Button>
-            </div>
+            <Card className="items-center gap-2 py-10 text-center">
+              <CardContent className="flex flex-col items-center gap-2">
+                <span className="mb-1 flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <CalendarCheck2 size={22} />
+                </span>
+                <h3 className="font-heading text-base font-medium">
+                  Create your first booking type
+                </h3>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Discovery calls, ongoing sessions, focused consults — each gets
+                  its own page and link.
+                </p>
+                <Button className="mt-2" onClick={onCreate}>
+                  <Plus size={14} /> New booking type
+                </Button>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
@@ -442,13 +578,19 @@ function UpcomingConsultations({
 
   if (!upcoming.length)
     return (
-      <div className="panel empty-state">
-        <span>
-          <CalendarCheck2 size={22} />
-        </span>
-        <h3>No consultations booked yet</h3>
-        <p>Share one of your booking links and new bookings will appear here.</p>
-      </div>
+      <Card className="items-center gap-2 py-10 text-center">
+        <CardContent className="flex flex-col items-center gap-2">
+          <span className="mb-1 flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <CalendarCheck2 size={22} />
+          </span>
+          <h3 className="font-heading text-base font-medium">
+            No consultations booked yet
+          </h3>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Share one of your booking links and new bookings will appear here.
+          </p>
+        </CardContent>
+      </Card>
     );
 
   return (
@@ -476,8 +618,9 @@ function UpcomingConsultations({
             : [];
 
           return (
-            <div
-              className={cn("panel consultation-row", expanded && "expanded")}
+            <Card
+              size="sm"
+              className={cn("consultation-row gap-0 p-0", expanded && "expanded")}
               key={request.id}
             >
               <div className="consultation-main">
@@ -551,7 +694,7 @@ function UpcomingConsultations({
                   </div>
                 </div>
               ) : null}
-            </div>
+            </Card>
           );
         })}
       </div>
@@ -654,22 +797,23 @@ function CreateBookingFlow({
     value: Omit<BookingPage, "id">[Key],
   ) => setDraft((current) => ({ ...current, [key]: value }));
 
+  const availabilityProblem = describeAvailabilityProblem(
+    draft.availability,
+    draft.durationMinutes,
+  );
+
   const publish = async () => {
     setError(null);
     if (!draft.title.trim()) {
       setError("Give this booking type a name.");
       return;
     }
-    if (!draft.availability.days.length) {
-      setError("Select at least one day you’re available.");
+    if (availabilityProblem) {
+      setError(availabilityProblem);
       return;
     }
-    if (
-      minutesFromTime(draft.availability.end) -
-        minutesFromTime(draft.availability.start) <
-      draft.durationMinutes
-    ) {
-      setError("Your available window is shorter than the call length.");
+    if (draft.locationType === "in_person" && !draft.locationDetails.trim()) {
+      setError("Add the address for in-person sessions.");
       return;
     }
     setPublishing(true);
@@ -693,7 +837,7 @@ function CreateBookingFlow({
 
       <div className="wizard-shell">
         <div className="wizard-progress">
-          {["The basics", "Availability"].map((label, index) => (
+          {["The basics", "Availability", "Appearance"].map((label, index) => (
             <div
               key={label}
               className={cn(
@@ -733,47 +877,18 @@ function CreateBookingFlow({
                   /{activeSlug}/{draft.slug || "your-link"}
                 </small>
               </Label>
-              <Label>
-                Call length
-                <Select
-                  value={String(draft.durationMinutes)}
-                  onValueChange={(value) =>
-                    update("durationMinutes", Number(value))
-                  }
-                >
-                  <SelectTrigger className="h-[37px] w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20">20 minutes</SelectItem>
-                    <SelectItem value="30">30 minutes</SelectItem>
-                    <SelectItem value="45">45 minutes</SelectItem>
-                    <SelectItem value="50">50 minutes</SelectItem>
-                    <SelectItem value="60">60 minutes</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Label>
-              <Label>
-                Where does it happen?
-                <Select
-                  value={draft.locationType}
-                  onValueChange={(value) =>
-                    update(
-                      "locationType",
-                      value as BookingPage["locationType"],
-                    )
-                  }
-                >
-                  <SelectTrigger className="h-[37px] w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="zoom">Zoom</SelectItem>
-                    <SelectItem value="google_meet">Google Meet</SelectItem>
-                    <SelectItem value="phone">Phone call</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Label>
+              <DurationField
+                value={draft.durationMinutes}
+                onChange={(minutes) => update("durationMinutes", minutes)}
+              />
+              <LocationFields
+                locationType={draft.locationType}
+                locationDetails={draft.locationDetails}
+                onChangeType={(type) => update("locationType", type)}
+                onChangeDetails={(details) =>
+                  update("locationDetails", details)
+                }
+              />
             </div>
             <div className="wizard-actions">
               <Button
@@ -790,83 +905,13 @@ function CreateBookingFlow({
           <section className="wizard-panel">
             <h2>When are you available?</h2>
             <p className="wizard-subtitle">
-              A simple weekly window to start with
-              {zone ? `, in ${zone} time` : ""}. You can refine it later.
+              Add as many time slots per day as you need
+              {zone ? `, in ${zone} time` : ""}.
             </p>
-            <div className="day-picker wizard-days">
-              {DAYS.map((day) => {
-                const selected = draft.availability.days.includes(day.value);
-                return (
-                  <button
-                    key={day.label}
-                    type="button"
-                    className={cn(selected && "selected")}
-                    onClick={() =>
-                      update("availability", {
-                        ...draft.availability,
-                        days: selected
-                          ? draft.availability.days.filter(
-                              (value) => value !== day.value,
-                            )
-                          : [...draft.availability.days, day.value],
-                      })
-                    }
-                    aria-label={day.label}
-                    aria-pressed={selected}
-                  >
-                    {day.short}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="wizard-fields">
-              <Label>
-                From
-                <Select
-                  value={draft.availability.start}
-                  onValueChange={(value) =>
-                    update("availability", {
-                      ...draft.availability,
-                      start: value,
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-[37px] w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Label>
-              <Label>
-                Until
-                <Select
-                  value={draft.availability.end}
-                  onValueChange={(value) =>
-                    update("availability", {
-                      ...draft.availability,
-                      end: value,
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-[37px] w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Label>
-            </div>
+            <AvailabilityEditor
+              availability={draft.availability}
+              onChange={(next) => update("availability", next)}
+            />
             {error ? (
               <div className="data-error" role="alert">
                 {error}
@@ -874,6 +919,52 @@ function CreateBookingFlow({
             ) : null}
             <div className="wizard-actions">
               <Button variant="outline" onClick={() => setStep(0)}>
+                <ArrowLeft size={14} /> Back
+              </Button>
+              <Button
+                onClick={() => {
+                  if (availabilityProblem) {
+                    setError(availabilityProblem);
+                    return;
+                  }
+                  setError(null);
+                  setStep(2);
+                }}
+              >
+                Continue <ArrowRight size={14} />
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 2 ? (
+          <section className="wizard-panel">
+            <h2>Make it yours</h2>
+            <p className="wizard-subtitle">
+              This is what visitors see when they open your link.
+            </p>
+            <div className="booking-builder-grid">
+              <div className="booking-settings-stack">
+                <AppearanceFields
+                  draft={draft}
+                  onChange={(key, value) => update(key, value)}
+                />
+              </div>
+              <aside className="booking-preview-column">
+                <div className="booking-preview-label">
+                  <span>Live preview</span>
+                  <small>Updates as you edit</small>
+                </div>
+                <BookingPagePreview draft={draft} />
+              </aside>
+            </div>
+            {error ? (
+              <div className="data-error" role="alert">
+                {error}
+              </div>
+            ) : null}
+            <div className="wizard-actions">
+              <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft size={14} /> Back
               </Button>
               <Button onClick={publish} disabled={publishing}>
@@ -885,6 +976,70 @@ function CreateBookingFlow({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Brand, headline, welcome copy and accent colour. Shared by the create
+ * wizard's last step and the editor's Appearance tab so the two cannot drift.
+ */
+function AppearanceFields({
+  draft,
+  onChange,
+}: {
+  draft: Omit<BookingPage, "id">;
+  onChange: <Key extends keyof Omit<BookingPage, "id">>(
+    key: Key,
+    value: Omit<BookingPage, "id">[Key],
+  ) => void;
+}) {
+  return (
+    <>
+      <div className="booking-form-grid">
+        <Label className="booking-field-wide">
+          Brand name
+          <Input
+            value={draft.brandName}
+            onChange={(event) => onChange("brandName", event.target.value)}
+          />
+        </Label>
+        <Label className="booking-field-wide">
+          Headline
+          <Input
+            value={draft.title}
+            onChange={(event) => onChange("title", event.target.value)}
+          />
+        </Label>
+        <Label className="booking-field-wide">
+          Welcome message
+          <Textarea
+            rows={3}
+            value={draft.description}
+            onChange={(event) => onChange("description", event.target.value)}
+          />
+        </Label>
+      </div>
+      <div className="brand-color-row">
+        <div>
+          <strong>Accent color</strong>
+          <span>Used for buttons, selections, and highlights.</span>
+        </div>
+        <div className="color-swatches" aria-label="Accent color">
+          {COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              className={cn(draft.accentColor === color && "selected")}
+              style={{ background: color }}
+              onClick={() => onChange("accentColor", color)}
+              aria-label={`Use ${color}`}
+            >
+              {draft.accentColor === color ? <Check size={13} /> : null}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -932,8 +1087,13 @@ function BookingTypeEditor({
     try {
       if (!draft.slug || !draft.brandName.trim() || !draft.title.trim())
         throw new Error("Add a brand name, headline, and booking-link name.");
-      if (!draft.availability.days.length)
-        throw new Error("Select at least one available day.");
+      const availabilityProblem = describeAvailabilityProblem(
+        draft.availability,
+        draft.durationMinutes,
+      );
+      if (availabilityProblem) throw new Error(availabilityProblem);
+      if (draft.locationType === "in_person" && !draft.locationDetails.trim())
+        throw new Error("Add the address for in-person sessions.");
       await onSave(draft);
     } catch (saveError) {
       setError(
@@ -1058,7 +1218,7 @@ function BookingTypeEditor({
         </TabsList>
 
       <TabsContent value="setup" className="mt-3.5">
-        <section className="panel booking-settings-card">
+        <Card className="gap-0 px-[18px] py-[18px]">
           <div className="booking-section-heading">
             <span>
               <Clock3 size={16} />
@@ -1072,120 +1232,21 @@ function BookingTypeEditor({
               </p>
             </div>
           </div>
-          <div className="day-picker">
-            {DAYS.map((day) => {
-              const selected = draft.availability.days.includes(day.value);
-              return (
-                <button
-                  key={day.label}
-                  type="button"
-                  className={cn(selected && "selected")}
-                  onClick={() =>
-                    update("availability", {
-                      ...draft.availability,
-                      days: selected
-                        ? draft.availability.days.filter(
-                            (value) => value !== day.value,
-                          )
-                        : [...draft.availability.days, day.value],
-                    })
-                  }
-                  aria-label={day.label}
-                  aria-pressed={selected}
-                >
-                  {day.short}
-                </button>
-              );
-            })}
-          </div>
-          <div className="booking-form-grid booking-schedule-fields">
-            <Label>
-              From
-              <Select
-                value={draft.availability.start}
-                onValueChange={(value) =>
-                  update("availability", {
-                    ...draft.availability,
-                    start: value,
-                  })
-                }
-              >
-                <SelectTrigger className="h-[37px] w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Label>
-            <Label>
-              Until
-              <Select
-                value={draft.availability.end}
-                onValueChange={(value) =>
-                  update("availability", {
-                    ...draft.availability,
-                    end: value,
-                  })
-                }
-              >
-                <SelectTrigger className="h-[37px] w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Label>
-            <Label>
-              Call length
-              <Select
-                value={String(draft.durationMinutes)}
-                onValueChange={(value) =>
-                  update("durationMinutes", Number(value))
-                }
-              >
-                <SelectTrigger className="h-[37px] w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="20">20 minutes</SelectItem>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                  <SelectItem value="45">45 minutes</SelectItem>
-                  <SelectItem value="50">50 minutes</SelectItem>
-                  <SelectItem value="60">60 minutes</SelectItem>
-                </SelectContent>
-              </Select>
-            </Label>
-            <Label>
-              Meeting
-              <Select
-                value={draft.locationType}
-                onValueChange={(value) =>
-                  update(
-                    "locationType",
-                    value as BookingPage["locationType"],
-                  )
-                }
-              >
-                <SelectTrigger className="h-[37px] w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="zoom">Zoom</SelectItem>
-                  <SelectItem value="google_meet">Google Meet</SelectItem>
-                  <SelectItem value="phone">Phone call</SelectItem>
-                </SelectContent>
-              </Select>
-            </Label>
+          <AvailabilityEditor
+            availability={draft.availability}
+            onChange={(next) => update("availability", next)}
+          />
+          <div className="booking-form-grid">
+            <DurationField
+              value={draft.durationMinutes}
+              onChange={(minutes) => update("durationMinutes", minutes)}
+            />
+            <LocationFields
+              locationType={draft.locationType}
+              locationDetails={draft.locationDetails}
+              onChangeType={(type) => update("locationType", type)}
+              onChangeDetails={(details) => update("locationDetails", details)}
+            />
             <Label>
               Shortest notice
               <Select
@@ -1222,11 +1283,11 @@ function BookingTypeEditor({
               </div>
             </Label>
           </div>
-        </section>
+        </Card>
       </TabsContent>
 
       <TabsContent value="questions" className="mt-3.5">
-        <section className="panel booking-settings-card">
+        <Card className="gap-0 px-[18px] py-[18px]">
           <div className="booking-section-heading questionnaire-heading">
             <span>
               <UserRound size={16} />
@@ -1320,12 +1381,12 @@ function BookingTypeEditor({
               </button>
             ) : null}
           </div>
-        </section>
+        </Card>
       </TabsContent>
 
       <TabsContent value="appearance" className="mt-3.5">
         <div className="booking-builder-grid">
-          <section className="panel booking-settings-card">
+          <Card className="gap-0 px-[18px] py-[18px]">
             <div className="booking-section-heading">
               <span>
                 <Sparkles size={16} />
@@ -1335,53 +1396,11 @@ function BookingTypeEditor({
                 <p>Make the first touchpoint feel unmistakably yours.</p>
               </div>
             </div>
-            <div className="booking-form-grid">
-              <Label className="booking-field-wide">
-                Brand name
-                <Input
-                  value={draft.brandName}
-                  onChange={(event) => update("brandName", event.target.value)}
-                />
-              </Label>
-              <Label className="booking-field-wide">
-                Headline
-                <Input
-                  value={draft.title}
-                  onChange={(event) => update("title", event.target.value)}
-                />
-              </Label>
-              <Label className="booking-field-wide">
-                Welcome message
-                <Textarea
-                  rows={3}
-                  value={draft.description}
-                  onChange={(event) =>
-                    update("description", event.target.value)
-                  }
-                />
-              </Label>
-            </div>
-            <div className="brand-color-row">
-              <div>
-                <strong>Accent color</strong>
-                <span>Used for buttons, selections, and highlights.</span>
-              </div>
-              <div className="color-swatches" aria-label="Accent color">
-                {COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={cn(draft.accentColor === color && "selected")}
-                    style={{ background: color }}
-                    onClick={() => update("accentColor", color)}
-                    aria-label={`Use ${color}`}
-                  >
-                    {draft.accentColor === color ? <Check size={13} /> : null}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
+            <AppearanceFields
+              draft={draft}
+              onChange={(key, value) => update(key, value)}
+            />
+          </Card>
 
           <aside className="booking-preview-column">
             <div className="booking-preview-label">
@@ -1452,59 +1471,117 @@ function BookingTypeEditor({
   );
 }
 
+const PREVIEW_WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+
+/**
+ * A scaled-down mirror of the real public booking page — same two-panel split,
+ * same month grid and time list — so what the coach approves here is what
+ * visitors get. Slot times come from `slotTimesForDay`, which reproduces the
+ * SQL generator's per-window grid.
+ */
 function BookingPagePreview({ draft }: { draft: Omit<BookingPage, "id"> }) {
-  const days = upcomingDays(draft.availability.days, 5);
-  const times = slotTimes(draft.availability, draft.durationMinutes, 3);
+  const days = upcomingDays(draft.availability, 30);
+  const selectedDay = days[0] || null;
+  const times = selectedDay
+    ? slotTimesForDay(draft.availability, draft.durationMinutes, selectedDay, 4)
+    : [];
+
+  const anchor = selectedDay || new Date();
+  const leadingBlanks = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth(),
+    1,
+  ).getDay();
+  const daysInMonth = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth() + 1,
+    0,
+  ).getDate();
+  const monthGrid: (Date | null)[] = [
+    ...Array.from({ length: leadingBlanks }, () => null),
+    ...Array.from(
+      { length: daysInMonth },
+      (_, index) =>
+        new Date(anchor.getFullYear(), anchor.getMonth(), index + 1),
+    ),
+  ];
+
+  const availableKeys = new Set(days.map((day) => day.toDateString()));
 
   return (
     <div
       className="booking-page-preview"
       style={{ "--booking-accent": draft.accentColor } as CSSProperties}
     >
-      <div className="preview-brand-mark">
-        {draft.brandName.charAt(0).toUpperCase()}
-      </div>
-      <small>{draft.brandName}</small>
-      <h2>{draft.title || "Your consultation headline"}</h2>
-      <p>{draft.description || "Add a short, welcoming introduction."}</p>
-      <div className="preview-meta">
-        <span>
-          <Clock3 size={13} /> {draft.durationMinutes} min
-        </span>
-        <span>
-          <MapPin size={13} /> {locationLabel(draft.locationType)}
-        </span>
-      </div>
-      <div className="preview-calendar-head">
-        <strong>Choose a day</strong>
-      </div>
-      {days.length ? (
-        <div className="preview-days">
-          {days.map((day, index) => (
-            <button key={day.toISOString()} className={index === 0 ? "selected" : ""}>
-              <small>
-                {day
-                  .toLocaleDateString("en-US", { weekday: "short" })
-                  .toUpperCase()}
-              </small>
-              <strong>{day.getDate()}</strong>
-            </button>
-          ))}
+      <div className="booking-preview-intro">
+        <div className="preview-brand-mark">
+          {draft.brandName.charAt(0).toUpperCase() || "?"}
         </div>
-      ) : (
-        <p className="preview-empty">Select at least one available day.</p>
-      )}
-      {times.length ? (
-        times.map((time) => (
-          <button className="preview-time" key={time}>
-            {time} <ArrowUpRight size={14} />
-          </button>
-        ))
-      ) : (
-        <p className="preview-empty">
-          Your window is shorter than the call length.
-        </p>
-      )}
+        <small>{draft.brandName}</small>
+        <h2>{draft.title || "Your consultation headline"}</h2>
+        <p>{draft.description || "Add a short, welcoming introduction."}</p>
+        <div className="preview-meta">
+          <span>
+            <Clock3 size={13} /> {draft.durationMinutes} min
+          </span>
+          <span>
+            {draft.locationType === "in_person" ? (
+              <MapPin size={13} />
+            ) : draft.locationType === "phone" ? (
+              <Phone size={13} />
+            ) : (
+              <Video size={13} />
+            )}{" "}
+            {locationLabel(draft.locationType)}
+          </span>
+        </div>
+      </div>
+
+      <div className="booking-preview-picker">
+        <strong className="preview-calendar-head">Select a Date &amp; Time</strong>
+        {days.length ? (
+          <>
+            <div className="preview-month-grid">
+              {PREVIEW_WEEKDAY_LABELS.map((label, index) => (
+                <span key={index} className="preview-weekday">
+                  {label}
+                </span>
+              ))}
+              {monthGrid.map((day, index) => (
+                <span
+                  key={index}
+                  className={cn(
+                    "preview-day-cell",
+                    !day && "empty",
+                    day && availableKeys.has(day.toDateString()) && "available",
+                    day &&
+                      selectedDay &&
+                      day.toDateString() === selectedDay.toDateString() &&
+                      "selected",
+                  )}
+                >
+                  {day ? day.getDate() : ""}
+                </span>
+              ))}
+            </div>
+            <div className="preview-times">
+              {times.length ? (
+                times.map((time) => (
+                  <span className="preview-time" key={time}>
+                    {time}
+                  </span>
+                ))
+              ) : (
+                <p className="preview-empty">
+                  Every time slot is shorter than the call length.
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="preview-empty">Add at least one time slot.</p>
+        )}
+      </div>
     </div>
   );
 }

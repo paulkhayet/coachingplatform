@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock3,
   Globe,
+  MapPin,
   Phone,
   ShieldCheck,
   Sparkles,
@@ -31,6 +32,7 @@ import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import type { BookingAvailability } from "@/lib/booking-availability";
 import type { Json } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
@@ -52,9 +54,11 @@ type PublicPage = {
   description: string;
   accentColor: string;
   durationMinutes: number;
-  locationType: "zoom" | "google_meet" | "phone";
+  locationType: "zoom" | "google_meet" | "phone" | "in_person";
+  /** Street address. The RPC only sends this when locationType is in_person. */
+  locationDetails: string;
   timezone: string;
-  availability: { days: number[]; start: string; end: string };
+  availability: BookingAvailability;
   minimumNoticeHours: number;
   questions: PublicQuestion[];
   bookedStarts: string[];
@@ -294,7 +298,17 @@ function PublicBookingPageView({ page }: { page: PublicPage }) {
       ? "Zoom"
       : page.locationType === "google_meet"
         ? "Google Meet"
-        : "Phone call";
+        : page.locationType === "in_person"
+          ? "In person"
+          : "Phone call";
+  const meetingIcon =
+    page.locationType === "in_person" ? (
+      <MapPin size={15} />
+    ) : page.locationType === "phone" ? (
+      <Phone size={15} />
+    ) : (
+      <Video size={15} />
+    );
   const totalSteps = hasQuestions ? 2 : 1;
   const stepNumber = step === "details" ? 1 : 2;
   const selectionSummary = selectedSlot ? (
@@ -352,12 +366,10 @@ function PublicBookingPageView({ page }: { page: PublicPage }) {
               <Clock3 size={15} /> {page.durationMinutes} minutes
             </span>
             <span>
-              {page.locationType === "phone" ? (
-                <Phone size={15} />
-              ) : (
-                <Video size={15} />
-              )}
-              {meetingLabel}
+              {meetingIcon}
+              {page.locationType === "in_person" && page.locationDetails
+                ? page.locationDetails
+                : meetingLabel}
             </span>
           </div>
           <div className="public-booking-trust">
@@ -767,6 +779,9 @@ function PublicBookingPageView({ page }: { page: PublicPage }) {
                     })}{" "}
                     · {meetingLabel}
                   </span>
+                  {page.locationType === "in_person" && page.locationDetails ? (
+                    <span>{page.locationDetails}</span>
+                  ) : null}
                 </p>
               </div>
               <span className="public-success-note">

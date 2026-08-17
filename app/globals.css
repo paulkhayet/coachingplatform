@@ -259,6 +259,26 @@ textarea:focus-visible {
   font-size: 9.5px;
   font-weight: 620;
 }
+/* A field whose label has to sit outside the control (the control is a Radix
+   trigger, not a real form element, so the label needs htmlFor). Matches the
+   spacing of the wrapping-label fields around it. */
+.booking-field-stack {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+.wizard-fields .booking-field-stack {
+  gap: 5px;
+}
+.booking-field-stack > label {
+  color: #5b5a60;
+  font-size: 9.5px;
+  font-weight: 620;
+}
+.wizard-fields .booking-field-stack > label {
+  color: var(--ink);
+  font-weight: 600;
+}
 .booking-form-grid input,
 .booking-form-grid textarea,
 .question-fields input,
@@ -362,26 +382,6 @@ textarea:focus-visible {
 }
 .color-swatches button.selected {
   box-shadow: 0 0 0 2px currentColor;
-}
-.day-picker {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 7px;
-  margin-bottom: 14px;
-}
-.day-picker button {
-  height: 34px;
-  border: 1px solid #e2e0dc;
-  border-radius: 9px;
-  background: #faf9f7;
-  color: #85848a;
-  font-size: 10px;
-  font-weight: 650;
-}
-.day-picker button.selected {
-  border-color: #2f6fed;
-  background: var(--purple-soft);
-  color: #2f6fed;
 }
 .question-list {
   display: grid;
@@ -509,7 +509,7 @@ textarea:focus-visible {
   margin-bottom: 9px;
   font-size: 16px;
 }
-.booking-page-preview > small {
+.booking-preview-intro > small {
   display: block;
   color: #8c8a90;
   font-size: 8.5px;
@@ -525,7 +525,7 @@ textarea:focus-visible {
   line-height: 1.12;
   letter-spacing: -.045em;
 }
-.booking-page-preview > p {
+.booking-preview-intro > p {
   max-width: 270px;
   margin: 0 auto;
   color: #85848a;
@@ -546,60 +546,68 @@ textarea:focus-visible {
   gap: 4px;
 }
 .preview-calendar-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: block;
   padding-top: 14px;
   border-top: 1px solid #eceae6;
-}
-.preview-calendar-head strong {
   font-size: 10px;
 }
-.preview-calendar-head button {
-  border: 0;
-  background: transparent;
-  color: #99979d;
+/* Mirrors the live page's calendar-beside-times split, at preview scale. */
+.booking-preview-picker {
+  margin-top: 4px;
 }
-.preview-days {
+.preview-month-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
   margin-top: 10px;
 }
-.preview-days button {
-  display: grid;
-  gap: 3px;
-  padding: 7px 2px;
-  border: 1px solid #ebe9e5;
-  border-radius: 8px;
-  background: #fff;
-  color: #68676c;
-}
-.preview-days small {
+.preview-weekday {
+  padding-bottom: 3px;
+  color: #a8a6ac;
   font-size: 6.5px;
+  font-weight: 650;
 }
-.preview-days strong {
-  font-size: 11px;
-}
-.preview-days button.selected {
-  border-color: var(--booking-accent);
-  background: color-mix(in srgb, var(--booking-accent) 9%, white);
-  color: var(--booking-accent);
-}
-.preview-time {
+.preview-day-cell {
   display: flex;
-  width: 100%;
-  height: 35px;
+  aspect-ratio: 1;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-top: 9px;
-  border: 0;
-  border-radius: 9px;
+  border-radius: 6px;
+  color: #c9c7cd;
+  font-size: 8px;
+}
+.preview-day-cell.empty {
+  visibility: hidden;
+}
+.preview-day-cell.available {
+  background: color-mix(in srgb, var(--booking-accent) 9%, white);
+  color: var(--booking-accent);
+  font-weight: 650;
+}
+.preview-day-cell.selected {
   background: var(--booking-accent);
   color: #fff;
-  font-size: 10px;
-  font-weight: 620;
+  font-weight: 650;
+}
+.preview-times {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 12px;
+}
+.preview-time {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid var(--booking-accent);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--booking-accent);
+  font-size: 9px;
+  font-weight: 650;
 }
 .booking-requests-card {
   margin-top: 13px;
@@ -4318,9 +4326,6 @@ kbd {
   font-size: 8.5px;
   font-weight: 400;
 }
-.wizard-days {
-  margin-bottom: 16px;
-}
 .wizard-actions {
   display: flex;
   justify-content: space-between;
@@ -4359,106 +4364,6 @@ kbd {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-}
-.booking-type-card {
-  display: flex;
-  min-height: 175px;
-  flex-direction: column;
-  padding: 16px;
-  color: inherit;
-  transition: 0.18s ease;
-}
-.booking-type-card:hover {
-  transform: translateY(-2px);
-  border-color: #d4d0df;
-  box-shadow: 0 9px 22px rgba(39, 35, 62, 0.055);
-}
-.booking-type-card-open {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.booking-type-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.booking-type-card h3 {
-  margin: 12px 0 2px;
-  overflow: hidden;
-  color: #29292d;
-  font-size: 13px;
-  letter-spacing: -0.02em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.booking-type-brand {
-  margin: 0;
-  overflow: hidden;
-  color: #9b9ba0;
-  font-size: 9.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.booking-type-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 11px;
-  color: var(--muted-text);
-  font-size: 9.5px;
-}
-.booking-type-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.booking-type-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid #efede9;
-}
-.booking-type-link {
-  overflow: hidden;
-  flex: 1 1 auto;
-  min-width: 0;
-  color: #6c6c71;
-  font-size: 9px;
-  font-weight: 550;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.booking-type-count {
-  flex: 0 0 auto;
-  color: #a0a0a5;
-  font-size: 9px;
-}
-.booking-type-copy {
-  display: flex;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--paper);
-  color: var(--faint);
-  cursor: pointer;
-}
-.booking-type-copy:hover {
-  border-color: var(--purple);
-  color: var(--purple);
 }
 .mini-avatars {
   display: flex;
