@@ -9,10 +9,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  MapPin,
+  Globe,
+  Phone,
   ShieldCheck,
   Sparkles,
+  Video,
 } from "lucide-react";
+import { Avatar } from "@/components/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +32,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import type { Json } from "@/lib/supabase/database.types";
+import { cn } from "@/lib/utils";
 
 type PublicQuestion = {
   id: string;
@@ -43,6 +47,7 @@ type PublicPage = {
   orgSlug: string;
   brandName: string;
   coachName: string;
+  coachAvatarUrl: string | null;
   title: string;
   description: string;
   accentColor: string;
@@ -56,11 +61,58 @@ type PublicPage = {
   availableSlots: string[];
 };
 
-/** How many days of the calendar are shown at once. */
-const DAY_WINDOW = 7;
+const FALLBACK_TIMEZONES = [
+  "America/Los_Angeles",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+  "UTC",
+];
 
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+let cachedTimezones: string[] | null = null;
+function allTimezones(): string[] {
+  if (!cachedTimezones) {
+    try {
+      cachedTimezones = Intl.supportedValuesOf("timeZone");
+    } catch {
+      cachedTimezones = FALLBACK_TIMEZONES;
+    }
+  }
+  return cachedTimezones;
+}
+
+/** The calendar day (YYYY-MM-DD) a given instant falls on, in `timeZone`. */
+function zonedDateKey(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(date);
+}
+
+function calendarKey(year: number, month: number, day: number) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** e.g. "Pacific Daylight Time (1:24 PM)" for the current moment in `timeZone`. */
+function zoneClockLabel(timeZone: string) {
+  const now = new Date();
+  const nameParts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    timeZoneName: "long",
+  }).formatToParts(now);
+  const name =
+    nameParts.find((part) => part.type === "timeZoneName")?.value || timeZone;
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(now);
+  return `${name} (${time})`;
 }
 
 function isPublicPage(value: Json) {
@@ -88,19 +140,6 @@ export function PublicBookingPage({
   const [loadError, setLoadError] = useState<string | null>(
     configured ? null : "Booking is temporarily unavailable.",
   );
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
-  const [dayOffset, setDayOffset] = useState(0);
-  const [step, setStep] = useState<
-    "time" | "details" | "questions" | "success"
-  >("time");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [website, setWebsite] = useState("");
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -114,57 +153,6 @@ export function PublicBookingPage({
         setLoading(false);
       });
   }, [orgSlug, typeSlug]);
-
-  const slots = useMemo(
-    () => (page ? page.availableSlots.map((value) => new Date(value)) : []),
-    [page],
-  );
-  /** Every day that has at least one open slot, across the whole horizon. */
-  const days = useMemo(() => {
-    const unique = new Map<string, Date>();
-    for (const slot of slots) unique.set(dateKey(slot), slot);
-    return [...unique.values()];
-  }, [slots]);
-
-  const visibleDays = days.slice(dayOffset, dayOffset + DAY_WINDOW);
-  const effectiveSelectedDay =
-    selectedDay || (visibleDays[0] ? dateKey(visibleDays[0]) : null);
-  const visibleSlots = effectiveSelectedDay
-    ? slots.filter((slot) => dateKey(slot) === effectiveSelectedDay)
-    : [];
-  const hasQuestions = Boolean(page?.questions.length);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!page || !selectedSlot) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase) throw new Error("Booking is temporarily unavailable.");
-      const { error } = await supabase.rpc("submit_public_booking", {
-        org_slug: page.orgSlug,
-        type_slug: page.slug,
-        guest_name: name,
-        guest_email: email,
-        guest_phone: phone,
-        requested_starts_at: selectedSlot.toISOString(),
-        guest_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        submitted_answers: answers,
-        website,
-      });
-      if (error) throw error;
-      setStep("success");
-    } catch (error) {
-      setSubmitError(
-        error instanceof Error
-          ? error.message
-          : "We couldn’t complete the booking.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (loading)
     return (
@@ -185,14 +173,130 @@ export function PublicBookingPage({
       </main>
     );
 
+  return <PublicBookingPageView page={page} />;
+}
+
+function PublicBookingPageView({ page }: { page: PublicPage }) {
+  const [viewerTimezone, setViewerTimezone] = useState(() =>
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  const [viewMonthOverride, setViewMonthOverride] = useState<Date | null>(
+    null,
+  );
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
+  const [step, setStep] = useState<
+    "time" | "details" | "questions" | "success"
+  >("time");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [website, setWebsite] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const slots = useMemo(
+    () => page.availableSlots.map((value) => new Date(value)),
+    [page],
+  );
+  /** Every calendar day (in the viewer's timezone) that has an open slot. */
+  const dayKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const slot of slots) set.add(zonedDateKey(slot, viewerTimezone));
+    return set;
+  }, [slots, viewerTimezone]);
+  const sortedDayKeys = useMemo(() => [...dayKeys].sort(), [dayKeys]);
+  // Default to the first month with availability rather than showing an
+  // empty grid for the current month; once the visitor navigates manually,
+  // that choice takes over.
+  const defaultViewMonth = useMemo(() => {
+    if (sortedDayKeys.length) {
+      const [year, month] = sortedDayKeys[0].split("-").map(Number);
+      return new Date(year, month - 1, 1);
+    }
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }, [sortedDayKeys]);
+  const viewMonth = viewMonthOverride || defaultViewMonth;
+
+  const effectiveSelectedDay = selectedDay || sortedDayKeys[0] || null;
+  const visibleSlots = useMemo(
+    () =>
+      effectiveSelectedDay
+        ? slots
+            .filter(
+              (slot) => zonedDateKey(slot, viewerTimezone) === effectiveSelectedDay,
+            )
+            .sort((a, b) => a.getTime() - b.getTime())
+        : [],
+    [slots, viewerTimezone, effectiveSelectedDay],
+  );
+  const hasQuestions = Boolean(page.questions.length);
+
+  const monthGrid = useMemo(() => {
+    const year = viewMonth.getFullYear();
+    const month = viewMonth.getMonth();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<{ day: number; key: string } | null> = [];
+    for (let i = 0; i < firstWeekday; i += 1) cells.push(null);
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      cells.push({ day, key: calendarKey(year, month, day) });
+    }
+    while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  }, [viewMonth]);
+  const todayKey = zonedDateKey(new Date(), viewerTimezone);
+  const canGoToPreviousMonth = (() => {
+    const now = new Date();
+    return (
+      viewMonth.getFullYear() > now.getFullYear() ||
+      (viewMonth.getFullYear() === now.getFullYear() &&
+        viewMonth.getMonth() > now.getMonth())
+    );
+  })();
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedSlot) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Booking is temporarily unavailable.");
+      const { error } = await supabase.rpc("submit_public_booking", {
+        org_slug: page.orgSlug,
+        type_slug: page.slug,
+        guest_name: name,
+        guest_email: email,
+        guest_phone: phone,
+        requested_starts_at: selectedSlot.toISOString(),
+        guest_timezone: viewerTimezone,
+        submitted_answers: answers,
+        website,
+      });
+      if (error) throw error;
+      setStep("success");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "We couldn’t complete the booking.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const meetingLabel =
     page.locationType === "zoom"
       ? "Zoom"
       : page.locationType === "google_meet"
         ? "Google Meet"
         : "Phone call";
-  const totalSteps = hasQuestions ? 3 : 2;
-  const stepNumber = step === "time" ? 1 : step === "details" ? 2 : 3;
+  const totalSteps = hasQuestions ? 2 : 1;
+  const stepNumber = step === "details" ? 1 : 2;
   const selectionSummary = selectedSlot ? (
     <div className="public-selection-summary">
       <CalendarDays size={17} />
@@ -202,12 +306,14 @@ export function PublicBookingPage({
             weekday: "long",
             month: "long",
             day: "numeric",
+            timeZone: viewerTimezone,
           })}
         </strong>
         <span>
           {selectedSlot.toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
+            timeZone: viewerTimezone,
           })}{" "}
           · {page.durationMinutes} min
         </span>
@@ -225,6 +331,20 @@ export function PublicBookingPage({
         <aside className="public-booking-intro">
           <div className="public-brand-mark">{page.brandName.charAt(0)}</div>
           <small>{page.brandName}</small>
+          <div className="public-intro-divider" />
+          <div className="public-coach-row">
+            <Avatar
+              initials={page.coachName
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((part) => part[0])
+                .join("")}
+              imageUrl={page.coachAvatarUrl}
+              color={page.accentColor}
+              size="xl"
+            />
+            <small>{page.coachName}</small>
+          </div>
           <h1>{page.title}</h1>
           <p>{page.description}</p>
           <div className="public-booking-meta">
@@ -232,7 +352,12 @@ export function PublicBookingPage({
               <Clock3 size={15} /> {page.durationMinutes} minutes
             </span>
             <span>
-              <MapPin size={15} /> {meetingLabel}
+              {page.locationType === "phone" ? (
+                <Phone size={15} />
+              ) : (
+                <Video size={15} />
+              )}
+              {meetingLabel}
             </span>
           </div>
           <div className="public-booking-trust">
@@ -245,24 +370,16 @@ export function PublicBookingPage({
         </aside>
 
         <div className="public-booking-flow">
-          {step !== "success" ? (
+          {step === "details" || step === "questions" ? (
             <div className="public-flow-heading">
               <div>
                 <span>{stepNumber}</span>
                 <p>
                   <strong>
-                    {step === "time"
-                      ? "Choose a time"
-                      : step === "details"
-                        ? "Your details"
-                        : "A few questions"}
+                    {step === "details" ? "Your details" : "A few questions"}
                   </strong>
                   <small>
-                    {step === "time"
-                      ? `Times shown in ${Intl.DateTimeFormat()
-                          .resolvedOptions()
-                          .timeZone.replaceAll("_", " ")}`
-                      : `Step ${stepNumber} of ${totalSteps}`}
+                    Step {stepNumber} of {totalSteps}
                   </small>
                 </p>
               </div>
@@ -271,96 +388,166 @@ export function PublicBookingPage({
 
           {step === "time" ? (
             <>
-              {days.length ? (
-                <>
-                  <div className="public-day-nav">
-                    <button
-                      onClick={() => {
-                        setDayOffset(Math.max(0, dayOffset - DAY_WINDOW));
-                        setSelectedDay(null);
-                        setSelectedSlot(null);
-                      }}
-                      disabled={dayOffset === 0}
-                      aria-label="Earlier days"
-                    >
-                      <ChevronLeft size={15} />
-                    </button>
-                    <span>
-                      {visibleDays[0]?.toLocaleDateString("en-US", {
-                        month: "long",
-                      })}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setDayOffset(dayOffset + DAY_WINDOW);
-                        setSelectedDay(null);
-                        setSelectedSlot(null);
-                      }}
-                      disabled={dayOffset + DAY_WINDOW >= days.length}
-                      aria-label="Later days"
-                    >
-                      <ChevronRight size={15} />
-                    </button>
-                  </div>
-                  <div className="public-day-row">
-                    {visibleDays.map((day) => {
-                      const key = dateKey(day);
-                      return (
-                        <button
-                          key={key}
-                          className={effectiveSelectedDay === key ? "selected" : ""}
-                          onClick={() => {
-                            setSelectedDay(key);
-                            setSelectedSlot(null);
-                          }}
-                        >
-                          <small>
-                            {day.toLocaleDateString("en-US", {
-                              weekday: "short",
-                            })}
-                          </small>
-                          <strong>{day.getDate()}</strong>
-                          <span>
-                            {day.toLocaleDateString("en-US", { month: "short" })}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="public-time-grid">
-                    {visibleSlots.map((slot) => (
+              <h2 className="public-time-heading">Select a Date &amp; Time</h2>
+              {sortedDayKeys.length ? (
+                <div className="public-calendar-columns">
+                  <div className="public-calendar-block">
+                    <div className="public-month-nav">
                       <button
-                        key={slot.toISOString()}
-                        className={
-                          selectedSlot?.getTime() === slot.getTime()
-                            ? "selected"
-                            : ""
+                        type="button"
+                        onClick={() =>
+                          setViewMonthOverride(
+                            new Date(
+                              viewMonth.getFullYear(),
+                              viewMonth.getMonth() - 1,
+                              1,
+                            ),
+                          )
                         }
-                        onClick={() => setSelectedSlot(slot)}
+                        disabled={!canGoToPreviousMonth}
+                        aria-label="Previous month"
                       >
-                        {slot.toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                        {selectedSlot?.getTime() === slot.getTime() ? (
-                          <Check size={14} />
-                        ) : null}
+                        <ChevronLeft size={15} />
                       </button>
-                    ))}
+                      <strong>
+                        {viewMonth.toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </strong>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setViewMonthOverride(
+                            new Date(
+                              viewMonth.getFullYear(),
+                              viewMonth.getMonth() + 1,
+                              1,
+                            ),
+                          )
+                        }
+                        aria-label="Next month"
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    </div>
+                    <div className="public-month-grid">
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                        (label) => (
+                          <span key={label} className="public-weekday-label">
+                            {label}
+                          </span>
+                        ),
+                      )}
+                      {monthGrid.map((cell, index) => {
+                        if (!cell)
+                          return (
+                            <span
+                              key={`blank-${index}`}
+                              className="public-day-cell empty"
+                              aria-hidden="true"
+                            />
+                          );
+                        const available = dayKeys.has(cell.key);
+                        const selected = effectiveSelectedDay === cell.key;
+                        return (
+                          <button
+                            key={cell.key}
+                            type="button"
+                            className={cn(
+                              "public-day-cell",
+                              available && "available",
+                              selected && "selected",
+                              cell.key === todayKey && "today",
+                            )}
+                            disabled={!available}
+                            onClick={() => {
+                              setSelectedDay(cell.key);
+                              setSelectedSlot(null);
+                            }}
+                          >
+                            {cell.day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="public-timezone-row">
+                      <span>Time zone</span>
+                      <Select
+                        value={viewerTimezone}
+                        onValueChange={setViewerTimezone}
+                      >
+                        <SelectTrigger className="public-timezone-trigger">
+                          <Globe size={14} />
+                          <SelectValue>
+                            {zoneClockLabel(viewerTimezone)}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allTimezones().map((zone) => (
+                            <SelectItem key={zone} value={zone}>
+                              {zone.replaceAll("_", " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  {!visibleSlots.length ? (
-                    <p className="public-no-times">
-                      No open times on this day — try another.
-                    </p>
-                  ) : null}
-                  <button
-                    className="public-primary-button"
-                    disabled={!selectedSlot}
-                    onClick={() => setStep("details")}
-                  >
-                    Continue <ArrowRight size={15} />
-                  </button>
-                </>
+                  <div className="public-times-block">
+                    {effectiveSelectedDay ? (
+                      <>
+                        <h3>
+                          {(() => {
+                            const [year, month, day] = effectiveSelectedDay
+                              .split("-")
+                              .map(Number);
+                            return new Date(
+                              year,
+                              month - 1,
+                              day,
+                            ).toLocaleDateString("en-US", {
+                              weekday: "long",
+                              month: "long",
+                              day: "numeric",
+                            });
+                          })()}
+                        </h3>
+                        {visibleSlots.length ? (
+                          <div className="public-time-list">
+                            {visibleSlots.map((slot) => (
+                              <button
+                                key={slot.toISOString()}
+                                type="button"
+                                className={cn(
+                                  selectedSlot?.getTime() === slot.getTime() &&
+                                    "selected",
+                                )}
+                                onClick={() => setSelectedSlot(slot)}
+                              >
+                                {slot.toLocaleTimeString("en-US", {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  timeZone: viewerTimezone,
+                                })}
+                                {selectedSlot?.getTime() === slot.getTime() ? (
+                                  <Check size={14} />
+                                ) : null}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="public-no-times">
+                            No open times on this day — try another.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="public-no-times">
+                        Select a date to see available times.
+                      </p>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="public-no-availability">
                   <CalendarDays size={22} />
@@ -373,6 +560,14 @@ export function PublicBookingPage({
                   </p>
                 </div>
               )}
+              {selectedSlot ? (
+                <button
+                  className="public-primary-button"
+                  onClick={() => setStep("details")}
+                >
+                  Continue <ArrowRight size={15} />
+                </button>
+              ) : null}
             </>
           ) : step === "details" ? (
             <form
@@ -561,12 +756,14 @@ export function PublicBookingPage({
                       weekday: "long",
                       month: "long",
                       day: "numeric",
+                      timeZone: viewerTimezone,
                     })}
                   </strong>
                   <span>
                     {selectedSlot?.toLocaleTimeString("en-US", {
                       hour: "numeric",
                       minute: "2-digit",
+                      timeZone: viewerTimezone,
                     })}{" "}
                     · {meetingLabel}
                   </span>
