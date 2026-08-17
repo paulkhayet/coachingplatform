@@ -77,63 +77,6 @@ const NOTICE_OPTIONS = [
   { value: 72, label: "3 days" },
 ];
 
-type Preset = {
-  id: string;
-  label: string;
-  blurb: string;
-  durationMinutes: number;
-  title: string;
-  description: string;
-  questionLabel: string | null;
-  questionRequired: boolean;
-};
-
-const PRESETS: Preset[] = [
-  {
-    id: "discovery",
-    label: "Discovery call",
-    blurb: "A short, no-pressure intro for people considering working with you.",
-    durationMinutes: 20,
-    title: "Let’s explore working together",
-    description:
-      "Choose a time for a relaxed, no-pressure conversation about what you’re working toward.",
-    questionLabel: "What would make this conversation valuable for you?",
-    questionRequired: true,
-  },
-  {
-    id: "session",
-    label: "Ongoing session",
-    blurb: "A regular coaching session for people you already work with.",
-    durationMinutes: 50,
-    title: "Book your next session",
-    description:
-      "Pick a time that works for you and we’ll pick up where we left off.",
-    questionLabel: "Anything you’d like to focus on this time?",
-    questionRequired: false,
-  },
-  {
-    id: "consult",
-    label: "Focused consult",
-    blurb: "A longer, deeper session on one specific challenge.",
-    durationMinutes: 60,
-    title: "Book a focused consult",
-    description:
-      "A dedicated deep-dive on the challenge you’re facing right now.",
-    questionLabel: "What challenge would you like to work through?",
-    questionRequired: true,
-  },
-  {
-    id: "blank",
-    label: "Start from scratch",
-    blurb: "Set everything up yourself.",
-    durationMinutes: 30,
-    title: "",
-    description: "",
-    questionLabel: null,
-    questionRequired: false,
-  },
-];
-
 function makeSlug(value: string) {
   return value
     .toLowerCase()
@@ -201,30 +144,19 @@ function slotTimes(
 function defaultPage(
   brandName: string,
   colorIndex: number,
-  preset: Preset,
 ): Omit<BookingPage, "id"> {
   return {
-    slug: makeSlug(preset.title || preset.label),
+    slug: "",
     brandName,
-    title: preset.title,
-    description: preset.description,
+    title: "",
+    description: "",
     accentColor: COLORS[colorIndex % COLORS.length],
-    durationMinutes: preset.durationMinutes,
+    durationMinutes: 30,
     locationType: "zoom",
     availability: { days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" },
     minimumNoticeHours: 24,
     active: true,
-    questions: preset.questionLabel
-      ? [
-          {
-            id: crypto.randomUUID(),
-            label: preset.questionLabel,
-            type: "long_text",
-            required: preset.questionRequired,
-            options: [],
-          },
-        ]
-      : [],
+    questions: [],
   };
 }
 
@@ -698,8 +630,9 @@ function CreateBookingFlow({
   onPublish: (page: Omit<BookingPage, "id">) => Promise<void>;
 }) {
   const [step, setStep] = useState(0);
-  const [presetId, setPresetId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Omit<BookingPage, "id"> | null>(null);
+  const [draft, setDraft] = useState<Omit<BookingPage, "id">>(() =>
+    defaultPage(userName, seedColorIndex),
+  );
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeSlug = organizationSlug || "your-practice";
@@ -708,16 +641,9 @@ function CreateBookingFlow({
   const update = <Key extends keyof Omit<BookingPage, "id">>(
     key: Key,
     value: Omit<BookingPage, "id">[Key],
-  ) => setDraft((current) => (current ? { ...current, [key]: value } : current));
-
-  const choosePreset = (preset: Preset) => {
-    setPresetId(preset.id);
-    setDraft(defaultPage(userName, seedColorIndex, preset));
-    setStep(1);
-  };
+  ) => setDraft((current) => ({ ...current, [key]: value }));
 
   const publish = async () => {
-    if (!draft) return;
     setError(null);
     if (!draft.title.trim()) {
       setError("Give this booking type a name.");
@@ -756,51 +682,22 @@ function CreateBookingFlow({
 
       <div className="wizard-shell">
         <div className="wizard-progress">
-          {["Kind of call", "The basics", "Availability"].map(
-            (label, index) => (
-              <div
-                key={label}
-                className={cn(
-                  "wizard-step",
-                  index === step && "current",
-                  index < step && "done",
-                )}
-              >
-                <span>{index < step ? <Check size={12} /> : index + 1}</span>
-                <small>{label}</small>
-              </div>
-            ),
-          )}
+          {["The basics", "Availability"].map((label, index) => (
+            <div
+              key={label}
+              className={cn(
+                "wizard-step",
+                index === step && "current",
+                index < step && "done",
+              )}
+            >
+              <span>{index < step ? <Check size={12} /> : index + 1}</span>
+              <small>{label}</small>
+            </div>
+          ))}
         </div>
 
         {step === 0 ? (
-          <section className="wizard-panel">
-            <h2>What kind of call is this?</h2>
-            <p className="wizard-subtitle">
-              We’ll set sensible defaults — you can change everything later.
-            </p>
-            <div className="preset-grid">
-              {PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  className={cn(
-                    "preset-card",
-                    presetId === preset.id && "selected",
-                  )}
-                  onClick={() => choosePreset(preset)}
-                >
-                  <strong>{preset.label}</strong>
-                  <span>{preset.blurb}</span>
-                  {preset.id !== "blank" ? (
-                    <small>{preset.durationMinutes} min</small>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {step === 1 && draft ? (
           <section className="wizard-panel">
             <h2>The basics</h2>
             <p className="wizard-subtitle">
@@ -814,11 +711,11 @@ function CreateBookingFlow({
                   placeholder="Discovery call"
                   onChange={(event) => {
                     const title = event.target.value;
-                    setDraft((current) =>
-                      current
-                        ? { ...current, title, slug: makeSlug(title) }
-                        : current,
-                    );
+                    setDraft((current) => ({
+                      ...current,
+                      title,
+                      slug: makeSlug(title),
+                    }));
                   }}
                 />
                 <small className="field-hint">
@@ -868,11 +765,8 @@ function CreateBookingFlow({
               </Label>
             </div>
             <div className="wizard-actions">
-              <Button variant="outline" onClick={() => setStep(0)}>
-                <ArrowLeft size={14} /> Back
-              </Button>
               <Button
-                onClick={() => setStep(2)}
+                onClick={() => setStep(1)}
                 disabled={!draft.title.trim()}
               >
                 Continue <ArrowRight size={14} />
@@ -881,7 +775,7 @@ function CreateBookingFlow({
           </section>
         ) : null}
 
-        {step === 2 && draft ? (
+        {step === 1 ? (
           <section className="wizard-panel">
             <h2>When are you available?</h2>
             <p className="wizard-subtitle">
@@ -948,7 +842,7 @@ function CreateBookingFlow({
               </div>
             ) : null}
             <div className="wizard-actions">
-              <Button variant="outline" onClick={() => setStep(1)}>
+              <Button variant="outline" onClick={() => setStep(0)}>
                 <ArrowLeft size={14} /> Back
               </Button>
               <Button onClick={publish} disabled={publishing}>
