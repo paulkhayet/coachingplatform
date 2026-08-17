@@ -41,7 +41,10 @@ const eslintConfig = defineConfig([
       // see them as a nested control when wrapped in a <label>.
       "jsx-a11y/label-has-associated-control": [
         "error",
-        { controlComponents: ["Checkbox", "SelectTrigger"] },
+        {
+          labelComponents: ["Label"],
+          controlComponents: ["Checkbox", "SelectTrigger", "Input", "Textarea"],
+        },
       ],
     },
   },

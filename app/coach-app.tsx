@@ -64,9 +64,20 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { Avatar } from "@/components/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DrawerContent,
+} from "@/components/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -75,6 +86,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { BookingsView } from "@/components/bookings-view";
 import {
@@ -164,38 +181,6 @@ function formatPracticeDate(
   });
 }
 
-function Avatar({
-  initials,
-  color,
-  imageUrl,
-  size = "md",
-}: {
-  initials: string;
-  color?: string;
-  imageUrl?: string | null;
-  size?: "sm" | "md" | "lg" | "xl";
-}) {
-  if (imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- external/user-uploaded URL, not a static asset
-      <img
-        src={imageUrl}
-        alt=""
-        className={cn("avatar", "avatar-photo", `avatar-${size}`)}
-      />
-    );
-  }
-  return (
-    <span
-      className={cn("avatar", `avatar-${size}`)}
-      style={{ background: color || "#ebe9e4" }}
-      aria-hidden="true"
-    >
-      {initials}
-    </span>
-  );
-}
-
 function VisibilityBadge({ visibility }: { visibility: Visibility }) {
   return (
     <Badge variant={visibilityTone[visibility]} className="visibility-badge">
@@ -272,15 +257,6 @@ export function CoachApp() {
         setCommandOpen((open) => !open);
       }
       if (event.key === "Escape") {
-        setCommandOpen(false);
-        setQuickAddOpen(false);
-        setSessionContext(null);
-        setScheduleOpen(false);
-        setAssignmentClient(null);
-        setAssignmentDetail(null);
-        setSharingClient(null);
-        setPortalAccessClient(null);
-        setPortalClient(null);
         setMobileMenuOpen(false);
       }
     };
@@ -1164,9 +1140,14 @@ function Dashboard({
         <section className="panel focus-panel">
           <SectionTitle
             action={
-              <button className="icon-button" aria-label="More options">
-                <MoreHorizontal size={17} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="icon-button" aria-label="More options">
+                    <MoreHorizontal size={17} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>More options</TooltipContent>
+              </Tooltip>
             }
           >
             Needs attention
@@ -1375,7 +1356,7 @@ function ClientsView({
         </div>
         <div className="inline-search">
           <Search size={15} />
-          <input
+          <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search clients"
@@ -2525,18 +2506,22 @@ function CalendarView({
           <button className="today-button" onClick={() => setWeekOffset(0)}>
             Today
           </button>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Previous week"
             onClick={() => setWeekOffset((current) => current - 1)}
           >
             <ChevronLeft size={13} />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Next week"
             onClick={() => setWeekOffset((current) => current + 1)}
           >
             <ChevronRight size={13} />
-          </button>
+          </Button>
           <strong>{weekLabel}</strong>
           <span />
         </div>
@@ -2730,29 +2715,39 @@ function ResourcesView({
               </h2>
             </div>
             <div className="drive-actions">
-              <label className="inline-search">
+              <Label className="inline-search">
                 <Search size={15} />
-                <input
+                <Input
                   value={resourceSearch}
                   onChange={(event) => setResourceSearch(event.target.value)}
                   placeholder="Search resources"
                 />
-              </label>
+              </Label>
               <div className="layout-toggle" aria-label="Resource layout">
-                <button
-                  aria-label="List view"
-                  className={cn(layout === "list" && "active")}
-                  onClick={() => setLayout("list")}
-                >
-                  <List size={15} />
-                </button>
-                <button
-                  aria-label="Grid view"
-                  className={cn(layout === "grid" && "active")}
-                  onClick={() => setLayout("grid")}
-                >
-                  <Grid2X2 size={14} />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      aria-label="List view"
+                      className={cn(layout === "list" && "active")}
+                      onClick={() => setLayout("list")}
+                    >
+                      <List size={15} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>List view</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      aria-label="Grid view"
+                      className={cn(layout === "grid" && "active")}
+                      onClick={() => setLayout("grid")}
+                    >
+                      <Grid2X2 size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Grid view</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </header>
@@ -2934,73 +2929,73 @@ function ResourceUploadModal({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <form className="workflow-modal resource-upload-modal" onSubmit={submit}>
-        <div className="modal-heading">
-          <div>
-            <p className="eyebrow">SECURE LIBRARY</p>
-            <h2>Upload a resource</h2>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent asChild>
+        <form className="workflow-modal resource-upload-modal" onSubmit={submit}>
+          <div className="modal-heading">
+            <div>
+              <p className="eyebrow">SECURE LIBRARY</p>
+              <DialogTitle>Upload a resource</DialogTitle>
+            </div>
+            <DialogClose asChild>
+              <button type="button" aria-label="Close upload">
+                <X size={18} />
+              </button>
+            </DialogClose>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close upload">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="modal-copy">
-          Files stay private until you assign them to a client.
-        </p>
-        <label className={cn("resource-dropzone", file && "selected")}>
-          <input
-            type="file"
-            accept=".pdf,.png,.jpg,.jpeg,.mp4,.mp3,.txt,.doc,.docx,.xls,.xlsx"
-            onChange={(event) => chooseFile(event.target.files?.[0] || null)}
-          />
-          <span>
-            <FileUp size={22} />
-          </span>
-          <strong>{file ? file.name : "Choose a file"}</strong>
-          <small>
-            {file
-              ? `${fileSizeLabel(file.size)} · Ready to upload`
-              : "PDF, document, image, audio, or video · 10 MB max"}
-          </small>
-        </label>
-        <div className="form-stack">
-          <label>
-            Resource name
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              required
+          <DialogDescription className="modal-copy">
+            Files stay private until you assign them to a client.
+          </DialogDescription>
+          <Label className={cn("resource-dropzone", file && "selected")}>
+            <Input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.mp4,.mp3,.txt,.doc,.docx,.xls,.xlsx"
+              onChange={(event) => chooseFile(event.target.files?.[0] || null)}
             />
-          </label>
-          <label>
-            Description <span className="optional">Optional</span>
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="How might a client use this?"
-            />
-          </label>
-        </div>
-        {error && <p className="form-error">{error}</p>}
-        <div className="modal-actions">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="accent"
-            disabled={!file || !title.trim() || saving}
-          >
-            {saving ? "Uploading…" : "Upload resource"}
-          </Button>
-        </div>
-      </form>
-    </div>
+            <span>
+              <FileUp size={22} />
+            </span>
+            <strong>{file ? file.name : "Choose a file"}</strong>
+            <small>
+              {file
+                ? `${fileSizeLabel(file.size)} · Ready to upload`
+                : "PDF, document, image, audio, or video · 10 MB max"}
+            </small>
+          </Label>
+          <div className="form-stack">
+            <Label>
+              Resource name
+              <Input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                required
+              />
+            </Label>
+            <Label>
+              Description <span className="optional">Optional</span>
+              <Textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="How might a client use this?"
+              />
+            </Label>
+          </div>
+          {error && <p className="form-error">{error}</p>}
+          <div className="modal-actions">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="accent"
+              disabled={!file || !title.trim() || saving}
+            >
+              {saving ? "Uploading…" : "Upload resource"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -3055,20 +3050,19 @@ function AssignResourceModal({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <form className="workflow-modal" onSubmit={submit}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent asChild>
+        <form className="workflow-modal" onSubmit={submit}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">ASSIGN RESOURCE</p>
-            <h2>{resource.title}</h2>
+            <DialogTitle>{resource.title}</DialogTitle>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close assignment">
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button type="button" aria-label="Close assignment">
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
         <div className="assigned-resource-chip">
           <FileText size={17} />
@@ -3080,7 +3074,7 @@ function AssignResourceModal({
           </span>
         </div>
         <div className="form-stack">
-          <label>
+          <Label>
             Client
             <Select
               value={clientId}
@@ -3104,15 +3098,15 @@ function AssignResourceModal({
                 ))}
               </SelectContent>
             </Select>
-          </label>
-          <label>
+          </Label>
+          <Label>
             Instructions <span className="optional">Optional</span>
-            <textarea
+            <Textarea
               value={instructions}
               onChange={(event) => setInstructions(event.target.value)}
               placeholder={`How should the client use ${resource.title}?`}
             />
-          </label>
+          </Label>
           <div className="response-choice compact">
             <button
               type="button"
@@ -3137,21 +3131,21 @@ function AssignResourceModal({
               </span>
             </button>
           </div>
-          <label>
+          <Label>
             Due date
-            <input
+            <Input
               type="datetime-local"
               value={dueAt}
               onChange={(event) => setDueAt(event.target.value)}
             />
-          </label>
-          <label className="check-control">
+          </Label>
+          <Label className="check-control">
             <Checkbox
               checked={required}
               onCheckedChange={(checked) => setRequired(checked === true)}
             />
             Make this mandatory
-          </label>
+          </Label>
           {client?.type === "Teen" && (
             <GuardianShareSelect
               value={guardianShare}
@@ -3168,8 +3162,9 @@ function AssignResourceModal({
             {saving ? "Assigning…" : "Assign as homework"}
           </Button>
         </div>
-      </form>
-    </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -3428,25 +3423,25 @@ function GeneralSettings({
         </div>
       </div>
       <div className="booking-form-grid">
-        <label className="booking-field-wide">
+        <Label className="booking-field-wide">
           Practice name
-          <input
+          <Input
             value={nameDraft}
             placeholder="Your Coaching Practice"
             onChange={(event) => setNameDraft(event.target.value)}
           />
-        </label>
-        <label className="booking-field-wide">
+        </Label>
+        <Label className="booking-field-wide">
           Practice URL
           <div className="slug-field">
             <span>{origin.replace(/^https?:\/\//, "")}/</span>
-            <input
+            <Input
               value={slugDraft}
               onChange={(event) => setSlugDraft(sanitizeSlug(event.target.value))}
             />
           </div>
-        </label>
-        <label>
+        </Label>
+        <Label>
           Timezone
           <Select value={timezoneDraft} onValueChange={setTimezoneDraft}>
             <SelectTrigger className="h-[37px] w-full">
@@ -3463,7 +3458,7 @@ function GeneralSettings({
           <small className="field-hint">
             Booking availability windows are interpreted in this timezone.
           </small>
-        </label>
+        </Label>
       </div>
       {error ? (
         <div className="data-error" role="alert">
@@ -3593,7 +3588,7 @@ function ProfileSettings({
             size="xl"
           />
           <div>
-            <input
+            <Input
               ref={avatarInputRef}
               type="file"
               accept="image/png,image/jpeg,image/webp"
@@ -3613,26 +3608,26 @@ function ProfileSettings({
           </div>
         </div>
         <div className="booking-form-grid">
-          <label className="booking-field-wide">
+          <Label className="booking-field-wide">
             Full name
-            <input
+            <Input
               value={nameDraft}
               onChange={(event) => setNameDraft(event.target.value)}
             />
-          </label>
-          <label>
+          </Label>
+          <Label>
             Email
-            <input value={userEmail || ""} disabled />
+            <Input value={userEmail || ""} disabled />
             <small className="field-hint">Contact support to change your email.</small>
-          </label>
-          <label>
+          </Label>
+          <Label>
             Phone <small>Optional</small>
-            <input
+            <Input
               type="tel"
               value={phoneDraft}
               onChange={(event) => setPhoneDraft(event.target.value)}
             />
-          </label>
+          </Label>
         </div>
         {error ? (
           <div className="data-error" role="alert">
@@ -3714,24 +3709,24 @@ function PasswordCard({
         </div>
       </div>
       <div className="booking-form-grid">
-        <label>
+        <Label>
           New password
-          <input
+          <Input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete="new-password"
           />
-        </label>
-        <label>
+        </Label>
+        <Label>
           Confirm password
-          <input
+          <Input
             type="password"
             value={confirm}
             onChange={(event) => setConfirm(event.target.value)}
             autoComplete="new-password"
           />
-        </label>
+        </Label>
       </div>
       {error ? (
         <div className="data-error" role="alert">
@@ -3887,70 +3882,68 @@ function IntegrationsSettings({
         </span>
       </div>
 
-      {pendingDisconnect && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) =>
-            event.target === event.currentTarget && setPendingDisconnect(null)
-          }
-        >
-          <div className="workflow-modal integration-disconnect-modal">
-            <div className="modal-heading">
-              <div>
-                <p className="eyebrow">DISCONNECT ACCOUNT</p>
-                <h2>
-                  Disconnect{" "}
-                  {pendingDisconnect.provider === "google"
-                    ? "Google Workspace"
-                    : "Zoom"}
-                  ?
-                </h2>
+      <Dialog
+        open={!!pendingDisconnect}
+        onOpenChange={(open) => !open && setPendingDisconnect(null)}
+      >
+        <DialogContent className="workflow-modal integration-disconnect-modal">
+          {pendingDisconnect && (
+            <>
+              <div className="modal-heading">
+                <div>
+                  <p className="eyebrow">DISCONNECT ACCOUNT</p>
+                  <DialogTitle>
+                    Disconnect{" "}
+                    {pendingDisconnect.provider === "google"
+                      ? "Google Workspace"
+                      : "Zoom"}
+                    ?
+                  </DialogTitle>
+                </div>
+                <DialogClose asChild>
+                  <button aria-label="Close disconnect confirmation">
+                    <X size={18} />
+                  </button>
+                </DialogClose>
               </div>
-              <button
-                onClick={() => setPendingDisconnect(null)}
-                aria-label="Close disconnect confirmation"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p className="modal-copy">
-              Existing sessions will remain in Soli, but new sessions will no
-              longer sync or receive meeting links from this account.
-            </p>
-            <div className="modal-actions">
-              <Button
-                variant="outline"
-                onClick={() => setPendingDisconnect(null)}
-              >
-                Keep connected
-              </Button>
-              <Button
-                variant="default"
-                disabled={disconnecting}
-                onClick={async () => {
-                  setDisconnecting(true);
-                  try {
-                    await onDisconnect(pendingDisconnect.id);
-                    onToast("Integration disconnected");
-                    setPendingDisconnect(null);
-                  } catch (error) {
-                    onToast(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not disconnect integration",
-                    );
-                  } finally {
-                    setDisconnecting(false);
-                  }
-                }}
-              >
-                {disconnecting ? "Disconnecting…" : "Disconnect"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+              <DialogDescription className="modal-copy">
+                Existing sessions will remain in Soli, but new sessions will no
+                longer sync or receive meeting links from this account.
+              </DialogDescription>
+              <div className="modal-actions">
+                <Button
+                  variant="outline"
+                  onClick={() => setPendingDisconnect(null)}
+                >
+                  Keep connected
+                </Button>
+                <Button
+                  variant="default"
+                  disabled={disconnecting}
+                  onClick={async () => {
+                    setDisconnecting(true);
+                    try {
+                      await onDisconnect(pendingDisconnect.id);
+                      onToast("Integration disconnected");
+                      setPendingDisconnect(null);
+                    } catch (error) {
+                      onToast(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not disconnect integration",
+                      );
+                    } finally {
+                      setDisconnecting(false);
+                    }
+                  }}
+                >
+                  {disconnecting ? "Disconnecting…" : "Disconnect"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -4202,20 +4195,20 @@ function CommandPalette({
     client.name.toLowerCase().includes(query.toLowerCase()),
   );
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div className="command-palette">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="command-palette">
+        <DialogTitle className="sr-only">Search</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search clients, notes, and sessions, or jump to a page.
+        </DialogDescription>
         <div className="command-input">
           <Search size={18} />
-          <input
+          <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search clients, notes, sessions…"
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- command palette should be typeable the instant it opens
+            autoFocus
           />
           <kbd>ESC</kbd>
         </div>
@@ -4271,8 +4264,8 @@ function CommandPalette({
           </span>
           <span>Searches stay private</span>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -4778,25 +4771,23 @@ function PortalAccessModal({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="workflow-modal portal-access-modal">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="workflow-modal portal-access-modal">
         <div className="modal-heading">
           <div>
             <p className="eyebrow">PEOPLE & ACCESS</p>
-            <h2>Portal access for {client.name}</h2>
+            <DialogTitle>Portal access for {client.name}</DialogTitle>
           </div>
-          <button onClick={onClose} aria-label="Close portal access">
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button aria-label="Close portal access">
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
-        <p className="modal-copy">
+        <DialogDescription className="modal-copy">
           Create an email-bound invitation for each person. Links expire after
           seven days and connect only to the intended role.
-        </p>
+        </DialogDescription>
         <div className="access-boundary">
           <ShieldCheck size={17} />
           <div>
@@ -4879,8 +4870,8 @@ function PortalAccessModal({
         <div className="modal-actions">
           <Button onClick={onClose}>Done</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -4932,30 +4923,29 @@ function SchedulingRequestModal({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <form
-        className="workflow-modal scheduling-request-modal"
-        onSubmit={submit}
-      >
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent asChild>
+        <form
+          className="workflow-modal scheduling-request-modal"
+          onSubmit={submit}
+        >
         <div className="modal-heading">
           <div>
             <p className="eyebrow">SCHEDULING REQUEST</p>
-            <h2>
+            <DialogTitle>
               {session ? "Request a session change" : "Request a session"}
-            </h2>
+            </DialogTitle>
           </div>
-          <button type="button" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button type="button">
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
-        <p className="modal-copy">
+        <DialogDescription className="modal-copy">
           Send a request to your coach. Your current booking stays unchanged
           until they confirm it.
-        </p>
+        </DialogDescription>
         {session && (
           <div className="request-current">
             <CalendarDays size={16} />
@@ -4973,7 +4963,7 @@ function SchedulingRequestModal({
           </div>
         )}
         <div className="form-stack">
-          <label>
+          <Label>
             Request
             <Select
               value={requestType}
@@ -4993,26 +4983,26 @@ function SchedulingRequestModal({
                 )}
               </SelectContent>
             </Select>
-          </label>
+          </Label>
           {requestType !== "cancel" && (
-            <label>
+            <Label>
               Preferred date and time
-              <input
+              <Input
                 type="datetime-local"
                 value={requestedStartsAt}
                 onChange={(event) => setRequestedStartsAt(event.target.value)}
                 required
               />
-            </label>
+            </Label>
           )}
-          <label>
+          <Label>
             Note for your coach
-            <textarea
+            <Textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Share a few times that work, or anything your coach should know."
             />
-          </label>
+          </Label>
         </div>
         {error && (
           <div className="data-error" role="alert">
@@ -5027,8 +5017,9 @@ function SchedulingRequestModal({
             {saving ? "Sending…" : "Send request"}
           </Button>
         </div>
-      </form>
-    </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -5256,9 +5247,9 @@ function AuthScreen({
             )}
             <form className="auth-form" onSubmit={submit}>
               {view === "sign_up" && (
-                <label>
+                <Label>
                   Full name
-                  <input
+                  <Input
                     type="text"
                     value={fullName}
                     onChange={(event) => setFullName(event.target.value)}
@@ -5266,12 +5257,12 @@ function AuthScreen({
                     required
                     placeholder="Your name"
                   />
-                </label>
+                </Label>
               )}
               {view !== "set_password" && (
-                <label>
+                <Label>
                   Email address
-                  <input
+                  <Input
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
@@ -5279,14 +5270,14 @@ function AuthScreen({
                     required
                     placeholder="you@yourpractice.com"
                   />
-                </label>
+                </Label>
               )}
               {(view === "sign_in" ||
                 view === "sign_up" ||
                 view === "set_password") && (
-                <label>
+                <Label>
                   {view === "set_password" ? "New password" : "Password"}
-                  <input
+                  <Input
                     type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
@@ -5297,12 +5288,12 @@ function AuthScreen({
                     required
                     placeholder="••••••••••••"
                   />
-                </label>
+                </Label>
               )}
               {(view === "sign_up" || view === "set_password") && (
-                <label>
+                <Label>
                   Confirm password
-                  <input
+                  <Input
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
@@ -5311,7 +5302,7 @@ function AuthScreen({
                     required
                     placeholder="••••••••••••"
                   />
-                </label>
+                </Label>
               )}
               {view === "sign_in" && (
                 <button
@@ -5398,21 +5389,22 @@ function AccountModal({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="data-modal">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="data-modal">
         <div className="modal-heading">
           <div>
             <p className="eyebrow">ACCOUNT</p>
-            <h2>Your secure workspace</h2>
+            <DialogTitle>Your secure workspace</DialogTitle>
           </div>
-          <button onClick={onClose} aria-label="Close account settings">
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button aria-label="Close account settings">
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
+        <DialogDescription className="sr-only">
+          Account and sign-out options.
+        </DialogDescription>
         <div className="data-connected">
           <span>
             <CheckCircle2 size={20} />
@@ -5437,8 +5429,8 @@ function AccountModal({
           <LockKeyhole size={12} />
           Your browser never receives administrative credentials.
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -5494,21 +5486,22 @@ function QuickAdd({
     },
   ];
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="quick-add-modal">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="quick-add-modal">
         <div className="modal-heading">
           <div>
             <p className="eyebrow">CREATE</p>
-            <h2>What would you like to add?</h2>
+            <DialogTitle>What would you like to add?</DialogTitle>
           </div>
-          <button onClick={onClose}>
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button>
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
+        <DialogDescription className="sr-only">
+          Choose what to create.
+        </DialogDescription>
         <div className="quick-action-grid">
           {actions.map(({ icon: Icon, title, copy, action }) => (
             <button key={title} onClick={action}>
@@ -5523,8 +5516,8 @@ function QuickAdd({
             </button>
           ))}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -5621,25 +5614,26 @@ function SessionPanel({
     }
   };
   return (
-    <div className="drawer-backdrop">
-      <button
-        className="drawer-scrim"
-        onClick={onClose}
-        aria-label="Close session panel"
-      />
-      <aside className="session-drawer">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DrawerContent asChild>
+        <aside className="session-drawer">
         <header>
           <div>
             <p className="eyebrow">SESSION WORKSPACE</p>
-            <h2>{client.name}</h2>
+            <DialogTitle>{client.name}</DialogTitle>
             <span>
               {sessionId ? "Scheduled session" : "New session"} · 50 minutes
             </span>
           </div>
-          <button onClick={onClose}>
-            <X size={19} />
-          </button>
+          <DialogClose asChild>
+            <button>
+              <X size={19} />
+            </button>
+          </DialogClose>
         </header>
+        <DialogDescription className="sr-only">
+          Log attendance, notes, and next steps for this session.
+        </DialogDescription>
         <div className="session-context">
           <p>
             <span>Active focus</span>
@@ -5651,7 +5645,7 @@ function SessionPanel({
           </span>
         </div>
         <div className="session-form">
-          <label>
+          <Label>
             Attendance
             <div className="attendance-options">
               {(["attended", "late_cancel", "no_show"] as const).map((item) => (
@@ -5670,18 +5664,18 @@ function SessionPanel({
                 </button>
               ))}
             </div>
-          </label>
-          <label>
+          </Label>
+          <Label>
             Session notes
             <span className="field-hint">
               Private by default. The visibility is attached to this note.
             </span>
-            <textarea
+            <Textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Capture themes, observations, and next steps…"
             />
-          </label>
+          </Label>
           <div className="visibility-picker">
             <div>
               <strong>Who can see this note?</strong>
@@ -5710,18 +5704,18 @@ function SessionPanel({
               ))}
             </div>
           </div>
-          <label>
+          <Label>
             Client takeaway{" "}
             <span className="field-hint">
               Optional · shared directly with {client.name.split(" ")[0]}
             </span>
-            <textarea
+            <Textarea
               className="compact-textarea"
               value={sharedSummary}
               onChange={(event) => setSharedSummary(event.target.value)}
               placeholder="A concise recap or encouragement in your own words…"
             />
-          </label>
+          </Label>
           <div className="ai-summary-box">
             <div className="ai-summary-top">
               <span>
@@ -5754,14 +5748,14 @@ function SessionPanel({
             )}
           </div>
           <div className="session-wrapup-grid">
-            <label>
+            <Label>
               Next session
-              <input
+              <Input
                 type="datetime-local"
                 value={nextSessionAt}
                 onChange={(event) => setNextSessionAt(event.target.value)}
               />
-            </label>
+            </Label>
             <button
               type="button"
               className={cn("add-followup-card", addAssignment && "active")}
@@ -5779,17 +5773,17 @@ function SessionPanel({
           </div>
           {addAssignment && (
             <div className="inline-assignment">
-              <label>
+              <Label>
                 Assignment title
-                <input
+                <Input
                   value={assignmentTitle}
                   onChange={(event) => setAssignmentTitle(event.target.value)}
                   placeholder="One clear next step"
                 />
-              </label>
-              <label>
+              </Label>
+              <Label>
                 Instructions
-                <textarea
+                <Textarea
                   className="compact-textarea"
                   value={assignmentInstructions}
                   onChange={(event) =>
@@ -5797,9 +5791,9 @@ function SessionPanel({
                   }
                   placeholder="What should the client do or reflect on?"
                 />
-              </label>
+              </Label>
               <div className="form-grid">
-                <label>
+                <Label>
                   Response
                   <Select
                     value={responseType}
@@ -5817,23 +5811,23 @@ function SessionPanel({
                       <SelectItem value="text">Written response</SelectItem>
                     </SelectContent>
                   </Select>
-                </label>
-                <label>
+                </Label>
+                <Label>
                   Due
-                  <input
+                  <Input
                     type="datetime-local"
                     value={dueAt}
                     onChange={(event) => setDueAt(event.target.value)}
                   />
-                </label>
+                </Label>
               </div>
-              <label className="check-control">
+              <Label className="check-control">
                 <Checkbox
                   checked={required}
                   onCheckedChange={(checked) => setRequired(checked === true)}
                 />
                 Required to complete
-              </label>
+              </Label>
               {client.type === "Teen" && (
                 <GuardianShareSelect
                   value={guardianShare}
@@ -5866,8 +5860,9 @@ function SessionPanel({
             </Button>
           </div>
         </footer>
-      </aside>
-    </div>
+        </aside>
+      </DrawerContent>
+    </Dialog>
   );
 }
 
@@ -5906,27 +5901,26 @@ function ScheduleSessionModal({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <form className="workflow-modal" onSubmit={submit}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent asChild>
+        <form className="workflow-modal" onSubmit={submit}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">SCHEDULING</p>
-            <h2>Schedule a session</h2>
+            <DialogTitle>Schedule a session</DialogTitle>
           </div>
-          <button type="button" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button type="button">
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
-        <p className="modal-copy">
+        <DialogDescription className="modal-copy">
           Choose the client and time. You can begin the session workspace
           directly from the calendar.
-        </p>
+        </DialogDescription>
         <div className="form-stack">
-          <label>
+          <Label>
             Client
             <Select
               value={clientId}
@@ -5944,18 +5938,18 @@ function ScheduleSessionModal({
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </Label>
           <div className="form-grid">
-            <label>
+            <Label>
               Starts
-              <input
+              <Input
                 type="datetime-local"
                 value={startsAt}
                 onChange={(event) => setStartsAt(event.target.value)}
                 required
               />
-            </label>
-            <label>
+            </Label>
+            <Label>
               Duration
               <Select
                 value={String(durationMinutes)}
@@ -5971,9 +5965,9 @@ function ScheduleSessionModal({
                   <SelectItem value="90">90 minutes</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
+            </Label>
           </div>
-          <label>
+          <Label>
             Meeting location
             <Select
               value={meetingProvider || "other"}
@@ -5992,7 +5986,7 @@ function ScheduleSessionModal({
                 <SelectItem value="other">Other / in person</SelectItem>
               </SelectContent>
             </Select>
-          </label>
+          </Label>
           <div className="privacy-callout neutral">
             <Video size={16} />
             <span>
@@ -6010,8 +6004,9 @@ function ScheduleSessionModal({
             {saving ? "Scheduling…" : "Schedule session"}
           </Button>
         </div>
-      </form>
-    </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -6023,7 +6018,7 @@ function GuardianShareSelect({
   onChange: (value: "client_default" | "share" | "private") => void;
 }) {
   return (
-    <label>
+    <Label>
       Guardian logistics
       <Select
         value={value}
@@ -6048,7 +6043,7 @@ function GuardianShareSelect({
         Only title, due date, required status, and completion can be shared.
         Responses stay private.
       </span>
-    </label>
+    </Label>
   );
 }
 
@@ -6096,42 +6091,41 @@ function AssignmentComposer({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <form className="workflow-modal" onSubmit={submit}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent asChild>
+        <form className="workflow-modal" onSubmit={submit}>
         <div className="modal-heading">
           <div>
             <p className="eyebrow">ASSIGN TO {client.name.toUpperCase()}</p>
-            <h2>Create an assignment</h2>
+            <DialogTitle>Create an assignment</DialogTitle>
           </div>
-          <button type="button" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button type="button">
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
-        <p className="modal-copy">
+        <DialogDescription className="modal-copy">
           Keep it clear: one outcome, one response, and an obvious due date.
-        </p>
+        </DialogDescription>
         <div className="form-stack">
-          <label>
+          <Label>
             Title
-            <input
+            <Input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="e.g. Three moments I trusted myself"
               required
             />
-          </label>
-          <label>
+          </Label>
+          <Label>
             Instructions
-            <textarea
+            <Textarea
               value={instructions}
               onChange={(event) => setInstructions(event.target.value)}
               placeholder="What should the client do?"
             />
-          </label>
+          </Label>
           <div className="response-choice assignment-response-choice">
             <button
               type="button"
@@ -6167,21 +6161,21 @@ function AssignmentComposer({
               </span>
             </button>
           </div>
-          <label>
+          <Label>
             Due date
-            <input
+            <Input
               type="datetime-local"
               value={dueAt}
               onChange={(event) => setDueAt(event.target.value)}
             />
-          </label>
-          <label className="check-control">
+          </Label>
+          <Label className="check-control">
             <Checkbox
               checked={required}
               onCheckedChange={(checked) => setRequired(checked === true)}
             />
             Make this mandatory
-          </label>
+          </Label>
           {client.type === "Teen" && (
             <GuardianShareSelect
               value={guardianShare}
@@ -6208,8 +6202,9 @@ function AssignmentComposer({
             {saving ? "Publishing…" : "Publish assignment"}
           </Button>
         </div>
-      </form>
-    </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -6268,24 +6263,25 @@ function AssignmentDetail({
     }
   };
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="workflow-modal assignment-detail">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="workflow-modal assignment-detail">
         <div className="modal-heading">
           <div>
             <p className="eyebrow">
               {assignment.client.toUpperCase()} · DUE{" "}
               {assignment.due.toUpperCase()}
             </p>
-            <h2>{assignment.title}</h2>
+            <DialogTitle>{assignment.title}</DialogTitle>
           </div>
-          <button onClick={onClose}>
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button>
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
+        <DialogDescription className="sr-only">
+          Assignment details and response.
+        </DialogDescription>
         <div className="detail-meta">
           <Badge variant={assignment.required ? "warning" : "neutral"}>
             {assignment.required ? "Required" : "Optional"}
@@ -6319,14 +6315,14 @@ function AssignmentDetail({
         <div className="response-preview">
           <p className="eyebrow">CLIENT RESPONSE</p>
           {assignment.responseType === "text" ? (
-            <label>
+            <Label>
               Written reflection
-              <textarea
+              <Textarea
                 value={response}
                 onChange={(event) => setResponse(event.target.value)}
                 placeholder="The client’s response appears here…"
               />
-            </label>
+            </Label>
           ) : assignment.responseType === "file" ? (
             <div className="homework-files">
               {assignment.files.length > 0 && (
@@ -6354,13 +6350,13 @@ function AssignmentDetail({
                 </div>
               )}
               {onUploadFile && (
-                <label
+                <Label
                   className={cn(
                     "homework-dropzone",
                     selectedFile && "selected",
                   )}
                 >
-                  <input
+                  <Input
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx,.xls,.xlsx"
                     onChange={(event) => {
@@ -6381,7 +6377,7 @@ function AssignmentDetail({
                         : "PDF, document, spreadsheet, or image · 10 MB max"}
                     </small>
                   </span>
-                </label>
+                </Label>
               )}
               {!assignment.files.length && !onUploadFile && (
                 <div className="mini-empty">
@@ -6391,7 +6387,7 @@ function AssignmentDetail({
               {fileError && <p className="form-error">{fileError}</p>}
             </div>
           ) : (
-            <label
+            <Label
               className="completion-check"
               aria-label="Mark assignment complete"
             >
@@ -6403,7 +6399,7 @@ function AssignmentDetail({
                 <strong>Mark this assignment complete</strong>
                 <small>The coach and client will see the updated status.</small>
               </span>
-            </label>
+            </Label>
           )}
         </div>
         <div className="modal-actions">
@@ -6442,8 +6438,8 @@ function AssignmentDetail({
             </Button>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -6467,25 +6463,23 @@ function GuardianSharingModal({
   );
   const [error, setError] = useState<string | null>(null);
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="workflow-modal sharing-modal">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="workflow-modal sharing-modal">
         <div className="modal-heading">
           <div>
             <p className="eyebrow">PEOPLE & ACCESS</p>
-            <h2>Guardian assignment updates</h2>
+            <DialogTitle>Guardian assignment updates</DialogTitle>
           </div>
-          <button onClick={onClose}>
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button>
+              <X size={18} />
+            </button>
+          </DialogClose>
         </div>
-        <p className="modal-copy">
+        <DialogDescription className="modal-copy">
           Choose which guardians automatically receive assignment logistics for{" "}
           {client.name}. Coaches can override this on each assignment.
-        </p>
+        </DialogDescription>
         <div className="sharing-boundary">
           <div>
             <span>
@@ -6573,8 +6567,8 @@ function GuardianSharingModal({
         <div className="modal-actions">
           <Button onClick={onClose}>Done</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -6592,20 +6586,21 @@ function ClientPortalPreview({
   onSchedule: () => void;
 }) {
   return (
-    <div
-      className="modal-backdrop portal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="portal-modal">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="portal-modal top-[3vh]">
+        <DialogTitle className="sr-only">
+          Client portal preview for {client.name}
+        </DialogTitle>
         <header>
           <div>
             <AppLogo />
             <Badge variant="neutral">Client portal preview</Badge>
           </div>
-          <button onClick={onClose}>
-            <X size={18} />
-          </button>
+          <DialogClose asChild>
+            <button>
+              <X size={18} />
+            </button>
+          </DialogClose>
         </header>
         <main>
           <p className="eyebrow">WELCOME BACK</p>
@@ -6709,7 +6704,7 @@ function ClientPortalPreview({
           <LockKeyhole size={12} />
           Only information intentionally shared with the client appears here.
         </footer>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

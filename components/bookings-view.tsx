@@ -21,9 +21,19 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { Avatar } from "@/components/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -32,6 +42,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type {
   BookingPage,
   BookingQuestion,
@@ -384,12 +400,11 @@ function BookingsOverview({
                     onClick={() => onEdit(page.id)}
                   >
                     <div className="booking-type-card-top">
-                      <span
-                        className="booking-type-avatar"
-                        style={{ background: page.accentColor }}
-                      >
-                        {page.brandName.charAt(0).toUpperCase() || "?"}
-                      </span>
+                      <Avatar
+                        initials={page.brandName.charAt(0).toUpperCase() || "?"}
+                        color={page.accentColor}
+                        shape="square"
+                      />
                       <Badge variant={page.active ? "success" : "neutral"}>
                         {page.active ? "Live" : "Paused"}
                       </Badge>
@@ -412,20 +427,25 @@ function BookingsOverview({
                     <span className="booking-type-count">
                       {upcomingCountByPage.get(page.id) || 0} upcoming
                     </span>
-                    <button
-                      type="button"
-                      className="booking-type-copy"
-                      aria-label={`Copy link for ${page.title || "booking type"}`}
-                      onClick={async (event) => {
-                        event.stopPropagation();
-                        await navigator.clipboard.writeText(
-                          `${window.location.origin}/${activeSlug}/${page.slug}`,
-                        );
-                        onToast("Booking link copied");
-                      }}
-                    >
-                      <Copy size={12} />
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="booking-type-copy"
+                          aria-label={`Copy link for ${page.title || "booking type"}`}
+                          onClick={async (event) => {
+                            event.stopPropagation();
+                            await navigator.clipboard.writeText(
+                              `${window.location.origin}/${activeSlug}/${page.slug}`,
+                            );
+                            onToast("Booking link copied");
+                          }}
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Copy link</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               ))}
@@ -593,71 +613,71 @@ function UpcomingConsultations({
         })}
       </div>
 
-      {pendingCancel ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) =>
-            event.target === event.currentTarget && setPendingCancel(null)
-          }
-        >
-          <div className="workflow-modal integration-disconnect-modal">
-            <div className="modal-heading">
-              <div>
-                <p className="eyebrow">CANCEL CONSULTATION</p>
-                <h2>Cancel {pendingCancel.guestName}’s booking?</h2>
+      <Dialog
+        open={!!pendingCancel}
+        onOpenChange={(open) => !open && setPendingCancel(null)}
+      >
+        <DialogContent className="workflow-modal integration-disconnect-modal">
+          {pendingCancel && (
+            <>
+              <div className="modal-heading">
+                <div>
+                  <p className="eyebrow">CANCEL CONSULTATION</p>
+                  <DialogTitle>
+                    Cancel {pendingCancel.guestName}’s booking?
+                  </DialogTitle>
+                </div>
+                <DialogClose asChild>
+                  <button aria-label="Close cancellation confirmation">
+                    <X size={18} />
+                  </button>
+                </DialogClose>
               </div>
-              <button
-                onClick={() => setPendingCancel(null)}
-                aria-label="Close cancellation confirmation"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p className="modal-copy">
-              This frees up{" "}
-              {new Date(pendingCancel.startsAt).toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}{" "}
-              at{" "}
-              {new Date(pendingCancel.startsAt).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
-              . {pendingCancel.guestName} will not be notified automatically —
-              reach out at {pendingCancel.guestEmail} to let them know.
-            </p>
-            <div className="modal-actions">
-              <Button variant="outline" onClick={() => setPendingCancel(null)}>
-                Keep booking
-              </Button>
-              <Button
-                disabled={cancelling}
-                onClick={async () => {
-                  setCancelling(true);
-                  try {
-                    await onCancelRequest(pendingCancel.id);
-                    onToast("Consultation cancelled");
-                    setPendingCancel(null);
-                  } catch (error) {
-                    onToast(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not cancel the consultation",
-                    );
-                  } finally {
-                    setCancelling(false);
-                  }
-                }}
-              >
-                {cancelling ? "Cancelling…" : "Cancel consultation"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+              <DialogDescription className="modal-copy">
+                This frees up{" "}
+                {new Date(pendingCancel.startsAt).toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}{" "}
+                at{" "}
+                {new Date(pendingCancel.startsAt).toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+                . {pendingCancel.guestName} will not be notified automatically —
+                reach out at {pendingCancel.guestEmail} to let them know.
+              </DialogDescription>
+              <div className="modal-actions">
+                <Button variant="outline" onClick={() => setPendingCancel(null)}>
+                  Keep booking
+                </Button>
+                <Button
+                  disabled={cancelling}
+                  onClick={async () => {
+                    setCancelling(true);
+                    try {
+                      await onCancelRequest(pendingCancel.id);
+                      onToast("Consultation cancelled");
+                      setPendingCancel(null);
+                    } catch (error) {
+                      onToast(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not cancel the consultation",
+                      );
+                    } finally {
+                      setCancelling(false);
+                    }
+                  }}
+                >
+                  {cancelling ? "Cancelling…" : "Cancel consultation"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -787,9 +807,9 @@ function CreateBookingFlow({
               What people will see, how long you’ll talk, and where.
             </p>
             <div className="wizard-fields">
-              <label className="booking-field-wide">
+              <Label className="booking-field-wide">
                 What should we call it?
-                <input
+                <Input
                   value={draft.title}
                   placeholder="Discovery call"
                   onChange={(event) => {
@@ -804,8 +824,8 @@ function CreateBookingFlow({
                 <small className="field-hint">
                   /{activeSlug}/{draft.slug || "your-link"}
                 </small>
-              </label>
-              <label>
+              </Label>
+              <Label>
                 Call length
                 <Select
                   value={String(draft.durationMinutes)}
@@ -824,8 +844,8 @@ function CreateBookingFlow({
                     <SelectItem value="60">60 minutes</SelectItem>
                   </SelectContent>
                 </Select>
-              </label>
-              <label>
+              </Label>
+              <Label>
                 Where does it happen?
                 <Select
                   value={draft.locationType}
@@ -845,7 +865,7 @@ function CreateBookingFlow({
                     <SelectItem value="phone">Phone call</SelectItem>
                   </SelectContent>
                 </Select>
-              </label>
+              </Label>
             </div>
             <div className="wizard-actions">
               <Button variant="outline" onClick={() => setStep(0)}>
@@ -895,9 +915,9 @@ function CreateBookingFlow({
               })}
             </div>
             <div className="wizard-fields">
-              <label>
+              <Label>
                 From
-                <input
+                <Input
                   type="time"
                   value={draft.availability.start}
                   onChange={(event) =>
@@ -907,10 +927,10 @@ function CreateBookingFlow({
                     })
                   }
                 />
-              </label>
-              <label>
+              </Label>
+              <Label>
                 Until
-                <input
+                <Input
                   type="time"
                   value={draft.availability.end}
                   onChange={(event) =>
@@ -920,7 +940,7 @@ function CreateBookingFlow({
                     })
                   }
                 />
-              </label>
+              </Label>
             </div>
             {error ? (
               <div className="data-error" role="alert">
@@ -1154,9 +1174,9 @@ function BookingTypeEditor({
             })}
           </div>
           <div className="booking-form-grid booking-schedule-fields">
-            <label>
+            <Label>
               From
-              <input
+              <Input
                 type="time"
                 value={draft.availability.start}
                 onChange={(event) =>
@@ -1166,10 +1186,10 @@ function BookingTypeEditor({
                   })
                 }
               />
-            </label>
-            <label>
+            </Label>
+            <Label>
               Until
-              <input
+              <Input
                 type="time"
                 value={draft.availability.end}
                 onChange={(event) =>
@@ -1179,8 +1199,8 @@ function BookingTypeEditor({
                   })
                 }
               />
-            </label>
-            <label>
+            </Label>
+            <Label>
               Call length
               <Select
                 value={String(draft.durationMinutes)}
@@ -1199,8 +1219,8 @@ function BookingTypeEditor({
                   <SelectItem value="60">60 minutes</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
-            <label>
+            </Label>
+            <Label>
               Meeting
               <Select
                 value={draft.locationType}
@@ -1220,8 +1240,8 @@ function BookingTypeEditor({
                   <SelectItem value="phone">Phone call</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
-            <label>
+            </Label>
+            <Label>
               Shortest notice
               <Select
                 value={String(draft.minimumNoticeHours)}
@@ -1243,19 +1263,19 @@ function BookingTypeEditor({
               <small className="field-hint">
                 How far ahead someone must book.
               </small>
-            </label>
-            <label>
+            </Label>
+            <Label>
               Booking link
               <div className="slug-field">
                 <span>/{activeSlug}/</span>
-                <input
+                <Input
                   value={draft.slug}
                   onChange={(event) =>
                     update("slug", makeSlug(event.target.value))
                   }
                 />
               </div>
-            </label>
+            </Label>
           </div>
         </section>
       </TabsContent>
@@ -1280,7 +1300,7 @@ function BookingTypeEditor({
                 <GripVertical size={15} className="question-grip" />
                 <span className="question-number">{index + 1}</span>
                 <div className="question-fields">
-                  <input
+                  <Input
                     value={question.label}
                     placeholder="What would you like to ask?"
                     onChange={(event) =>
@@ -1306,7 +1326,7 @@ function BookingTypeEditor({
                         <SelectItem value="checkbox">Checkbox</SelectItem>
                       </SelectContent>
                     </Select>
-                    <label className="required-toggle">
+                    <Label className="required-toggle">
                       <Checkbox
                         checked={question.required}
                         onCheckedChange={(checked) =>
@@ -1316,10 +1336,10 @@ function BookingTypeEditor({
                         }
                       />
                       Required
-                    </label>
+                    </Label>
                   </div>
                   {question.type === "select" ? (
-                    <input
+                    <Input
                       className="question-options"
                       value={question.options.join(", ")}
                       placeholder="Choices separated by commas"
@@ -1371,30 +1391,30 @@ function BookingTypeEditor({
               </div>
             </div>
             <div className="booking-form-grid">
-              <label className="booking-field-wide">
+              <Label className="booking-field-wide">
                 Brand name
-                <input
+                <Input
                   value={draft.brandName}
                   onChange={(event) => update("brandName", event.target.value)}
                 />
-              </label>
-              <label className="booking-field-wide">
+              </Label>
+              <Label className="booking-field-wide">
                 Headline
-                <input
+                <Input
                   value={draft.title}
                   onChange={(event) => update("title", event.target.value)}
                 />
-              </label>
-              <label className="booking-field-wide">
+              </Label>
+              <Label className="booking-field-wide">
                 Welcome message
-                <textarea
+                <Textarea
                   rows={3}
                   value={draft.description}
                   onChange={(event) =>
                     update("description", event.target.value)
                   }
                 />
-              </label>
+              </Label>
             </div>
             <div className="brand-color-row">
               <div>
@@ -1435,58 +1455,54 @@ function BookingTypeEditor({
         </Button>
       </div>
 
-      {confirmDelete ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) =>
-            event.target === event.currentTarget && setConfirmDelete(false)
-          }
-        >
-          <div className="workflow-modal integration-disconnect-modal">
-            <div className="modal-heading">
-              <div>
-                <p className="eyebrow">DELETE BOOKING TYPE</p>
-                <h2>Delete “{draft.title || "this booking type"}”?</h2>
-              </div>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                aria-label="Close delete confirmation"
-              >
+      <Dialog
+        open={confirmDelete}
+        onOpenChange={(open) => !open && setConfirmDelete(false)}
+      >
+        <DialogContent className="workflow-modal integration-disconnect-modal">
+          <div className="modal-heading">
+            <div>
+              <p className="eyebrow">DELETE BOOKING TYPE</p>
+              <DialogTitle>
+                Delete “{draft.title || "this booking type"}”?
+              </DialogTitle>
+            </div>
+            <DialogClose asChild>
+              <button aria-label="Close delete confirmation">
                 <X size={18} />
               </button>
-            </div>
-            <p className="modal-copy">
-              The booking link will stop working immediately. Consultations
-              already booked through it stay in your calendar.
-            </p>
-            <div className="modal-actions">
-              <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-                Keep it
-              </Button>
-              <Button
-                disabled={deleting}
-                onClick={async () => {
-                  setDeleting(true);
-                  try {
-                    await onDelete();
-                  } catch (deleteError) {
-                    setError(
-                      deleteError instanceof Error
-                        ? deleteError.message
-                        : "The booking type could not be deleted.",
-                    );
-                    setDeleting(false);
-                    setConfirmDelete(false);
-                  }
-                }}
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </Button>
-            </div>
+            </DialogClose>
           </div>
-        </div>
-      ) : null}
+          <DialogDescription className="modal-copy">
+            The booking link will stop working immediately. Consultations
+            already booked through it stay in your calendar.
+          </DialogDescription>
+          <div className="modal-actions">
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Keep it
+            </Button>
+            <Button
+              disabled={deleting}
+              onClick={async () => {
+                setDeleting(true);
+                try {
+                  await onDelete();
+                } catch (deleteError) {
+                  setError(
+                    deleteError instanceof Error
+                      ? deleteError.message
+                      : "The booking type could not be deleted.",
+                  );
+                  setDeleting(false);
+                  setConfirmDelete(false);
+                }
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

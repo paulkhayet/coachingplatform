@@ -14,6 +14,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -21,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -391,40 +394,40 @@ export function PublicBookingPage({
               </button>
               {selectionSummary}
               <div className="public-form-fields">
-                <label>
+                <Label>
                   Full name
-                  <input
+                  <Input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     required
                   />
-                </label>
-                <label>
+                </Label>
+                <Label>
                   Email address
-                  <input
+                  <Input
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     required
                   />
-                </label>
-                <label>
+                </Label>
+                <Label>
                   Phone <small>Optional</small>
-                  <input
+                  <Input
                     type="tel"
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
                   />
-                </label>
-                <label className="booking-honeypot" aria-hidden="true">
+                </Label>
+                <Label className="booking-honeypot" aria-hidden="true">
                   Website
-                  <input
+                  <Input
                     tabIndex={-1}
                     autoComplete="off"
                     value={website}
                     onChange={(event) => setWebsite(event.target.value)}
                   />
-                </label>
+                </Label>
               </div>
               {submitError ? (
                 <div className="data-error" role="alert">
@@ -459,11 +462,11 @@ export function PublicBookingPage({
               </p>
               <div className="public-form-fields">
                 {page.questions.map((question) => (
-                  <label key={question.id}>
+                  <Label key={question.id}>
                     {question.label}{" "}
                     {!question.required ? <small>Optional</small> : null}
                     {question.type === "long_text" ? (
-                      <textarea
+                      <Textarea
                         rows={3}
                         required={question.required}
                         value={answers[question.id] || ""}
@@ -511,7 +514,7 @@ export function PublicBookingPage({
                         Yes
                       </span>
                     ) : (
-                      <input
+                      <Input
                         required={question.required}
                         value={answers[question.id] || ""}
                         onChange={(event) =>
@@ -522,7 +525,7 @@ export function PublicBookingPage({
                         }
                       />
                     )}
-                  </label>
+                  </Label>
                 ))}
               </div>
               {submitError ? (
