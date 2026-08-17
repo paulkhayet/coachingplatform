@@ -803,6 +803,7 @@ textarea:focus-visible {
 }
 .public-calendar-columns {
   display: flex;
+  align-items: flex-start;
   gap: 36px;
 }
 .public-calendar-block {
@@ -927,6 +928,7 @@ textarea:focus-visible {
 }
 .public-time-list button {
   display: flex;
+  flex-shrink: 0;
   height: 42px;
   align-items: center;
   justify-content: center;
