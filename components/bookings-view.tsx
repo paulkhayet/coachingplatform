@@ -57,13 +57,13 @@ import { useOrigin } from "@/lib/use-origin";
 import { cn } from "@/lib/utils";
 
 const DAYS = [
+  { value: 0, short: "S", label: "Sunday" },
   { value: 1, short: "M", label: "Monday" },
   { value: 2, short: "T", label: "Tuesday" },
   { value: 3, short: "W", label: "Wednesday" },
   { value: 4, short: "T", label: "Thursday" },
   { value: 5, short: "F", label: "Friday" },
   { value: 6, short: "S", label: "Saturday" },
-  { value: 0, short: "S", label: "Sunday" },
 ];
 
 const COLORS = ["#2f6fed", "#347a5f", "#2563a8", "#a65f44", "#a24f72"];
@@ -107,6 +107,17 @@ function formatMinutes(totalMinutes: number) {
   const display = hours % 12 === 0 ? 12 : hours % 12;
   return `${display}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
+
+/** Every half-hour of the day, as "HH:MM" values with a friendly label. */
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
+  const totalMinutes = index * 30;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return {
+    value: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+    label: formatMinutes(totalMinutes),
+  };
+});
 
 /** Next `count` calendar days that fall on one of the selected weekdays. */
 function upcomingDays(days: number[], count: number) {
@@ -811,29 +822,49 @@ function CreateBookingFlow({
             <div className="wizard-fields">
               <Label>
                 From
-                <Input
-                  type="time"
+                <Select
                   value={draft.availability.start}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     update("availability", {
                       ...draft.availability,
-                      start: event.target.value,
+                      start: value,
                     })
                   }
-                />
+                >
+                  <SelectTrigger className="h-[37px] w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIME_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Label>
               <Label>
                 Until
-                <Input
-                  type="time"
+                <Select
                   value={draft.availability.end}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     update("availability", {
                       ...draft.availability,
-                      end: event.target.value,
+                      end: value,
                     })
                   }
-                />
+                >
+                  <SelectTrigger className="h-[37px] w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIME_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Label>
             </div>
             {error ? (
@@ -1070,29 +1101,49 @@ function BookingTypeEditor({
           <div className="booking-form-grid booking-schedule-fields">
             <Label>
               From
-              <Input
-                type="time"
+              <Select
                 value={draft.availability.start}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   update("availability", {
                     ...draft.availability,
-                    start: event.target.value,
+                    start: value,
                   })
                 }
-              />
+              >
+                <SelectTrigger className="h-[37px] w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Label>
             <Label>
               Until
-              <Input
-                type="time"
+              <Select
                 value={draft.availability.end}
-                onChange={(event) =>
+                onValueChange={(value) =>
                   update("availability", {
                     ...draft.availability,
-                    end: event.target.value,
+                    end: value,
                   })
                 }
-              />
+              >
+                <SelectTrigger className="h-[37px] w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Label>
             <Label>
               Call length
