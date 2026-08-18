@@ -13,7 +13,9 @@ import {
   GripVertical,
   Link2,
   MapPin,
+  MoreVertical,
   Palette,
+  Pencil,
   Phone,
   Plus,
   Sparkles,
@@ -28,6 +30,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogClose,
@@ -437,6 +445,7 @@ export function BookingsView({
       requests={requests}
       onEdit={setEditingId}
       onCreate={() => setCreating(true)}
+      onDelete={onDelete}
       onCancelRequest={onCancelRequest}
       onToast={onToast}
     />
@@ -449,6 +458,7 @@ function BookingsOverview({
   requests,
   onEdit,
   onCreate,
+  onDelete,
   onCancelRequest,
   onToast,
 }: {
@@ -457,10 +467,21 @@ function BookingsOverview({
   requests: BookingRequest[];
   onEdit: (pageId: string) => void;
   onCreate: () => void;
+  onDelete: (pageId: string) => Promise<void>;
   onCancelRequest: (requestId: string) => Promise<void>;
   onToast: (message: string) => void;
 }) {
   const [tab, setTab] = useState<"types" | "upcoming">("types");
+  const [pendingDelete, setPendingDelete] = useState<BookingPage | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const closeDeleteDialog = () => {
+    setPendingDelete(null);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+  };
   const [loadedAt] = useState(() => Date.now());
   const activeSlug = organizationSlug || "your-practice";
 
@@ -534,23 +555,43 @@ function BookingsOverview({
                   className="gap-0 py-0 transition-shadow hover:ring-foreground/20"
                 >
                   <CardContent className="px-0">
+                    <div className="flex w-full items-center justify-between px-4 pt-4">
+                      <Avatar
+                        initials={page.brandName.charAt(0).toUpperCase() || "?"}
+                        color={page.accentColor}
+                        shape="square"
+                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground"
+                            aria-label={`Actions for ${page.title || "booking type"}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <MoreVertical size={15} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => onEdit(page.id)}>
+                            <Pencil size={13} /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setPendingDelete(page)}
+                          >
+                            <Trash2 size={13} /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                     <button
                       type="button"
-                      className="flex w-full flex-col items-start gap-2 p-4 text-left"
+                      className="flex w-full flex-col items-start gap-2 px-4 pt-2 pb-4 text-left"
                       onClick={() => onEdit(page.id)}
                     >
-                      <div className="flex w-full items-center justify-between">
-                        <Avatar
-                          initials={
-                            page.brandName.charAt(0).toUpperCase() || "?"
-                          }
-                          color={page.accentColor}
-                          shape="square"
-                        />
-                        <Badge variant={page.active ? "success" : "neutral"}>
-                          {page.active ? "Live" : "Paused"}
-                        </Badge>
-                      </div>
                       <h3 className="font-heading text-[15px] leading-snug font-medium">
                         {page.title || "Untitled booking type"}
                       </h3>
@@ -628,6 +669,86 @@ function BookingsOverview({
           />
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => !open && closeDeleteDialog()}
+      >
+        <DialogContent className="workflow-modal integration-disconnect-modal">
+          {pendingDelete ? (
+            <>
+              <div className="modal-heading">
+                <div>
+                  <p className="eyebrow">DELETE BOOKING TYPE</p>
+                  <DialogTitle>
+                    Delete “
+                    {pendingDelete.title || pendingDelete.brandName}”?
+                  </DialogTitle>
+                </div>
+                <DialogClose asChild>
+                  <button aria-label="Close delete confirmation">
+                    <X size={18} />
+                  </button>
+                </DialogClose>
+              </div>
+              <DialogDescription className="modal-copy">
+                The booking link will stop working immediately, and this
+                can’t be undone. Consultations already booked through it stay
+                in your calendar.
+              </DialogDescription>
+              <Label className="booking-field-wide">
+                Type “{pendingDelete.title || pendingDelete.brandName}” to
+                confirm
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(event) =>
+                    setDeleteConfirmText(event.target.value)
+                  }
+                  placeholder={pendingDelete.title || pendingDelete.brandName}
+                />
+              </Label>
+              {deleteError ? (
+                <div className="data-error" role="alert">
+                  {deleteError}
+                </div>
+              ) : null}
+              <div className="modal-actions">
+                <Button variant="outline" onClick={closeDeleteDialog}>
+                  Keep it
+                </Button>
+                <Button
+                  disabled={
+                    deleting ||
+                    deleteConfirmText.trim() !==
+                      (
+                        pendingDelete.title || pendingDelete.brandName
+                      ).trim()
+                  }
+                  onClick={async () => {
+                    setDeleting(true);
+                    setDeleteError(null);
+                    try {
+                      await onDelete(pendingDelete.id);
+                      onToast("Booking type deleted");
+                      closeDeleteDialog();
+                    } catch (error) {
+                      setDeleteError(
+                        error instanceof Error
+                          ? error.message
+                          : "The booking type could not be deleted.",
+                      );
+                    } finally {
+                      setDeleting(false);
+                    }
+                  }}
+                >
+                  {deleting ? "Deleting…" : "Delete"}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
