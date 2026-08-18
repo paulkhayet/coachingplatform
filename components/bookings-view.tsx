@@ -183,6 +183,45 @@ function describeQuestionsProblem(questions: BookingQuestion[]): string | null {
   return null;
 }
 
+/** The other booking page (if any) already using this link, so a rename or a
+ * new booking type can't silently collide with it. */
+function findSlugCollision(
+  pages: BookingPage[],
+  slug: string,
+  excludePageId?: string,
+): BookingPage | null {
+  if (!slug) return null;
+  return (
+    pages.find((page) => page.id !== excludePageId && page.slug === slug) ||
+    null
+  );
+}
+
+/**
+ * Everything the wizard's first step (and the editor's Setup tab) needs to be
+ * valid before moving on, in the order a coach would want to fix them: an
+ * empty name, a name whose link collides with an existing booking type, then
+ * a missing address for in-person sessions. Checked client-side so a
+ * collision is caught immediately rather than only surfacing as a database
+ * error after the whole wizard has been filled out.
+ */
+function describeBasicsProblem(
+  draft: Omit<BookingPage, "id">,
+  existingPages: BookingPage[],
+  excludePageId?: string,
+): string | null {
+  if (!draft.title.trim()) return "Give this booking type a name.";
+  const slug = draft.slug || makeSlug(draft.title);
+  if (!slug)
+    return "Give this booking type a name that includes a letter or number.";
+  const collision = findSlugCollision(existingPages, slug, excludePageId);
+  if (collision)
+    return `You already have a booking type called "${collision.title || collision.brandName}" that uses this name. Choose a different one.`;
+  if (draft.locationType === "in_person" && !draft.locationDetails.trim())
+    return "Add the address for in-person sessions.";
+  return null;
+}
+
 function defaultPage(
   brandName: string,
   colorIndex: number,
@@ -357,6 +396,7 @@ export function BookingsView({
         userName={userName}
         organizationSlug={organizationSlug}
         organizationTimezone={organizationTimezone}
+        bookingPages={bookingPages}
         seedColorIndex={bookingPages.length}
         onCancel={() => setCreating(false)}
         onPublish={async (page) => {
@@ -373,6 +413,7 @@ export function BookingsView({
       <BookingTypeEditor
         organizationSlug={organizationSlug}
         organizationTimezone={organizationTimezone}
+        bookingPages={bookingPages}
         page={editingPage}
         onBack={() => setEditingId(null)}
         onSave={async (page) => {
@@ -804,6 +845,7 @@ function CreateBookingFlow({
   userName,
   organizationSlug,
   organizationTimezone,
+  bookingPages,
   seedColorIndex,
   onCancel,
   onPublish,
@@ -811,6 +853,7 @@ function CreateBookingFlow({
   userName: string;
   organizationSlug: string | null;
   organizationTimezone: string | null;
+  bookingPages: BookingPage[];
   seedColorIndex: number;
   onCancel: () => void;
   onPublish: (page: Omit<BookingPage, "id">) => Promise<void>;
@@ -829,6 +872,7 @@ function CreateBookingFlow({
     value: Omit<BookingPage, "id">[Key],
   ) => setDraft((current) => ({ ...current, [key]: value }));
 
+  const basicsProblem = describeBasicsProblem(draft, bookingPages);
   const availabilityProblem = describeAvailabilityProblem(
     draft.availability,
     draft.durationMinutes,
@@ -836,16 +880,12 @@ function CreateBookingFlow({
 
   const publish = async () => {
     setError(null);
-    if (!draft.title.trim()) {
-      setError("Give this booking type a name.");
+    if (basicsProblem) {
+      setError(basicsProblem);
       return;
     }
     if (availabilityProblem) {
       setError(availabilityProblem);
-      return;
-    }
-    if (draft.locationType === "in_person" && !draft.locationDetails.trim()) {
-      setError("Add the address for in-person sessions.");
       return;
     }
     const questionsProblem = describeQuestionsProblem(draft.questions);
@@ -931,10 +971,21 @@ function CreateBookingFlow({
                 }
               />
             </div>
+            {error ? (
+              <div className="data-error" role="alert">
+                {error}
+              </div>
+            ) : null}
             <div className="wizard-actions">
               <Button
-                onClick={() => setStep(1)}
-                disabled={!draft.title.trim()}
+                onClick={() => {
+                  if (basicsProblem) {
+                    setError(basicsProblem);
+                    return;
+                  }
+                  setError(null);
+                  setStep(1);
+                }}
               >
                 Continue <ArrowRight size={14} />
               </Button>
@@ -1299,6 +1350,7 @@ type EditorTab = "setup" | "questions" | "appearance";
 function BookingTypeEditor({
   organizationSlug,
   organizationTimezone,
+  bookingPages,
   page,
   onBack,
   onSave,
@@ -1307,6 +1359,7 @@ function BookingTypeEditor({
 }: {
   organizationSlug: string | null;
   organizationTimezone: string | null;
+  bookingPages: BookingPage[];
   page: BookingPage;
   onBack: () => void;
   onSave: (page: Omit<BookingPage, "id">) => Promise<void>;
@@ -1332,19 +1385,20 @@ function BookingTypeEditor({
     value: Omit<BookingPage, "id">[Key],
   ) => setDraft((current) => ({ ...current, [key]: value }));
 
+  const slugCollision = findSlugCollision(bookingPages, draft.slug, page.id);
+
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
-      if (!draft.slug || !draft.brandName.trim() || !draft.title.trim())
-        throw new Error("Add a brand name, headline, and booking-link name.");
+      if (!draft.brandName.trim()) throw new Error("Add a brand name.");
+      const basicsProblem = describeBasicsProblem(draft, bookingPages, page.id);
+      if (basicsProblem) throw new Error(basicsProblem);
       const availabilityProblem = describeAvailabilityProblem(
         draft.availability,
         draft.durationMinutes,
       );
       if (availabilityProblem) throw new Error(availabilityProblem);
-      if (draft.locationType === "in_person" && !draft.locationDetails.trim())
-        throw new Error("Add the address for in-person sessions.");
       const questionsProblem = describeQuestionsProblem(draft.questions);
       if (questionsProblem) throw new Error(questionsProblem);
       await onSave({ ...draft, questions: sanitizeQuestions(draft.questions) });
@@ -1514,6 +1568,12 @@ function BookingTypeEditor({
                   }
                 />
               </div>
+              {slugCollision ? (
+                <small className="field-error">
+                  Already used by “
+                  {slugCollision.title || slugCollision.brandName}”.
+                </small>
+              ) : null}
             </Label>
           </div>
         </Card>

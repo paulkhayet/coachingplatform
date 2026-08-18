@@ -4374,6 +4374,13 @@ kbd {
   font-size: 8.5px;
   font-weight: 400;
 }
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: #a64c59;
+  font-size: 8.5px;
+  font-weight: 600;
+}
 .wizard-actions {
   display: flex;
   justify-content: space-between;
