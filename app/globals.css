@@ -423,7 +423,10 @@ textarea:focus-visible {
   align-items: center;
   gap: 12px;
 }
-.question-options-list {
+/* Higher specificity than `.question-fields > div` above, which would
+   otherwise flex this into a wrapping row since it's also a bare div child
+   of .question-fields. */
+.question-fields > .question-options-list {
   display: grid;
   gap: 6px;
   padding: 9px 10px 10px;
@@ -435,8 +438,10 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
 }
 .question-option-row .question-options {
+  flex: 1;
   height: 30px;
   font-size: 9.5px;
 }
