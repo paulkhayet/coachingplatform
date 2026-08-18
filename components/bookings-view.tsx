@@ -837,7 +837,7 @@ function CreateBookingFlow({
 
       <div className="wizard-shell">
         <div className="wizard-progress">
-          {["The basics", "Availability", "Appearance"].map((label, index) => (
+          {["The basics", "Availability", "Questions", "Appearance"].map((label, index) => (
             <div
               key={label}
               className={cn(
@@ -939,6 +939,28 @@ function CreateBookingFlow({
 
         {step === 2 ? (
           <section className="wizard-panel">
+            <h2>Anything you want to know first?</h2>
+            <p className="wizard-subtitle">
+              Optional — ask only what helps you prepare. Skip this if you
+              don’t need anything up front.
+            </p>
+            <QuestionsFields
+              questions={draft.questions}
+              onChange={(next) => update("questions", next)}
+            />
+            <div className="wizard-actions">
+              <Button variant="outline" onClick={() => setStep(1)}>
+                <ArrowLeft size={14} /> Back
+              </Button>
+              <Button onClick={() => setStep(3)}>
+                Continue <ArrowRight size={14} />
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 3 ? (
+          <section className="wizard-panel">
             <h2>Make it yours</h2>
             <p className="wizard-subtitle">
               This is what visitors see when they open your link.
@@ -964,7 +986,7 @@ function CreateBookingFlow({
               </div>
             ) : null}
             <div className="wizard-actions">
-              <Button variant="outline" onClick={() => setStep(1)}>
+              <Button variant="outline" onClick={() => setStep(2)}>
                 <ArrowLeft size={14} /> Back
               </Button>
               <Button onClick={publish} disabled={publishing}>
@@ -1043,6 +1065,132 @@ function AppearanceFields({
   );
 }
 
+/**
+ * The intake-question builder. Shared by the create wizard's Questions step
+ * and the editor's Questions tab so the two implementations cannot diverge.
+ */
+function QuestionsFields({
+  questions,
+  onChange,
+}: {
+  questions: BookingQuestion[];
+  onChange: (next: BookingQuestion[]) => void;
+}) {
+  const addQuestion = () =>
+    onChange([
+      ...questions,
+      {
+        id: crypto.randomUUID(),
+        label: "",
+        type: "long_text",
+        required: false,
+        options: [],
+      },
+    ]);
+
+  const updateQuestion = (id: string, changes: Partial<BookingQuestion>) =>
+    onChange(
+      questions.map((question) =>
+        question.id === id ? { ...question, ...changes } : question,
+      ),
+    );
+
+  return (
+    <>
+      <div className="booking-section-heading questionnaire-heading">
+        <span>
+          <UserRound size={16} />
+        </span>
+        <div>
+          <h2>Intake questionnaire</h2>
+          <p>Ask only what helps you prepare for a useful conversation.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={addQuestion}>
+          <Plus size={13} /> Add question
+        </Button>
+      </div>
+      <div className="question-list">
+        {questions.map((question, index) => (
+          <div className="question-row" key={question.id}>
+            <GripVertical size={15} className="question-grip" />
+            <span className="question-number">{index + 1}</span>
+            <div className="question-fields">
+              <Input
+                value={question.label}
+                placeholder="What would you like to ask?"
+                onChange={(event) =>
+                  updateQuestion(question.id, { label: event.target.value })
+                }
+              />
+              <div>
+                <Select
+                  value={question.type}
+                  onValueChange={(value) =>
+                    updateQuestion(question.id, {
+                      type: value as BookingQuestion["type"],
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-[37px] w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="short_text">Short answer</SelectItem>
+                    <SelectItem value="long_text">Long answer</SelectItem>
+                    <SelectItem value="select">Multiple choice</SelectItem>
+                    <SelectItem value="checkbox">Checkbox</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Label className="required-toggle">
+                  <Checkbox
+                    checked={question.required}
+                    onCheckedChange={(checked) =>
+                      updateQuestion(question.id, {
+                        required: checked === true,
+                      })
+                    }
+                  />
+                  Required
+                </Label>
+              </div>
+              {question.type === "select" ? (
+                <Input
+                  className="question-options"
+                  value={question.options.join(", ")}
+                  placeholder="Choices separated by commas"
+                  onChange={(event) =>
+                    updateQuestion(question.id, {
+                      options: event.target.value
+                        .split(",")
+                        .map((option) => option.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="question-delete"
+              onClick={() =>
+                onChange(questions.filter((item) => item.id !== question.id))
+              }
+              aria-label="Remove question"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+        {!questions.length ? (
+          <button className="question-empty" onClick={addQuestion}>
+            <Plus size={15} /> Add your first intake question
+          </button>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 type EditorTab = "setup" | "questions" | "appearance";
 
 function BookingTypeEditor({
@@ -1105,26 +1253,6 @@ function BookingTypeEditor({
       setSaving(false);
     }
   };
-
-  const addQuestion = () =>
-    update("questions", [
-      ...draft.questions,
-      {
-        id: crypto.randomUUID(),
-        label: "",
-        type: "long_text",
-        required: false,
-        options: [],
-      },
-    ]);
-
-  const updateQuestion = (id: string, changes: Partial<BookingQuestion>) =>
-    update(
-      "questions",
-      draft.questions.map((question) =>
-        question.id === id ? { ...question, ...changes } : question,
-      ),
-    );
 
   return (
     <div className="bookings-page page-enter">
@@ -1288,99 +1416,10 @@ function BookingTypeEditor({
 
       <TabsContent value="questions" className="mt-3.5">
         <Card className="gap-0 px-[18px] py-[18px]">
-          <div className="booking-section-heading questionnaire-heading">
-            <span>
-              <UserRound size={16} />
-            </span>
-            <div>
-              <h2>Intake questionnaire</h2>
-              <p>Ask only what helps you prepare for a useful conversation.</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={addQuestion}>
-              <Plus size={13} /> Add question
-            </Button>
-          </div>
-          <div className="question-list">
-            {draft.questions.map((question, index) => (
-              <div className="question-row" key={question.id}>
-                <GripVertical size={15} className="question-grip" />
-                <span className="question-number">{index + 1}</span>
-                <div className="question-fields">
-                  <Input
-                    value={question.label}
-                    placeholder="What would you like to ask?"
-                    onChange={(event) =>
-                      updateQuestion(question.id, { label: event.target.value })
-                    }
-                  />
-                  <div>
-                    <Select
-                      value={question.type}
-                      onValueChange={(value) =>
-                        updateQuestion(question.id, {
-                          type: value as BookingQuestion["type"],
-                        })
-                      }
-                    >
-                      <SelectTrigger className="h-[37px] w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="short_text">Short answer</SelectItem>
-                        <SelectItem value="long_text">Long answer</SelectItem>
-                        <SelectItem value="select">Multiple choice</SelectItem>
-                        <SelectItem value="checkbox">Checkbox</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Label className="required-toggle">
-                      <Checkbox
-                        checked={question.required}
-                        onCheckedChange={(checked) =>
-                          updateQuestion(question.id, {
-                            required: checked === true,
-                          })
-                        }
-                      />
-                      Required
-                    </Label>
-                  </div>
-                  {question.type === "select" ? (
-                    <Input
-                      className="question-options"
-                      value={question.options.join(", ")}
-                      placeholder="Choices separated by commas"
-                      onChange={(event) =>
-                        updateQuestion(question.id, {
-                          options: event.target.value
-                            .split(",")
-                            .map((option) => option.trim())
-                            .filter(Boolean),
-                        })
-                      }
-                    />
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="question-delete"
-                  onClick={() =>
-                    update(
-                      "questions",
-                      draft.questions.filter((item) => item.id !== question.id),
-                    )
-                  }
-                  aria-label="Remove question"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-            {!draft.questions.length ? (
-              <button className="question-empty" onClick={addQuestion}>
-                <Plus size={15} /> Add your first intake question
-              </button>
-            ) : null}
-          </div>
+          <QuestionsFields
+            questions={draft.questions}
+            onChange={(next) => update("questions", next)}
+          />
         </Card>
       </TabsContent>
 
