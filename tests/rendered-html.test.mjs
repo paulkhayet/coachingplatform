@@ -232,7 +232,7 @@ test("ships the privacy-aware MVP foundation", async () => {
   assert.match(availabilityWindowsMigration, /'zoom', 'google_meet', 'phone', 'in_person'/);
 
   assert.match(bookingsView, /Intake questionnaire/);
-  assert.match(bookingsView, /Choices separated by commas/);
+  assert.match(bookingsView, /Add option/);
   assert.match(bookingsView, /Booking link/);
   assert.match(publicBookingPage, /Book consultation/);
   assert.match(publicBookingPage, /availableSlots/);

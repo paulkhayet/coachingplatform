@@ -423,10 +423,53 @@ textarea:focus-visible {
   align-items: center;
   gap: 12px;
 }
-.question-fields .question-options {
-  height: 32px;
-  border-style: dashed;
+.question-options-list {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px 10px;
+  border: 1px dashed #e2dfda;
+  border-radius: 8px;
+  background: #f9f8f6;
+}
+.question-option-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.question-option-row .question-options {
+  height: 30px;
   font-size: 9.5px;
+}
+.question-option-remove {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #b6b4b9;
+}
+.question-option-remove:hover {
+  background: #fff0f0;
+  color: #a94d59;
+}
+.question-option-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: start;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: #2f6fed;
+  font-size: 9.5px;
+  font-weight: 650;
+}
+.question-option-add:hover {
+  text-decoration: underline;
 }
 .required-toggle {
   display: inline-flex;

@@ -151,6 +151,38 @@ function slotTimesForDay(
     );
 }
 
+/**
+ * Drops blank multiple-choice options before a question list is sent to the
+ * server. An empty-string option isn't just untidy — Radix `Select.Item`
+ * reserves "" for clearing the selection, so one would break the public
+ * form's dropdown rather than merely showing an unlabeled row.
+ */
+function sanitizeQuestions(questions: BookingQuestion[]): BookingQuestion[] {
+  return questions.map((question) =>
+    question.type === "select"
+      ? {
+          ...question,
+          options: question.options
+            .map((option) => option.trim())
+            .filter(Boolean),
+        }
+      : question,
+  );
+}
+
+/** A multiple-choice question needs at least two real choices to make sense. */
+function describeQuestionsProblem(questions: BookingQuestion[]): string | null {
+  const tooFewChoices = questions.find(
+    (question) =>
+      question.type === "select" &&
+      question.label.trim() &&
+      question.options.filter((option) => option.trim()).length < 2,
+  );
+  if (tooFewChoices)
+    return `Add at least two choices for "${tooFewChoices.label.trim()}".`;
+  return null;
+}
+
 function defaultPage(
   brandName: string,
   colorIndex: number,
@@ -816,9 +848,18 @@ function CreateBookingFlow({
       setError("Add the address for in-person sessions.");
       return;
     }
+    const questionsProblem = describeQuestionsProblem(draft.questions);
+    if (questionsProblem) {
+      setError(questionsProblem);
+      return;
+    }
     setPublishing(true);
     try {
-      await onPublish({ ...draft, slug: draft.slug || makeSlug(draft.title) });
+      await onPublish({
+        ...draft,
+        slug: draft.slug || makeSlug(draft.title),
+        questions: sanitizeQuestions(draft.questions),
+      });
     } catch (publishError) {
       setError(
         publishError instanceof Error
@@ -948,11 +989,28 @@ function CreateBookingFlow({
               questions={draft.questions}
               onChange={(next) => update("questions", next)}
             />
+            {error ? (
+              <div className="data-error" role="alert">
+                {error}
+              </div>
+            ) : null}
             <div className="wizard-actions">
               <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft size={14} /> Back
               </Button>
-              <Button onClick={() => setStep(3)}>
+              <Button
+                onClick={() => {
+                  const questionsProblem = describeQuestionsProblem(
+                    draft.questions,
+                  );
+                  if (questionsProblem) {
+                    setError(questionsProblem);
+                    return;
+                  }
+                  setError(null);
+                  setStep(3);
+                }}
+              >
                 Continue <ArrowRight size={14} />
               </Button>
             </div>
@@ -1066,6 +1124,53 @@ function AppearanceFields({
 }
 
 /**
+ * One editable row per multiple-choice option, instead of a single
+ * comma-separated field — commas typed into an option's own text (e.g.
+ * "9am, meet in the lobby") used to silently split into extra choices.
+ */
+function QuestionOptionsEditor({
+  options,
+  onChange,
+}: {
+  options: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <div className="question-options-list">
+      {options.map((option, index) => (
+        <div className="question-option-row" key={index}>
+          <Input
+            className="question-options"
+            value={option}
+            placeholder={`Option ${index + 1}`}
+            onChange={(event) => {
+              const next = [...options];
+              next[index] = event.target.value;
+              onChange(next);
+            }}
+          />
+          <button
+            type="button"
+            className="question-option-remove"
+            onClick={() => onChange(options.filter((_, i) => i !== index))}
+            aria-label={`Remove option ${index + 1}`}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="question-option-add"
+        onClick={() => onChange([...options, ""])}
+      >
+        <Plus size={12} /> Add option
+      </button>
+    </div>
+  );
+}
+
+/**
  * The intake-question builder. Shared by the create wizard's Questions step
  * and the editor's Questions tab so the two implementations cannot diverge.
  */
@@ -1125,11 +1230,16 @@ function QuestionsFields({
               <div>
                 <Select
                   value={question.type}
-                  onValueChange={(value) =>
+                  onValueChange={(value) => {
+                    const nextType = value as BookingQuestion["type"];
                     updateQuestion(question.id, {
-                      type: value as BookingQuestion["type"],
-                    })
-                  }
+                      type: nextType,
+                      options:
+                        nextType === "select" && !question.options.length
+                          ? ["", ""]
+                          : question.options,
+                    });
+                  }}
                 >
                   <SelectTrigger className="h-[37px] w-full">
                     <SelectValue />
@@ -1154,17 +1264,10 @@ function QuestionsFields({
                 </Label>
               </div>
               {question.type === "select" ? (
-                <Input
-                  className="question-options"
-                  value={question.options.join(", ")}
-                  placeholder="Choices separated by commas"
-                  onChange={(event) =>
-                    updateQuestion(question.id, {
-                      options: event.target.value
-                        .split(",")
-                        .map((option) => option.trim())
-                        .filter(Boolean),
-                    })
+                <QuestionOptionsEditor
+                  options={question.options}
+                  onChange={(options) =>
+                    updateQuestion(question.id, { options })
                   }
                 />
               ) : null}
@@ -1242,7 +1345,9 @@ function BookingTypeEditor({
       if (availabilityProblem) throw new Error(availabilityProblem);
       if (draft.locationType === "in_person" && !draft.locationDetails.trim())
         throw new Error("Add the address for in-person sessions.");
-      await onSave(draft);
+      const questionsProblem = describeQuestionsProblem(draft.questions);
+      if (questionsProblem) throw new Error(questionsProblem);
+      await onSave({ ...draft, questions: sanitizeQuestions(draft.questions) });
     } catch (saveError) {
       setError(
         saveError instanceof Error
