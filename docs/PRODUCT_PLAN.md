@@ -559,6 +559,8 @@ Technology selection and implementation details follow those decisions. The sele
 
 ## 11. Current discussion and next step
 
+Development order and status are tracked in the [development roadmap](ROADMAP.md). Phase 1 (foundation) started November 5, 2026.
+
 Continue the founder-requested decision process one choice at a time, presenting two concrete options, their tradeoffs, and a recommendation. Record each answer as a decision without treating unselected proposals as confirmed. Distinguish product/release capability choices from policies that customer businesses should configure; do not force a platform-wide policy where the founder has chosen customer control. This clarification does not reopen previously confirmed decisions.
 
 This structured A/B round has completed 28 decisions (D-020 through D-047). After decision 12, the founder asked how many questions remained and was given an estimate of another 15–20 major decisions before the first complete product-specification draft, followed by a consolidated review. Sixteen of those decisions are now complete; the corresponding remaining estimate is 0–4. Plan one final major question in this round (Decision 29, voluntary staff-capacity downgrade handling), then prepare the first consolidated product-specification draft for review. This is not a claim that all implementation details will then be settled. The founder's D-037 preference is to keep the initial workflow simple; recommend bounded launch capabilities while preserving agreed features. Draft routine details as clearly labeled proposals for review rather than asking a separate question for every setting. Do not silently confirm assumptions or reopen agreed choices.

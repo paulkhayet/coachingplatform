@@ -54,6 +54,10 @@ Google and Zoom each need a registered developer app, but coaches connect their 
 - Privacy review for minors' data (COPPA, state student-privacy laws) and consent for session recording and AI summaries.
 - Lead times: Google's app verification for calendar access, Zoom marketplace review, and US SMS (A2P 10DLC) registration.
 
+## Build order
+
+See the [development roadmap](ROADMAP.md) for the phases and their status.
+
 ## Moving from the prototype
 
 The prototype in [`platform/`](../platform) already uses React, TypeScript, Tailwind and shadcn/ui. Its business rules move from the browser to the server: credit funding, booking checks, permissions, cancellations and follow-up delivery (`src/lib/`). The new work is the Supabase schema and row-level security rules, logins, background jobs, and the real integrations.

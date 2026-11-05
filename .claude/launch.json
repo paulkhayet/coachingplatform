@@ -2,15 +2,35 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "app",
+        "run",
+        "dev"
+      ],
+      "port": 3100
+    },
+    {
       "name": "platform",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "platform", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "platform",
+        "run",
+        "dev"
+      ],
       "port": 5174
     },
     {
       "name": "landing",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "landing", "start"],
+      "runtimeArgs": [
+        "--prefix",
+        "landing",
+        "start"
+      ],
       "port": 4173
     }
   ]

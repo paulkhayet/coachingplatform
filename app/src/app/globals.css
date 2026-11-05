@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: 'DM Sans';
+  src: url('/fonts/dm-sans.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/instrument-serif-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/instrument-serif-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  --radius: 0.45rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0.006 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.006 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.006 270);
+  --primary: oklch(0.55 0.21 268);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.003 265);
+  --secondary-foreground: oklch(0.21 0.006 270);
+  --muted: oklch(0.967 0.003 265);
+  --muted-foreground: oklch(0.52 0.012 265);
+  --accent: oklch(0.96 0.02 270);
+  --accent-foreground: oklch(0.42 0.17 268);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0.004 265);
+  --input: oklch(0.912 0.004 265);
+  --ring: oklch(0.55 0.21 268);
+  --success: oklch(0.55 0.14 152);
+  --warning: oklch(0.66 0.15 65);
+  --sidebar: oklch(0.985 0.002 265);
+  --sidebar-foreground: oklch(0.3 0.008 270);
+  --sidebar-accent: oklch(0.955 0.004 265);
+  --sidebar-accent-foreground: oklch(0.2 0.006 270);
+  --sidebar-border: oklch(0.922 0.004 265);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.16 0.005 270);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.19 0.006 270);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.21 0.006 270);
+  --popover-foreground: oklch(0.97 0 0);
+  --primary: oklch(0.66 0.17 270);
+  --primary-foreground: oklch(0.16 0.005 270);
+  --secondary: oklch(0.26 0.006 270);
+  --secondary-foreground: oklch(0.97 0 0);
+  --muted: oklch(0.25 0.006 270);
+  --muted-foreground: oklch(0.7 0.01 265);
+  --accent: oklch(0.28 0.04 270);
+  --accent-foreground: oklch(0.85 0.08 270);
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.66 0.17 270);
+  --success: oklch(0.72 0.14 152);
+  --warning: oklch(0.78 0.14 75);
+  --sidebar: oklch(0.18 0.005 270);
+  --sidebar-foreground: oklch(0.85 0.005 270);
+  --sidebar-accent: oklch(0.25 0.006 270);
+  --sidebar-accent-foreground: oklch(0.97 0 0);
+  --sidebar-border: oklch(1 0 0 / 8%);
+}
+
+@theme inline {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+  --radius-sm: calc(var(--radius) - 3px);
+  --radius-md: calc(var(--radius) - 1px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground antialiased; font-feature-settings: "ss01"; }
+  * { scrollbar-width: thin; }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+}
