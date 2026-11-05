@@ -1,0 +1,659 @@
+# schedulefa.st — Product Plan
+
+Last updated: November 5, 2026  
+Stage: SaaS product definition and planning
+
+This is the living source of truth for the product: its purpose, capabilities, configurable behavior, agreed decisions, and unresolved questions. Application coding has not begun.
+
+## 1. Product purpose and confirmed principles
+
+- Build a SaaS coaching platform for solopreneurs and small teams.
+- The marketing brand and domain are schedulefa.st. The founder stated ownership of the domain and requested the website be rebranded to it.
+- Customer businesses should be able to customize how they sell, schedule, deliver, and administer coaching.
+- The customizations discussed so far should be standard product capabilities available to customer businesses. They are not a special implementation for one coach.
+- Examples from the founder's girlfriend's practice helped identify capabilities. Her specific configuration is not the product specification or a mandatory default for other businesses.
+- Launch focus: businesses coaching middle school, high school, and college students, including parent involvement. Expand toward coaching businesses across specialties over time. The product remains configurable for solo operators and small teams; this focus does not make one practice's policies universal defaults. Detailed launch scope and expansion timing remain open.
+- Reduce administrative work, particularly scheduling, meeting-link reminders, and session follow-ups. Detailed success measures remain open.
+- Support both solo operation and small-team operation in the first release, including predefined owner, administrator, and coach roles, staff handoffs, and shared coaching allowances. Businesses configure supported access permissions and client assignments; a custom staff-role builder is outside the first release (D-027). Owners set shared business defaults and permissions; coaches manage their availability and customize non-pricing client arrangements within those permissions. The exact permission matrix, content access, and team-size limits remain open.
+- A business can enable shared-pool booking, allowing clients to book eligible available coaches rather than only assigned coaches.
+- Support intake and enrollment workflows with responsibilities split across staff, including administrator-led coach matching, a coach-led first call, and administrator-led pricing and contracting discussions.
+- At launch, use guided, configurable intake/enrollment workflows with solo/team templates, supported steps that can be enabled as appropriate, assigned responsibilities, and customizable intake questions and reminders. A full builder for arbitrary stages, conditions, and automated actions is outside the first release. The exact template and configuration options remain to be specified.
+- Families can complete pre-enrollment steps without a client portal account. Client account setup and portal access come after successful coaching payment.
+- At launch, a student can have multiple authorized parent/guardian accounts, each with an individual login and separately controlled permissions (D-032). Independent students can use the product without a required parent account. Invitation, authorization, and age-appropriate access details remain to be defined.
+- Launch with a focused student portal for authorized booking/rescheduling, meeting links, shared follow-ups, homework, and files (D-033). Dedicated goal/progress dashboards, private student journaling, and in-app messaging are outside the first release. Detailed portal workflows and parent-facing views remain to be specified.
+- Use automatic Zoom meeting-summary import as the first integrated input for AI follow-ups at launch, with manual session notes and pasted/uploaded existing transcripts as fallbacks (D-034). Business-controlled use and existing content permissions remain in effect. Review/send behavior, capture settings, retention, and usage limits remain open; no other automatic provider integration is confirmed.
+- Launch includes manual approval and optional business-enabled automatic sending of AI follow-ups using configured recipient and content rules (D-035). Support distinct student and parent versions when needed, with a shared version still available (D-036). Each version follows recipient permissions and the selected sending mode. Connecting Zoom or importing a summary does not itself enable sending. Detailed settings, authorization, publication behavior, exceptions, and delivery recovery remain to be defined.
+- Keep homework coach-written at launch (D-037). AI homework suggestions and generation are deferred to keep the first release simpler, with no later delivery date committed. The approved AI follow-up capabilities remain in scope; their model/provider approach is still open.
+- Zoom is the first automatic video-meeting integration at launch (D-038): create Zoom links for bookings and include the correct details in appointments and reminders. Allow manually entered meeting links or locations for other arrangements. Automatic Google Meet integration is outside the first release; calendar-provider coverage and detailed link lifecycle rules remain open.
+- Google Calendar is the only coach calendar connection at launch (D-039), for availability and scheduled appointments. Outlook/Microsoft 365 calendar connections are outside the first release. Clients can receive appointment invitations regardless of this coach-provider choice. Connected-calendar limits, authorization, and exact synchronization behavior remain to be defined.
+- At launch, families review and electronically sign contracts within the guest enrollment flow through an e-signature service integration, with automatic contract-status updates (D-040). A client portal account is not required for signing. DocuSeal is the signing provider (D-051). Document/template behavior, authorized signers, and signature/payment ordering remain open.
+- Stripe is the first payment-provider integration for clients paying coaching businesses at launch (D-041). PayPal integration is outside the first release. This choice does not select the provider for schedulefa.st's own SaaS subscription billing, account/fund ownership, platform fees, or exact payment methods.
+- Monetize schedulefa.st through software subscriptions with no additional schedulefa.st transaction fee or percentage cut on coaching payments (D-042). Subscription tiers are based on staff capacity (D-043), covering owners, administrators, and coaches. Student/parent portal access alone does not consume staff capacity. Third-party payment costs remain separate; exact prices, capacities, usage allowances, and SaaS billing-provider choice remain open.
+- Offer an ongoing limited free plan at launch, with staff/usage caps and paid upgrades for additional capacity (D-044). The selected free-access model does not expire after a trial period. Exact allowances, upgrade/downgrade behavior, and any payment-card requirement remain open; free software access does not waive paid coverage for coaching sessions or third-party provider costs.
+- Businesses moving to schedulefa.st enter their existing clients manually at launch (D-045). CSV/spreadsheet imports and source-specific migration tools are outside the first release. Manual setup fields, existing appointments, opening balances and verification of previously paid coverage remain to be defined; this choice does not authorize unpaid coaching or require existing clients to pay again.
+- Launch for U.S.-based coaching businesses with USD pricing/payments (D-046), with international business markets and additional currencies outside the first release. This does not determine where students/parents may reside or remove timezone support. Business eligibility verification, client-country eligibility, detailed payment flows, provider availability, and applicable tax/privacy/consent requirements still need definition and validation.
+- Launch includes email notifications plus optional business-enabled SMS appointment reminders for recipients who opt in (D-047). SMS is not mandatory for businesses or recipients. This choice does not add two-way texting or SMS delivery of coaching summaries/private content. Sender identity, preferences, opt-in/opt-out handling, supported numbers, providers, usage allowances/costs, timing, and delivery recovery remain to be defined.
+- For a voluntary downgrade to a plan with fewer staff seats, the owner selects which staff remain active and brings the business within the new staff limit before the lower plan takes effect (D-048). Existing records are preserved. Exact effective dates, staff handover/inactivation, feature and usage limits, failed SaaS payments, and retention remain separate details to define.
+- Guests can book calls such as consultations from Calendly-style booking pages, without an account (D-049). Each business decides whether a call is free or paid and can attach a questionnaire. A paid call does not enroll the client or create coaching credits. Refund terms, host routing, booking limits, and question types remain to be defined.
+- The product is built on Supabase (database, logins, storage, background jobs) and Vercel (hosting), keeping separate services to a minimum (D-050). E-signing uses DocuSeal (D-051). The rest of the stack, including the OpenAI API for AI follow-up drafts, is confirmed in D-052 and listed in section 15.
+- Among business staff, only the CEO/owner and administrator have pricing access. A solo owner-coach has that access through the ownership role. Clients still receive their own relevant offer and checkout information.
+- Administrators who are not acting as a client's coach start with operational access for clients they are authorized to manage: scheduling, enrollment, contracts, and payment information. Private coaching notes and available transcripts require an explicit permission grant. The business owner can change this access (D-028); recording/transcription settings remain separate.
+- Coaches see assigned or explicitly authorized clients by default (D-029). A confirmed shared-pool booking automatically grants the booked coach the client-record access permitted by the business's settings by default (D-030). Booking-created access ends after the coach's booked sessions and a business-configured follow-up window by default (D-031); owners can configure the policy. Independent assignments/grants follow their own rules. Content permissions and staff pricing restrictions remain in effect; exact timing and content-sharing details still need definition.
+- Ongoing coaching can take place only when the session is paid for. For fixed-term bundles, successful installment payments unlock credits in proportion to the package price paid (D-024). Each customer business chooses whether enrolled clients may book only against funded credits or reserve future sessions ahead of paid coverage (D-025). Launch includes client reminders, staff notifications, and optional automatic cancellation of unpaid reservations at a business-selected cutoff; businesses may retain manual handling (D-026). Rounding, payment adjustments, precise cutoff options, and cancellation/recovery details remain open.
+- A client's purchased allowance can be used across eligible coaches in the same business; ten covered sessions can be taken with ten different eligible coaches.
+- Measure purchased coaching allowance in session credits. Session types have defined credit costs, including fractional costs where configured, so service value need not follow duration alone. For example, a standard session may cost one credit and a permitted half-session may cost half a credit. Fixed-term installment funding is proportional to the package price paid; exact credit costs, precision, configuration authority, and payment adjustments remain open. These example session costs are not universal defaults.
+- CEO/administrator decides whether transcripts are wanted. Whether this means enabling capture, choosing transcript visibility, or both needs clarification.
+- Plan the behavior and scope before choosing implementation details or writing application code.
+
+## 2. How decisions are recorded
+
+- **Confirmed capability:** Behavior the product needs to support.
+- **Configurable policy:** A choice a customer business can make using that capability.
+- **Example configuration:** One valid arrangement from the discussion; it does not establish a universal value or default.
+- **Proposed:** A recommendation awaiting agreement.
+- **Open:** A decision still needed.
+- **Deferred:** Work intentionally reserved for later, with a reason.
+
+A requirement should specify what can be configured, who can configure it, its scope, its interaction with other settings, and how the result is explained to the people affected. Precise supported options, limits, defaults, and release priority remain to be defined unless explicitly agreed.
+
+Access to settings within a team is a separate permission decision. Configurability for customer businesses does not mean every staff member can change every setting.
+
+## 3. Configurable product capabilities
+
+### Confirmed capability areas
+
+| ID | Capability | Customization identified | Details still needed |
+| --- | --- | --- | --- |
+| R-001 | Client self-service scheduling with synced availability | Support flexible bookings alongside recurring appointments; use the coach's connected Google Calendar for availability and scheduled appointments at launch (D-039). Clients can receive appointment invitations. Outlook/Microsoft 365 connections are outside the first release. | Working hours, buffers, advance notice, booking windows, connection/calendar limits, conflict-check versus destination calendars, event synchronization and external edits/deletions, recurring-series rules, and team routing. |
+| R-002 | Select who may book and reschedule for a client | An authorized coach/business user can choose the student, parent, or both for each client. Multiple parent/guardian accounts with separately controlled permissions are supported at launch (D-032). | Team authority, specific guardian booking permissions, account setup, cancellation rights, and effects of permission changes. |
+| R-003 | Configure unused-session expiration | Support an expiration policy for sessions in an allowance period. | Supported expiration/carryover options, period boundaries, limits, exceptions, and treatment of already-booked sessions. |
+| R-004 | Configure cancellation and absence policies | Set the notice cutoff, session-use consequences, and authorized exceptions. | Supported outcomes, boundary handling, no-shows, coach-initiated cancellations, consultation rules, and split-session accounting. |
+| R-005 | Configure makeup-session eligibility | Support preserving sessions after timely cancellation and allowing makeups after the original program or allowance-period end. | Optional deadlines, booking access after the main plan ends, interaction with ordinary expiration, and exception permissions. |
+| R-006 | Define flexible coaching offerings | Configure program length, weekly frequency, session duration, permitted split formats, and pricing; support fixed-length and ongoing monthly arrangements. Purchased allowance uses session credits with defined session-type costs, including fractional costs where configured (D-023). | Reusable offerings versus client-specific agreements, permitted combinations, credit-cost settings and authority, fractional precision, pauses, and changes to existing agreements. |
+| R-007 | Offer different client payment arrangements | Support upfront payment, installments for a bundle, and ongoing monthly coaching arrangements, using Stripe as the launch coaching-payment integration (D-041). Successful fixed-term installments unlock credits proportionally (D-024); coaching requires paid coverage. | Provider validation, funding precision, price adjustments, fees/taxes, collection/failure behavior, refunds/disputes, recurring monthly funding, renewals, and account/fund ownership. |
+| R-008 | Owner-governed team customization | The business owner sets shared defaults and permissions. Launch uses predefined owner, administrator, and coach roles with configurable supported access and client assignments (D-027). Administrators have operational-only content access by default (D-028). Coaches see assigned or explicitly authorized clients by default; owners can adjust client visibility (D-029). Coaches manage availability and customize non-pricing arrangements within granted permissions. | Remaining permission controls/defaults, delegation, assignment mechanics, content-type access, grant scope, and effects on existing agreements. A custom staff-role builder is outside the first release. |
+| R-009 | Optional shared coach pools | A business can enable booking with eligible available coaches in a shared pool, alongside assigned-coach booking. Pool membership is separate from record access. A confirmed booking automatically grants the booked coach permission-limited record access by default (D-030). Booking-created access ends after booked sessions and a configurable follow-up window by default, with owner-configurable policy (D-031). | Pool membership, eligible services/clients, coach selection/routing, availability/capacity, access settings, follow-up-window options, independent grant interactions, cancellation/reassignment effects, and content-sharing rules. |
+| R-010 | Intake and enrollment with staff handoffs | Support business workflows in which an administrator receives interest and matches a coach, the coach holds a first call, and the administrator handles money discussions before the family decides about a contract. Also accommodate a solo coach. Launch with guided solo/team templates, enable supported steps, assign responsibilities, and customize intake questions and reminders. | Exact templates and supported steps, stage ordering, role/task ownership, handoff actions, scheduling permissions before enrollment, and offer/contract/payment conditions. A full custom workflow builder is outside the first release per D-022. |
+| R-011 | Account and portal setup after payment | Intake, permitted initial-call booking, offers/contracts, and checkout can be completed without requiring a client portal account. Account setup/portal access follows successful coaching payment. | Secure-link behavior, identity verification, linking an existing account, and inviting the appropriate parent/student after payment. |
+| R-012 | Restrict staff pricing access | Only CEO/owner and administrator roles can access pricing. Coaches acting only as coaches and assistants do not receive pricing access. | Detailed price-management actions, other financial permissions, and protecting pricing in shared documents, messages, and reports. |
+| R-013 | Require payment before coaching delivery | A coaching session can happen only once its credit cost has paid coverage. Fixed-term installments fund credits proportionally to the package price paid (D-024). Businesses can permit reservations before paid coverage, but those reservations do not authorize unpaid delivery (D-025). | Funding precision/rounding, reservation payment deadlines, future recurring sessions, payment failure/reversal behavior, and the separate introductory-call rules. |
+| R-014 | Share purchased allowances across eligible coaches | A client's credit allowance belongs to their coaching purchase within the business rather than one coach. Ten covered standard sessions may be used with ten different eligible coaches, subject to the configured session-type credit costs. | Credit-cost configuration, simultaneous reservations, pool/service eligibility, and handover of necessary coaching context. |
+| R-015 | Business-controlled transcript use | CEO/administrator decides whether transcripts are wanted. Administrator status alone does not grant transcript viewing: operational-only access is the default, with private transcript access granted explicitly (D-028). | Clarify capture controls, remaining raw-transcript permissions for owner/coach/client roles, grant scope, and retention. |
+| R-016 | Business-controlled advance-booking payment policy | Each customer business chooses between requiring funded credits at booking or allowing enrolled clients to reserve future sessions within their purchased package ahead of paid coverage. Include client reminders, staff notifications, and optional automatic cancellation of unpaid reservations at a business-selected cutoff (D-026). Manual handling remains available. Paid coverage is required before delivery in all modes. | Platform defaults, business/offering/client setting scope, delegated configuration or override rights, booking limits, cutoff options, reminder timing/recipients, cancellation granularity, payment/cancellation conflicts, recovery, and effects on existing bookings when settings change. |
+| R-017 | Multiple parent/guardian accounts and independent students | At launch, support multiple authorized parent/guardian accounts linked to a student, with individual logins and separately controlled permissions. Independent students do not require a parent account (D-032). Post-payment portal setup remains in effect. | Invitation/approval authority, identity/linking checks, supported permission fields and defaults, revocation, sibling relationships, payer/signer distinctions, and age-appropriate enrollment/access conditions. |
+| R-018 | Focused student coaching portal at launch | Include authorized booking/rescheduling, meeting links, shared follow-ups, homework, and files (D-033), under the agreed account and access rules. Dedicated goal/progress dashboards, private journaling, and in-app messaging are outside the first release. | Screen map, homework assignment/submission/review behavior, supported file sharing, follow-up presentation, parent-facing views, and detailed permissions. |
+| R-019 | Zoom-summary input with manual fallback for AI follow-ups | At launch, automatically import Zoom meeting summaries for authorized connected accounts and associate them with the correct coaching session. Support manual notes and pasted/uploaded existing transcripts as fallbacks (D-034). | Account/host authorization and onboarding, integration validation, matching recurring instances, business controls, input permissions, unavailable-summary recovery, retention, AI generation, review/send policy, and usage limits. |
+| R-020 | Manual approval and optional automatic AI follow-up sending | At launch, support coach review/editing, permitted-recipient selection, and approval before sending/publishing, plus a business-enabled automatic-send mode using configured recipient and content rules (D-035). Manual approval remains available. Distinct student/parent versions or a shared version are supported (D-036). | Configuration authority and scope, initial settings, permitted inputs/recipients/content, per-version rules, send timing, portal/email behavior, automation exceptions, delivery status/recovery, and changed-permission handling. |
+| R-021 | Student and parent follow-up versions | At launch, support distinct student and parent follow-up versions when useful, while retaining a shared version. Each version follows recipient permissions and the business's selected sending mode (D-036). | Generation templates, permitted source content, version selection/configuration scope, approval and editing behavior by version, multiple-guardian delivery, portal visibility, and changes or corrections after sending. |
+| R-022 | Coach-written homework at launch | Coaches manually author homework assignments (D-037). AI homework suggestions and generation are outside the first release. Importing a summary or generating/sending a follow-up does not itself create an assignment record. | Assignment fields, submission/completion/review behavior, role permissions, notifications, parent visibility, and how existing assignments or session-agreed next steps are referenced in follow-ups. |
+| R-023 | Zoom-first automatic video-meeting links | At launch, automatically create Zoom meeting links for bookings and include the correct details in appointments and reminders (D-038). Also support manually entered meeting links or locations. Automatic Google Meet integration is outside the first release. | Business/coach Zoom connection ownership, account authorization, creation/update/cancellation rules, recurring-series links, coach reassignment, manual-link permissions, integration validation, and failure recovery. |
+| R-024 | Integrated guest contract signing | At launch, families review and electronically sign contracts within enrollment through an e-signature service integration, without requiring a portal account. Contract status updates automatically (D-040). | Provider selection and costs, document/template/upload scope, signer identity and authority, required-signature policy, payment/signing order, signature status/events, version changes, signed-copy access, evidence/retention, and failure recovery. |
+| R-025 | Stripe-first coaching payments | At launch, use Stripe for client-to-coaching-business payments (D-041), for U.S.-based coaching businesses with USD pricing/payments (D-046), within the agreed guest enrollment, post-payment portal, and paid-credit rules. PayPal integration is outside the first release. | Business account onboarding and eligibility, client-country eligibility, fund/merchant ownership, platform versus processing fees, supported payment methods, checkout and recurring-payment behavior, event reconciliation, refunds/disputes, offline-payment handling, and recovery. |
+| R-026 | Staff-capacity subscriptions without coaching transaction fees | Offer an ongoing limited free plan plus paid subscriptions with staff-capacity tiers (D-043/D-044). Schedulefa.st adds no fee or percentage cut to coaching payments (D-042). Parent/student portal access alone does not consume staff capacity. Third-party payment costs remain separate. | Exact free/paid capacities/prices, staff-counting and membership rules, client-account entitlements, usage allowances and possible usage billing, billing provider, upgrades/downgrades, cancellation, payment failure, and cost validation. |
+| R-027 | Ongoing limited free software plan | At launch, businesses can use a free plan with staff/usage limits and upgrade for additional capacity (D-044). This is ongoing access, rather than the proposed 14-day trial. Coaching still requires paid session coverage, and provider costs remain separate. | Free-plan caps, feature/usage entitlements, card requirements, limits and reset behavior, upgrade/downgrade flow, over-limit data/access treatment, billing failure, and client continuity. |
+| R-028 | Manual setup of existing clients | Businesses enter existing clients manually at launch (D-045). CSV/spreadsheet imports and platform-specific migration tools are outside the first release. Existing account, permission, and paid-coverage rules remain in effect. | Entry fields, duplicate checks, parent/student linking, authorized setup of existing arrangements and appointments, verification and audit of opening paid balances, post-payment portal eligibility for existing clients, and any onboarding-assistance scope/cost. |
+| R-029 | U.S. business market and USD launch scope | Serve U.S.-based coaching businesses with USD pricing/payments at launch (D-046). Additional business countries and currencies are outside the first release. Student/parent residence eligibility and timezone handling are separate questions. | Business-location eligibility and verification, permitted client locations, SaaS/coaching payment-flow details, provider validation, timezone behavior, and applicable tax/privacy/consent requirements. |
+| R-030 | Email notifications and optional SMS appointment reminders | Include email notifications and business-enabled SMS appointment reminders for opted-in recipients at launch (D-047). Portal presentation and calendar invitations remain separate. Two-way texting and SMS delivery of follow-ups/private coaching content are not established by this choice. | Notification types, business enablement and permissions, recipient/contact verification and preferences, opt-in/opt-out handling, sender identity, permitted message/link content, supported numbers, provider validation, quotas/cost allocation, retries/deduplication, rescheduled/cancelled appointments, and failure visibility. |
+| R-031 | Guided voluntary staff-capacity downgrade | Before a lower-capacity plan takes effect, the owner selects active staff and brings the account within the new staff limit. Preserve existing records (D-048). | Effective date, pending invitations, handover of clients/sessions/unsent work, inactive-staff access, plan-change reversal, feature/usage treatment, and continuity. Failed SaaS payments and retention/deletion rules are separate. |
+
+These capabilities describe customer-configurable behavior. No particular notice threshold, program length, session count, price, or expiration choice has been established as the platform default.
+
+### Communication and coaching capabilities to specify
+
+The following needs were identified in discovery; their detailed workflows and automation controls remain open:
+
+- Consultation booking with configurable intake information.
+- Calendar events and video-meeting details connected to bookings. Automatic Zoom links and manual links/locations are selected for launch in D-038; calendar-provider coverage and detailed lifecycle behavior remain open.
+- Automatic session reminders that include the correct meeting link.
+- Configurable reminder timing, content, and recipients.
+- Email notifications plus optional SMS appointment reminders for recipients who opt in are selected for launch (D-047). Business enablement and recipient preferences govern SMS use. Provider, sender identity, message templates, usage allowances/costs, opt-in/opt-out flow, and delivery recovery remain open. This is not a two-way texting or SMS coaching-follow-up commitment.
+- AI-assisted follow-up creation from session information, with editing and recipient selection. Automatic Zoom summary import with manual notes/existing-transcript fallback is selected in D-034. Detailed generation behavior remains open.
+- Launch supports both manual approval and optional business-enabled automatic sending using configured recipient and content rules (D-035). Manual mode lets the coach review/edit, choose permitted recipients, and approve before sending/publishing. Automatic mode requires business configuration; Zoom connection/import alone does not enable it. Exact settings, publication behavior, and delivery recovery remain open.
+- Launch supports distinct student and parent versions when needed, alongside a shared follow-up version (D-036). For example, a student action plan and a parent progress update may draw on the same session but contain different permitted information. These are examples, not mandatory templates. Version-specific content, recipients, approval, and publication behavior still need definition; creating a version does not grant a recipient new access.
+- Transcript use is controlled by the CEO/administrator, with the exact controls still to clarify. Do not infer that all staff automatically receive raw-transcript access.
+- Homework and shared files are part of the focused launch portal (D-033). Homework is coach-written at launch; AI homework suggestions/generation are deferred (D-037). Assignment, submission, review, completion, notification, and follow-up-reference details remain to be specified.
+- Dedicated goal/progress dashboards, private student journaling, and in-app messaging are outside the first release (D-033). Session follow-ups and homework can still communicate progress; their exact presentation remains open.
+- Coach notes, resource/file sharing, parent-facing views, and client communication workflows need further detail within the selected release scope.
+
+Zoom meeting-summary import is selected as the first automatic AI follow-up input in D-034, supported by research in section 13. D-038 selects Zoom-first automatic meeting links; D-039 selects Google Calendar connections; D-040 selects integrated guest signing; D-041 selects Stripe for coaching payments; D-047 selects email notifications plus optional SMS appointment reminders. The signing service, email/SMS providers, SaaS subscription-billing provider, other transcription integrations, and detailed lifecycle/authorization/fund-ownership rules remain open. These selections do not settle the rest of the platform stack.
+
+### Example configurations for validating the capabilities
+
+| Example | Product behavior it helps validate |
+| --- | --- |
+| Eight-week program with one 60-minute session each week | Program duration and weekly coaching allowance can be defined separately. |
+| A permitted split into two 30-minute appointments | Appointment count can change without increasing the purchased coaching time. |
+| Eight-week program with two 60-minute sessions each week and a different price | Frequency and pricing can vary between offerings or client arrangements. |
+| Four sessions per month, with ordinary unused sessions expiring | Monthly allowance and expiration can be configured. |
+| More than 24 hours' absence notice preserves a session; otherwise it is lost, subject to an exception | A notice-based policy and an authorized exception can be represented. |
+| A preserved session can be made up after the original end date | Makeup eligibility can differ from ordinary allowance expiration. |
+
+These examples do not require further investigation of one coach's exact preferences. Future questions should define the product's supported choices and behavior.
+
+## 4. Settings and policy model
+
+Confirmed: The discussed customizations belong in the general SaaS product. In teams, owners set shared defaults and permissions; coaches manage availability and client arrangements within those permissions.
+
+The business/coach responsibility split below is agreed. Specific settings, offering/session scopes, and precedence still need detail:
+
+| Scope | Responsibility / possible settings | Questions to settle |
+| --- | --- | --- |
+| Business | Owner sets shared defaults and permissions. Settings include booking modes and may include policies, branding, integrations, reusable offerings, and intake/enrollment workflows. | Which settings may coaches customize, who may edit workflows, and which administrative rights may the owner delegate? |
+| Coach | Coach manages availability and customizes non-pricing client arrangements within owner-granted permissions. | Exact configurable fields, limits, and any approval requirements. |
+| Offering / client agreement | Coaching allowance, term, session formats, price, payment arrangement, and applicable policies. Pricing access is restricted to CEO/owner and administrator roles. | How are reusable offerings customized for a particular client? Which terms are fixed once accepted? |
+| Individual session | Rescheduling decisions, makeup arrangements, or an authorized exception. | Who can override a rule, and how is the exception recorded and communicated? |
+
+Confirmed guardrail: Coach customization is governed by the owner's permissions. The exact precedence between business, coach, offering/client, and session settings is not agreed. A proposed approach is business defaults, explicit offering/client terms, then an authorized session exception.
+
+Confirmed pricing boundary: The staff pricing capability belongs only to CEO/owner and administrator roles. General coach-customization permission does not grant pricing access. Other financial actions, such as refunds and payment-account administration, still need explicit permissions.
+
+For each setting, specify:
+
+- Available choices and any limits or dependencies.
+- Who can view or change it.
+- Whether it applies to the business, coach, offering, client, or session.
+- Whether changes affect new bookings/agreements only or existing ones as well.
+- What clients see before booking, paying, canceling, or accepting terms.
+- How conflicting settings and exceptional cases are handled.
+
+## 5. Business accounts and teams
+
+### Current status
+
+Supporting solo operators and small teams in the first release is confirmed in D-021, including staff handoffs and shared allowances. D-027 establishes predefined owner, administrator, and coach roles with configurable supported access and client assignments; a custom staff-role builder is outside the first release. D-028 sets operational-only administrator content access by default; D-029 sets coaches' default client visibility to assigned or explicitly authorized clients. Owners can adjust the supported access permissions. Coaches manage availability and customize non-pricing client arrangements within their granted permissions. Optional shared pools, cross-coach allowances, multi-role intake/enrollment, and CEO/administrator-only staff pricing access are confirmed. The remaining permission matrix, team-size limits, and release boundaries remain open.
+
+### Agreed team governance
+
+- A team operates under shared business defaults and owner-defined permissions.
+- Coaches manage their own availability.
+- Coaches can customize client arrangements within their granted permissions.
+- The owner determines the permissions under which those customizations occur.
+- Staff pricing access is restricted to CEO/owner and administrator roles.
+
+Staff pricing access, the operational-only administrator content-access default (D-028), and assigned/authorized-client visibility for coaches by default (D-029) are settled. Remaining owner, coach, and client private-note/transcript permissions, access-grant details, and financial actions still need definition. The CEO/administrator's transcript preference needs clarification about capture controls; enabling transcript use and granting permission to read private content are separate concerns.
+
+### Business-account structure — details proposed
+
+- Each coaching business has a workspace containing its clients, offerings, agreements, sessions, communications, and settings.
+- A solo business has one staff member; a team adds staff memberships to the same model.
+- An owner can also coach. Administrative responsibility and coaching participation can coexist.
+- Business records and access are separated from other businesses.
+- Parent/student relationships and permissions are associated with the relevant client and business.
+- Whether one person can belong to several businesses, and whether independent coaches can share a subscription while keeping separate businesses, remains open.
+
+These account details extend the agreed governance model; multi-business membership and other account mechanics remain open.
+
+### Family-account scope — confirmed launch capability
+
+Confirmed in D-032: a student can have multiple authorized parent/guardian accounts at launch. Each parent/guardian has an individual login and separately controlled permissions associated with the student. This is a supported relationship, not a requirement that every family create multiple accounts. Independent students can use the product without a required parent account.
+
+Guest pre-enrollment and post-payment portal setup remain in effect. The appropriate invitation recipients and their access still need definition; paying for coaching does not settle every person's relationship or permission.
+
+Still define invitation and approval authority, identity and relationship linking, the specific permission controls and defaults, access revocation, siblings/multiple students, and payer/signer distinctions. Age-appropriate enrollment/access conditions and changes in student independence remain open. Draft routine relationship and permission details as proposals for consolidated review rather than a separate question per field.
+
+### Launch staff roles — confirmed structure; permissions to define
+
+Confirmed in D-027: launch with predefined owner, administrator, and coach roles, configurable supported access permissions, and client assignments. Businesses cannot create additional custom staff roles in the first release. D-028 sets the administrator's initial content access to operational information, with private coaching notes/transcripts requiring explicit permission. D-029 sets coaches' initial client visibility to assigned or explicitly authorized clients, adjustable by the owner. Other configurable actions and defaults, and whether adjustments apply at role or individual-staff level, remain open. The table's responsibilities remain proposed where not separately confirmed.
+
+| Role | Possible responsibilities | Access decisions still needed |
+| --- | --- | --- |
+| CEO / owner | Business account, SaaS subscription, staff, settings, business reporting, and pricing access; may also coach. | Private coaching-content access, exact financial actions, multiple owners, and ownership transfer. |
+| Administrator | Intake, coach matching, schedules, commercial discussions, agreements, business operations, and pricing access. For authorized clients, default operational viewing covers scheduling, enrollment, contracts, and payment information; private coaching notes/transcripts require explicit permission (D-028). | Exact financial actions, staff administration, content-grant scope, and supported delegation within the predefined launch roles. |
+| Coach | Coaching, availability, notes, homework, and follow-ups for authorized clients. Assigned or explicitly authorized clients are visible by default (D-029). Confirmed pool bookings automatically grant permitted record access by default, with owner-configurable behavior (D-030). No pricing access through the coach role. | Content-type permissions, pool-grant duration, supervision, coverage, policy overrides, and a price-free indication that a session is eligible. |
+
+A separate assistant/scheduler role was previously proposed but is outside the selected three-role launch set. Additional named roles and a custom role builder have no committed later delivery date. This does not settle how limited administrative work can be delegated using the supported permission controls.
+
+Role names alone do not settle access. Define who may view, create, edit, send, assign, override, export, and delete relevant records. Parent/student accounts are separate from staff roles and their portal access alone does not consume staff capacity. D-043 selects staff-capacity subscription tiers; exact capacities, prices, membership-counting rules, and client-account entitlements remain open.
+
+### Administrator content-access default — confirmed
+
+In D-028 the founder selected operational-only access for administrators who are not acting as the client's coach. For clients the administrator is authorized to manage, default viewing includes scheduling, enrollment, contracts, and payment information. Private coaching notes and available transcripts require an explicit permission grant; the business owner can adjust access.
+
+This decision specifies a viewing default within an authorized client scope. Detailed edit/export actions, financial operations, and the scope and delegation of permission grants remain open. If the person also acts as a client's coach, their coaching access must follow the separately defined coach-access rules. Transcript capture, owner visibility, and parent/student access remain separate decisions. Operational handoff information and designated shared updates also need to be distinguished from private session content.
+
+### Coach client-visibility default — confirmed
+
+In D-029 the founder selected assigned or explicitly authorized clients as the default coach view. Owners can broaden or restrict client visibility through supported access controls. This defines the set of clients a coach can see; permissions for notes, transcripts, other content, and actions require separate definition. The existing staff pricing restriction continues to apply.
+
+Shared-pool membership determines booking eligibility. Confirmed in D-030: a confirmed shared-pool booking automatically authorizes the booked coach for the client-record access permitted by the business's settings by default. A separate staff grant is not required under this default. The owner can configure the behavior; both automatic and staff-granted access remain subject to existing pricing and content permissions.
+
+This is not blanket access to every private note or raw transcript. D-031 sets the booking-created grant's default lifetime: it ends after the coach's booked sessions and a business-configured follow-up window. Owners can configure this policy. Ongoing coach assignments and separate explicit grants have their own rules; expiry of the booking-created grant does not by itself revoke independent authorization.
+
+Still define which information the booking grant covers, supported follow-up-window values, treatment of multiple or recurring bookings, and cancellation/reassignment timing. Retention or access to the coach's own historical work also needs definition. Basic appointment information and access to the broader coaching record require distinct rules. No particular follow-up-window length has been selected.
+
+### Team decisions to make
+
+- Exact business settings, coach customization rights, and delegation to managers or assistants, within the agreed owner-governed model.
+- Rules for assigned coaches and optional shared pools, including pool eligibility, collaboration, and how initial matching relates to ongoing coaching.
+- Visibility into client lists, private notes, recordings, summaries, homework, and financial information beyond the confirmed pricing restriction.
+- Business booking pages versus individual coach pages; coach selection and consultation routing.
+- Separate calendars, shared scheduling views, recurring slots, and substitute coverage.
+- Offering/payment administration and eligible-coach rules. Allowances are shared across eligible coaches within the same business, as confirmed in R-014.
+- Invitations, acceptance, role changes, removal, and ownership transfer.
+- Handover of clients, future sessions, makeups, and unsent follow-ups when someone leaves.
+- Exact supported access controls within the three predefined launch roles. Custom staff-role creation is outside the first release; other team deferrals still need definition.
+
+### Shared coach pools — confirmed capability
+
+Businesses can choose to enable a shared coach pool. The founder agreed that a business should have this option if it wants it.
+
+Pool eligibility determines who can be booked, not who can see all client records. The default is automatic permission-limited access for the booked coach upon confirmed booking (D-030), ending after booked sessions and a configurable follow-up window (D-031). Owners can configure the policy. Exact eligibility, booking choice/routing, content sharing, follow-up-window settings, and coexistence with primary coach assignments remain to be specified.
+
+Confirmed allowance behavior: Eligible coaches draw from the same client's purchased credit allowance (D-023). Changing coaches does not reset the balance or require a new allowance solely because the coach changed. For example, ten credits can cover ten standard one-credit sessions with ten different eligible coaches. Session types have configured credit costs; this does not establish cross-business allowance sharing or arbitrary conversion between service/session formats. Costs and conversion rules must support the agreed permitted split formats.
+
+### Client assignment and access — confirmed default and proposed details
+
+- A client can have a primary coach and additional assigned coaches for collaboration or coverage.
+- Confirmed in D-029: a coach sees assigned or explicitly authorized clients by default; the owner can broaden or restrict client visibility. Exact content permissions remain to be defined.
+- Confirmed in D-030/D-031: a confirmed shared-pool booking automatically grants permission-limited record access by default, ending after booked sessions and a configurable follow-up window. The owner can configure the policy. Exact timing and covered content still need definition; independent assignments and grants have their own rules.
+- Permission to schedule or coordinate a client is defined separately from permission to read private notes, transcripts, or financial records.
+- Proposed coach-facing payment information is a price-free session eligibility indicator; prices and payment amounts remain restricted to CEO/administrator staff views and the client's own commercial materials.
+
+The D-029 coach-visibility default, D-030 pool-booking access default, and D-031 session-linked lifetime are confirmed; the remaining assignment and access details above remain proposals. The ability to enable a shared pool is confirmed separately. Booking eligibility, client visibility, detailed grant timing, and access to particular content types require separate rules.
+
+## 6. Primary product journeys to define
+
+| Journey | Intended work to specify |
+| --- | --- |
+| Business becomes a SaaS customer | Sign up, establish business account, choose subscription, complete setup, and start using the product. |
+| Business configures its services | Set policies, create offerings, connect tools, brand booking/client experiences, and establish permissions. |
+| Team member joins | Accept invitation, receive access, connect relevant tools, and become available for assigned work. |
+| Prospect becomes a client | Enter the business's configured intake flow, complete relevant review/matching/call/commercial steps, and meet the agreed enrollment conditions. Staff responsibility and step order can differ by business. |
+| Client receives coaching | Book or attend recurring sessions, receive reminders, participate, receive follow-ups/homework, and review progress. |
+| Plans or sessions change | Reschedule, cancel, apply a policy or exception, use makeups, renew, pause, change plans, or finish coaching. |
+| Staff or business leaves | Remove access, hand over work, settle outstanding tasks, export records, and apply retention/deletion rules. |
+
+For each journey, define the actors, starting conditions, steps, choices, access rules, changes to records, exceptions, recovery, and observable success criteria. Current coverage is an outline; screens and detailed behavior remain open.
+
+### Intake and enrollment — confirmed workflow needs
+
+Support both a direct consultation flow and a flow with administrator/coach handoffs. Different people may own intake, coaching fit, and the commercial relationship.
+
+The founder supplied this example, which the product must accommodate:
+
+| Example stage | Responsible participant | What happens |
+| --- | --- | --- |
+| Interest / inquiry | Parent or student; business receives the inquiry | A family expresses interest in coaching. Entry channel and exact intake information are configurable details to define. |
+| Review and coach matching | Administrator | The administrator pairs the prospect with a coach. Matching criteria and any coach-acceptance step remain open. |
+| First call | Matched coach and family/student | The coach has an initial call with them. Scheduling, attendees, and the call's recorded outcome need definition. |
+| Money / offering discussion | Administrator and family | The administrator discusses the commercial arrangement. Specific pricing, proposal, and payment permissions remain open. |
+| Contract decision | Family and authorized business staff | The family decides whether to proceed with a contract. Declined, undecided, and rematching paths must be specified. |
+| Enrollment | Authorized business staff / configured process | Successful coaching payment precedes client account/portal setup. Ongoing sessions require paid coverage. Signature and any other activation prerequisites remain open. |
+
+The example establishes a supported handoff pattern, not a mandatory sequence for all businesses. A solo operator can perform several responsibilities; a team can distribute them.
+
+### Intake workflow configuration — agreed approach and details to define
+
+Confirmed in D-022: the first release uses guided configurable workflows. Businesses start with solo/team templates, enable supported steps, assign responsibilities, and customize intake questions and reminders. A full builder for arbitrary stages, branching conditions, and automated actions is outside the first release; no later delivery date is committed.
+
+The detailed behavior below remains proposed unless separately confirmed:
+
+- Define included stages and the role or person responsible for each stage.
+- Configure the intake fields needed for review and matching.
+- Track the current stage, responsible staff, next action, and relevant history for an inquiry/enrollment.
+- Define which actions complete a stage and which handoffs create tasks or notifications for the next responsible person.
+- Allow coaching-fit responsibilities and commercial responsibilities to be assigned separately. Exact data visibility is a permission choice.
+- Distinguish the coach matched for a first call from the coach or pool authorized for ongoing bookings; define whether and how that assignment carries forward.
+- Keep first-call completion, contract acceptance, payment status, and active-coaching eligibility distinct. A first call alone does not establish paid enrollment.
+- Support guest intake, first-call scheduling, commercial steps, and checkout without requiring a portal account. After successful payment, invite/enable the appropriate client accounts while preserving the existing prospect history.
+- Enforce paid coverage before ongoing coaching delivery. Whether an unpaid future slot may be reserved is a separate decision.
+- Support pending, declined, no-response, and reassignment outcomes; decide how follow-up and reopening work.
+- Use a continuous prospect/client history so handoffs and enrollment do not require staff to re-enter the family's information. Linking repeat inquiries or existing clients needs detail.
+
+Still define the available templates and steps, stage-ordering rules, mandatory versus optional steps, handoff behavior, and any built-in exception paths. Guided configuration preserves the agreed configurable offerings, policies, permissions, and payment requirements. D-022 does not authorize unrestricted branching or arbitrary custom automation at launch.
+
+### Intake questions still open
+
+- After successful payment, who receives account setup invitations: payer, parent, student, or the configured combination? How are existing accounts linked and verified?
+- Who may match/reassign a coach, and must a coach accept a match before the family can book?
+- Can a family request a different coach after the first call? Who owns that handoff?
+- What first-call information does the coach share back with the administrator, and what remains private?
+- CEO/owner and administrator are the only staff with pricing access. Which exact offer/contract/payment actions may each perform, and who may mark enrollment active?
+- Payment before coaching is required, and fixed-term installments fund credits proportionally (D-024). What signature or other enrollment prerequisites apply, and how are rounding, payment adjustments, and recurring monthly funding handled?
+- ~~Is the introductory first call free, paid, or configured as either?~~ Answered by D-049: the business configures each bookable call as free or paid. A paid call stays separate from enrollment and coaching credits.
+- Which stages, tasks, notifications, and family-facing progress information belong in the initial release?
+
+### End-to-end comparison — solo business versus CEO, administrator, and ten coaches
+
+Review draft requested by the founder. This combines agreed capabilities with proposed connecting behavior so the complete journey can be assessed. It does not confirm every setup step, permission, automation, or prerequisite. Open choices are called out below.
+
+For this scenario, the solo customer is one person acting as owner, administrator, and coach. The team has one CEO acting as business owner, one administrator, and ten coaches: twelve staff accounts. This is an example business size, not a decided SaaS tier, seat limit, or price.
+
+| Step | Solo owner-coach | Team: CEO + administrator + ten coaches |
+| --- | --- | --- |
+| 1. Establish SaaS account | Creates an owner login and business account; uses the limited free plan or selects a paid staff-capacity tier. | CEO establishes the business account on the limited free plan or a paid staff-capacity tier. Exact prices/caps, card requirements, and signup/upgrade flow remain open in both scenarios. |
+| 2. Set up staff and permissions | One person performs ownership, administration, and coaching responsibilities. | CEO invites the administrator and ten coaches and sets permissions. Delegation of invitations to the administrator is an open permission detail. Each staff member uses an individual login. |
+| 3. Configure business | Sets branding, policies, intake stages, reminders, and client booking permissions. | CEO sets shared defaults and what staff may customize; the administrator performs permitted setup and ongoing administration. |
+| 4. Define coaching offerings | Creates fixed-term or ongoing offerings with frequency, session formats, prices, payment options, and usage policies through the ownership role. | CEO/administrator manages pricing. Coaches customize permitted non-pricing client arrangements; exact other offering-edit rights remain open. |
+| 5. Connect tools and availability | Connects relevant calendar, meeting, payment, and communication services and sets availability. | Business-level connections are managed by authorized staff. Each coach sets availability and connects the appropriate calendar/meeting tools. Shared versus per-coach provider accounts remain open. |
+| 6. Publish intake / booking entry | Shares the configured inquiry or consultation-booking link. | Publishes a business intake link and any permitted coach-specific links. The configured intake flow controls whether matching precedes first-call booking. |
+| 7. Receive an inquiry | Reviews the family's intake information and follows up without requiring the family to create a portal account. | Administrator receives/reviews the guest inquiry, tracks its stage, and owns the next task. Family portal setup follows payment. |
+| 8. Establish a first-call coach | The owner-coach handles the first call. | Administrator matches the prospect to a coach. Shared-pool or direct booking can be offered where the business's workflow allows. Matching criteria and any coach-acceptance requirement remain open. |
+| 9. Schedule the first call | Family or coach books a permitted slot using synced availability. | Family or authorized staff books with the matched/eligible coach. The configured system creates or attaches the meeting details and sends confirmations/reminders. Exact booking and integration behavior remains to be specified. |
+| 10. Hold the first call | Meets the family/student and records the relevant outcome. | Matched coach holds the call and passes the agreed outcome/next action to the administrator. Exactly what notes are shared remains a permission decision. |
+| 11. Resolve fit / matching | Continues, follows up, or declines as appropriate. | If a different match is needed, the administrator can coordinate reassignment; otherwise the commercial stage proceeds. Reassignment and no-response handling are proposed details to define. |
+| 12. Discuss offering and money | Discusses the program, price, and payment arrangement with the family through the ownership role. | CEO/administrator handles the commercial discussion. Coaches acting only as coaches have no pricing access; other financial permissions remain to be detailed. |
+| 13. Complete the sign-up decision | Sends the relevant offer/contract and guest checkout; coordinates acceptance and payment. | Administrator coordinates the offer/contract and guest checkout. Successful payment precedes portal setup. Fixed-term installments fund credits proportionally to the package price paid. Signature/other prerequisites and funding edge cases remain to be detailed. |
+| 14. Set up paid client access | After successful payment, enables/invites the appropriate client account(s), links the existing inquiry/history, and establishes the allowance and booking permissions. | Administrator/configured process does the same for an assigned coach or eligible pool. Coaching delivery requires paid coverage. Exact invite/identity mechanics remain open. |
+| 15. Schedule ongoing sessions | Sets recurring slots or allows authorized parents/students to book flexible sessions, applying the business's selected booking/payment policy. | Authorized staff establishes recurring arrangements; parents/students self-book under assigned-coach/pool eligibility. The same allowance can be used across eligible coaches. The business chooses funded-credit-only booking or future reservations ahead of paid coverage; coaching delivery still requires payment. |
+| 16. Prepare and remind | Configured reminders provide the correct meeting details; the coach prepares for the session. | System reminders go to configured recipients; the relevant coach prepares. The administrator handles scheduling support and operational issues within their access. |
+| 17. Deliver coaching | Delivers a session only when it is paid for, records its outcome, and assigns homework where appropriate. | The booked coach delivers a paid-covered session and updates permitted records. A price-free eligibility indicator is proposed; shared-pool membership does not grant unrestricted private-content access. |
+| 18. Follow up | Uses the business's selected sending mode: reviews/edits an AI draft and approves sending to permitted recipients, or enables automatic sending under configured recipient/content rules. Homework workflow details remain open. | The configured process sends under the business's selected manual-approval or optional automatic mode (D-035), within recipient/content permissions. Authorized staff can review/edit drafts in manual mode; administrative coordination remains permission-controlled. Exact automation, homework, and recovery rules remain open. |
+| 19. Handle changes / exceptions | Applies configured cancellation, forfeiture, expiration, and makeup rules; grants permitted exceptions. | Rules apply consistently with the client agreement; staff grant exceptions only where authorized. Makeups beyond the original end date are supported when configured. Exact tracking and approval controls remain open. |
+| 20. Review ongoing work | Manages one work queue covering inquiries, sessions, follow-ups, coaching purchases, and outstanding actions. | Proposed views: CEO monitors the business, administrator manages intake/commercial/scheduling work, and coaches manage their assigned/authorized work. Reports and private-content visibility remain open. |
+| 21. Renew, change, or finish coaching | Discusses renewal or changes, handles the commercial steps, and completes permitted makeups/offboarding. | Coach contributes progress/fit information; administrator handles the commercial/lifecycle steps. Defined makeups and payment commitments require explicit treatment. Renewal automation is not yet decided. |
+| 22. Maintain business continuity | Manages absence, account recovery, export, and any ownership-transfer needs. | CEO/authorized administrator handles staff changes and access removal, handing over clients, future sessions, makeups, and unfinished follow-ups. Exact offboarding controls remain open. |
+| 23. Change or end the SaaS subscription | Changes/cancels the software subscription and follows the agreed access/export/retention process. | CEO or authorized billing administrator manages the software subscription. Effects on existing client bookings, data, and makeup access need definition in both scenarios. |
+
+### System assistance across both scenarios — proposed detail
+
+- Track the current intake/enrollment stage, responsible person, and next action.
+- Carry relevant information through handoffs and create the next task/notification.
+- Use configured availability, booking eligibility, and coaching allowance rules when a session is booked.
+- Provide correct calendar/meeting details and scheduled reminders, accounting for changes and cancellations.
+- Track contract, payment, and coaching status separately and apply the agreed enrollment conditions.
+- Enable client account/portal setup after successful payment, carrying forward the guest inquiry and enrollment history.
+- Check paid coverage before coaching delivery, and share a client's allowance across eligible coaches without exposing prices in coach-only views.
+- Prepare follow-up drafts and assist delivery according to the chosen review/recipient rules.
+- Track session usage, forfeitures, preserved makeups, and authorized exceptions.
+- Surface conflicts, disconnected integrations, failed sends/payments, and unfinished tasks for an authorized person to resolve. Exact recovery and retry behavior remains open.
+
+### Branches the walkthrough must cover
+
+| Event | Solo business | Team business | Current decision status |
+| --- | --- | --- | --- |
+| Prospect is not a good fit for the first coach | Coach decides the next step with the prospect. | Administrator may rematch or close the inquiry. | Detailed reassignment/decision controls proposed. |
+| Family delays or declines | Owner follows up or closes the inquiry. | Administrator owns follow-up/closure. | Status, retention, and follow-up rules open. |
+| Signature or payment requirement is incomplete | Owner resolves the missing condition. | CEO/administrator resolves the commercial issue. | Coaching requires paid coverage. Advance reservations follow the business's selected policy; signature requirements, payment deadlines, and unpaid-reservation handling remain open. |
+| Session is canceled or missed | Configured policy and authorized exception apply. | Same policy behavior, with team-defined exception authority. | Capability confirmed; settings and permissions need detail. |
+| Coach becomes unavailable | Owner coordinates rescheduling or other permitted resolution. | Authorized staff arranges coverage/reassignment and necessary record access. | Detailed coverage and handover rules open. |
+| Reminder, meeting integration, payment, or AI step fails | Owner sees the issue and resolves it. | Issue reaches the authorized responsible staff member. | Notification, retry, and recovery details open. |
+
+## 7. Billing relationships
+
+Two relationships need separate definitions:
+
+| Relationship | What is being purchased | Decisions needed |
+| --- | --- | --- |
+| Business uses/pays the SaaS platform | Ongoing limited free access (D-044), with paid staff-capacity subscription tiers (D-043) and no additional schedulefa.st fee on coaching payments (D-042). | Free/paid capacities/prices, staff-counting rules, client-account entitlements, usage allowances, card requirements, billing provider, upgrades/downgrades, cancellation, and failed subscription payments. |
+| Client pays a coaching business | A coaching service or ongoing arrangement, through Stripe at launch (D-041). Client portal setup follows successful payment; each delivered session must be paid-covered. Fixed-term installment payments fund credits proportionally. | Provider/account model, funding precision, payment schedules, recurring monthly funding, refunds/disputes, exact financial authority, reservation deadlines, and unpaid-reservation handling. |
+
+Confirmed provider boundary: D-041 selects Stripe for clients paying coaching businesses; the provider for businesses paying schedulefa.st's software subscription remains open. PayPal integration is outside the first release.
+
+Confirmed launch market/currency boundary: U.S.-based coaching businesses with USD pricing/payments (D-046). Additional business countries and currencies are outside the first release. Define business-location eligibility and detailed USD treatment in both SaaS and coaching-payment flows; student/parent residence eligibility remains separate and unresolved. This product-scope choice is not proof of provider eligibility or compliance and does not remove timezone handling.
+
+Confirmed monetization: paid software subscriptions without an additional schedulefa.st transaction fee on coaching payments (D-042), staff-capacity tiers (D-043), and an ongoing limited free plan with paid upgrades (D-044). Owners, administrators, and coaches are staff; a parent/student's portal access alone does not make them staff. Exact free/paid capacities/prices, staff-counting rules, client-account entitlements, usage allowances, and any usage billing remain open. Free access does not promise unlimited AI/signatures/messages or include external provider licenses and fees.
+
+The selected free-access model has staff/usage limits and no trial expiry. Define cap/reset behavior, any card requirement, upgrade/downgrade treatment, and continuity for existing clients and appointments. The proposed 14-day no-card trial was not selected; an additional trial or promotion has not been agreed. Existing paid-before-coaching and post-coaching-payment portal rules remain in effect.
+
+Confirmed voluntary staff-capacity downgrade handling: the owner prepares the active-staff selection and brings the account within the new limit before the lower plan takes effect (D-048). Existing records are preserved. A post-activation staff-capacity grace period was not selected. Exact effective dates and handover/inactivation behavior remain open; this choice does not decide failed-payment grace periods, feature/usage limits, or retention/deletion policy.
+
+Stripe processing and Connect costs are separate from schedulefa.st's own fees; configuration affects pricing and which party pays. Validate the selected configuration before committing to unit economics. [Stripe Connect pricing](https://stripe.com/connect/pricing), checked November 5, 2026. The connected-account/fund-flow model and SaaS billing provider remain open. D-042 establishes our no-coaching-transaction-fee policy without waiving third-party costs.
+
+### Credit-based allowance — confirmed model
+
+The founder selected session credits rather than a time-based balance in D-023. A purchase defines a credit allowance; session types have defined credit costs. Fractional credit costs can represent permitted split sessions, such as one credit for a standard 60-minute session and half a credit for a permitted 30-minute session. These are example costs, not fixed platform defaults. Different session types can have different credit costs independent of duration.
+
+This selection does not grant arbitrary credit-editing rights to staff, establish a cash value or duration for every credit, or expose monetary prices to coach-only accounts. Existing staff pricing restrictions and the cross-coach allowance capability remain in effect.
+
+Still define credit-cost configuration scope and authority, fractional precision, reservations versus deductions, adjustments, changes to existing purchases, expiry, makeups, and refunds. Purchased credit quantity is distinct from paid-covered credits and the remaining usable balance; fixed-term installment funding follows D-024 below.
+
+Coaching allowance and payment timing are separate concepts to specify: the service agreement describes the purchased credits and eligible services, while the payment arrangement describes when money is collected and which credits are covered. Installments do not inherently define monthly coaching allowances.
+
+### Fixed-term installment credit funding — confirmed
+
+The founder selected automatic proportional credit unlocking in D-024. Successful installment payments fund the same proportion of the purchased credit allowance as the proportion of the agreed package price paid. Businesses do not independently assign a different credit allocation to each installment under this selected model.
+
+Example: a $1,200 package containing 12 credits, paid in three $400 installments, has 4 paid-covered credits after the first successful payment, 8 cumulatively after the second, and 12 after the third. These are cumulative funded totals, not the remaining available balance; usage and other credit lifecycle events must be accounted for separately.
+
+For an unchanged package without adjustments: cumulative funded credits = purchased credits × cumulative successful package payments ÷ agreed package price, capped at the purchased credit quantity. The corresponding coaching session requires sufficient paid coverage for its configured credit cost before delivery.
+
+Still define fractional precision and rounding; the funding-price basis where discounts, taxes, fees, or separate charges apply; refunds, reversals, and changes to existing purchases; and recurring monthly funding behavior. Do not assume the first installment funds the entire bundle. Advance reservations follow the business-controlled policy below.
+
+### Advance-booking payment policy — configurable
+
+Confirmed in D-025: this is a customer-business setting, not a single platform-wide booking rule. Support both choices:
+
+- Require sufficient funded credits to make a booking.
+- Allow enrolled clients to reserve future sessions within their purchased package ahead of paid credit coverage, including sessions awaiting later installments.
+
+Neither choice permits unpaid coaching delivery. An advance reservation does not fund credits or waive the paid-before-coaching requirement. Guest introductory-call rules and post-payment portal setup remain separate.
+
+Configuration follows the agreed owner-governed permission model; exact delegated rights and whether offering/client overrides are supported remain open. Define platform defaults, booking limits, cutoff options, and treatment of existing bookings when settings change. D-025 established the booking-policy choice; D-026 establishes the optional automation below. No single global payment cutoff has been chosen.
+
+### Unpaid-reservation handling — confirmed launch capability
+
+Confirmed in D-026: launch includes client payment reminders and staff notifications, plus optional automatic cancellation of reservations that still lack the required paid coverage at the business's chosen cutoff. Each business can select manual handling or enable automatic cancellation. A business's choice to allow future reservations does not by itself enable automatic cancellation.
+
+Manual handling does not waive paid coverage before coaching delivery. Automatic handling must evaluate the reservation's required paid coverage rather than treating every outstanding future installment as grounds to cancel all bookings.
+
+Still define the supported cutoff settings, reminder timing and recipients, staff authority, defaults, per-offering/client overrides, treatment of recurring-series occurrences versus the full series, cancellation notifications, and the handling of payment arriving near the cutoff. Late-payment rebooking/reinstatement, calendar/meeting updates, credit consequences, and exceptional or failed automation also need explicit rules. These details are not settled by selecting the optional automation capability.
+
+Schedulefa.st adds no coaching transaction fee under D-042. Coach compensation, payouts, and split-payment capabilities remain open. The relationship between a business's SaaS cancellation and its clients' existing coaching arrangements must also be defined.
+
+## 8. Remaining planning gaps and order
+
+| Area | Main questions | Priority |
+| --- | --- | --- |
+| Launch audience and scope | Student-coaching businesses are the confirmed initial audience, with expansion across coaching specialties over time. Both solos and small teams launch initially, using guided configurable intake/enrollment workflows. A full custom workflow builder is outside the first release. Define remaining capabilities, supported configurations, team-size limits, and explicit deferrals. | Foundation and release scope |
+| Team and business model | Owner-governed customization, predefined launch roles with configurable supported access, and optional shared pools agreed; define exact permissions/defaults, assignment/pool rules, staff visibility, administrator/coach handoffs, and account mechanics. A custom staff-role builder is outside the first release. | Foundation and core journeys |
+| Settings governance | Supported choices, limits, precedence, overrides, defaults, and changes to existing agreements. | Foundation |
+| Client and family accounts | Post-payment portal setup, multiple parent/guardian accounts with separate logins/permissions, and independent students without required parent accounts agreed. Define invitation recipients/authority, identity linking, sibling relationships, payer/signer roles, access defaults, and age-appropriate conditions. | Foundation and core journeys |
+| Customer onboarding | Account creation, team invitation, setup, connections, manual entry of existing clients (D-045), and first successful booking. CSV/spreadsheet imports and source-specific migration tools are outside launch. Define fields, linking, existing appointments, and verification of opening paid coverage. | Core journeys |
+| Sales and enrollment | Guest pre-enrollment, integrated guest electronic signing with automatic status tracking, and post-payment portal agreed; CEO/administrator-only staff pricing agreed. Define signing provider/document scope, signer authority, signature/payment conditions, exact commercial actions, handoffs, and funding edge cases. | Core journeys and remaining commercial details |
+| Scheduling and allowances | Cross-coach allowances, session-credit accounting, proportional fixed-term installment funding, customer-controlled advance booking, and optional automatic cancellation of unpaid reservations agreed; define credit costs/precision, funding adjustments, cutoff options/cancellation recovery, period boundaries, booking limits, recurring series, split-session usage, cancellations, makeup deadlines, and coach absences. | Core journeys and remaining accounting detail |
+| Communications and integrations | Automatic Zoom meeting links, manual links/locations, Google Calendar-only coach connections, and email plus optional opted-in SMS appointment reminders (D-047) agreed. Define calendar synchronization, sender identity, branding, timing/recipients, preferences and opt-in/opt-out flow, email/SMS providers and usage costs/limits, link lifecycle, reminders after changes, disconnected accounts, and recovery. Automatic Google Meet and Outlook/Microsoft 365 calendar connections are outside the first release. | Core journeys within agreed provider scope |
+| Coaching delivery | Focused launch portal and coach-written homework agreed. Define assignment/submission/completion/review behavior, coach notes, file sharing, parent views, and offboarding. AI homework suggestions, dedicated goal/progress dashboards, private student journaling, and in-app messaging are outside the first release. | Core journeys within agreed scope |
+| AI workflow | Zoom summary import plus manual input, manual approval, optional automatic sending, and distinct student/parent or shared follow-up versions selected for launch. AI homework generation is deferred. Clarify capture versus raw access; define follow-up generation/provider approach, per-version recipient/content rules, settings, retention, recovery, and usage costs/limits. | Core journeys within agreed scope |
+| Both billing relationships | Stripe coaching payments, an ongoing limited free plan, and paid staff-capacity subscriptions without a coaching transaction fee are agreed. Define free/paid entitlements and prices, staff-counting rules, usage allowances/provider and lifecycle, plus coaching-business account/fund ownership, third-party fees, and remaining client-payment behavior. | Foundation and remaining lifecycle/cost decisions |
+| Reports and administration | Coach versus business reports, staff activity, platform customer support access, and operational tools. | Launch operation |
+| Trust and data lifecycle | Separation between businesses, authentication/recovery, activity history, exports, deletion, and requirements to investigate for target ages/regions. | Foundation and launch operation |
+| Reliability and recovery | Conflicts, failed reminders/payments/summaries, disconnected integrations, backups, recovery, and unfinished work. | Launch operation |
+| Validation | Representative solo/team scenarios, measurable outcomes, workflow review, and acceptance criteria. | Throughout planning |
+
+These are planning topics, not a commitment to include every possible option in the first release. Define bounded supported behavior and explicit deferrals.
+
+## 9. Release scope and readiness
+
+The launch audience is student-coaching businesses, with expansion across coaching specialties over time. Both solos and small teams are included in the first release, with predefined owner, administrator, and coach roles, staff handoffs, and shared allowances. Supported access permissions and client assignments are configurable; custom staff-role creation is outside the first release (D-027). This does not establish every team feature, permission option, or capacity limit as a launch requirement. For each remaining candidate capability, record its user/problem, priority, dependencies, supported configurations, and reason for including or deferring it.
+
+Confirmed workflow boundary: guided configurable intake/enrollment templates at launch, with supported steps, assigned responsibilities, and customizable intake questions and reminders. A full custom workflow builder is outside the first release (D-022). The precise supported options still need definition.
+
+Confirmed reservation-automation capability: client reminders, staff notifications, and optional automatic cancellation of unpaid reservations at a business-selected cutoff are included at launch (D-026). Businesses can retain manual handling. Exact cutoff, notification, cancellation, and recovery rules still need definition.
+
+Confirmed family-account scope: multiple authorized parent/guardian accounts per student, with individual logins and separately controlled permissions, are included at launch (D-032). Independent students can use the product without a required parent account. Detailed linking, invitation, and permission behavior still needs definition.
+
+Confirmed student-workspace scope: the focused portal includes authorized booking/rescheduling, meeting links, shared follow-ups, homework, and files (D-033). Dedicated goal/progress dashboards, private student journaling, and in-app messaging are outside the first release, with no later delivery date committed. Homework status and session follow-ups remain part of the core workflow; deferring dashboards does not remove those activities. Detailed portal behavior and parent-facing views still need definition.
+
+Confirmed AI-input scope: automatic Zoom meeting-summary import with manual notes and pasted/uploaded existing transcripts as fallbacks is included at launch (D-034). Other automatic input providers and a platform-operated audio/video capture pipeline are not established by this choice. Validate the integration and define authorization, recurring-session matching, review/send controls, retention, and fallback behavior before implementation.
+
+Confirmed follow-up capability: launch includes manual approval and optional business-enabled automatic sending (D-035), plus distinct student and parent versions when needed with a shared version still available (D-036). Every version follows configured recipient/content rules and existing permissions; sending is not implied by connecting Zoom or importing a source summary. Draft timing, settings, templates, version-specific controls, publication behavior, and delivery recovery for consolidated review.
+
+Confirmed homework scope: coaches manually author assignments at launch (D-037). AI homework suggestions and generation are deferred, with no later delivery date committed. Define the simple assignment workflow and how follow-ups reference existing homework or session-agreed next steps. A generated follow-up does not itself create an assignment record. Selecting manual homework does not cancel the approved AI follow-up features or settle their model/provider approach.
+
+Confirmed video-integration scope: automate Zoom meeting-link creation and include correct meeting details in appointments and reminders at launch (D-038). Support manually entered links or locations for other arrangements. Automatic Google Meet integration is outside the first release, with no later delivery date committed. Detailed authorization, recurring-session, rescheduling, cancellation, and recovery rules remain open.
+
+Confirmed calendar scope: Google Calendar is the only coach calendar connection at launch, for availability and scheduled appointments (D-039). Clients can receive appointment invitations. Outlook/Microsoft 365 connections are outside the first release, with no later delivery date committed. Define connected-calendar limits, conflict-check and destination calendars, event update/cancellation propagation, external calendar edits, invitation ownership, and disconnected-account recovery. This provider choice does not establish unrestricted two-way editing of every appointment field.
+
+Confirmed contract-signing scope: families review and electronically sign within the guest enrollment flow through an e-signature service integration, with automatic contract-status updates (D-040). Portal account creation remains after successful coaching payment. Select and validate the signing provider; define document/templates, authorized signers, signature prerequisites and payment ordering, signed-copy access, versioning, and recovery. This experience choice does not establish the legal sufficiency of particular contract terms or signature requirements in a target region.
+
+Confirmed coaching-payment provider scope: Stripe is the launch integration for clients paying coaching businesses (D-041); PayPal is outside the first release, without a committed later date. This does not settle SaaS subscription-billing infrastructure or the fund-flow/account model. Within the U.S.-business/USD launch boundary (D-046), define provider onboarding, payment methods and client-country eligibility, payment events, fees, refunds/disputes, offline payments, and recovery, validating the selected configuration against the required payment arrangements before implementation.
+
+Confirmed SaaS monetization: an ongoing limited free plan with paid upgrades (D-044), paid tiers based on staff capacity (D-043), and no additional schedulefa.st fee or percentage of coaching payments (D-042). Student/parent portal access alone does not consume staff capacity. Third-party payment costs remain separate. Exact free/paid entitlements and prices, staff-counting rules, usage allowances, card requirements, provider, and lifecycle still need definition. Draft website amounts and limits do not establish final pricing or capacity commitments.
+
+Confirmed existing-client setup scope: manual entry only at launch (D-045). CSV/spreadsheet import and source-specific migration tools are outside the first release, without a committed later date. Define the supported manual fields and treatment of existing agreements, appointments, previously paid balances, and portal eligibility as proposals for consolidated review. Paid-coverage verification and financial authority remain unresolved; manual entry alone must not be treated as proof of payment. No managed migration service or onboarding-assistance entitlement is established by this choice.
+
+Confirmed business-market scope: U.S.-based coaching businesses and USD pricing/payments at launch (D-046). International business markets and additional currencies are outside the first release, without a committed expansion date. Define business eligibility, separate client-country eligibility, timezone behavior, and detailed SaaS/coaching currency handling. Validate provider availability and applicable tax/privacy/consent requirements before implementation; no legal or provider configuration has been selected by this scope choice.
+
+Confirmed notification-channel scope: email notifications plus optional business-enabled SMS appointment reminders for opted-in recipients at launch (D-047). Portal access and calendar invitations remain supported under their separate rules. Define permitted message content, recipient verification/preferences, opt-in/opt-out handling, business controls, sender identity, timing, supported numbers, provider configuration, quotas/cost allocation, and delivery recovery. No SMS provider, allowance, surcharge, automatic overage billing, or two-way texting capability is selected by this choice. AI follow-up audience permissions and manual/optional automatic sending rules remain unchanged; SMS coaching-summary delivery is not established.
+
+Confirmed voluntary downgrade scope: prepare active-staff selection before a lower staff-capacity plan takes effect, preserving existing records (D-048). Draft effective-date, handover, inactive-staff, feature/usage-limit, and client-continuity details for consolidated review. Failed SaaS subscription payments and data retention/deletion remain separate policies.
+
+Before implementation, agree:
+
+- The detailed launch customer profile, team-size limits, and remaining release boundaries, within the confirmed student-coaching focus and solo/team launch coverage.
+- Staff/client relationships and access rules.
+- Configuration scopes and the core supported settings.
+- Both billing relationships and their main lifecycle rules.
+- Complete core journeys, including significant failure and recovery paths.
+- Initial release scope and criteria for whether it works.
+
+Technology selection and implementation details follow those decisions. The selected stack is recorded in section 15 (D-050–D-052).
+
+## 10. Decision log
+
+| ID | Date | Decision or discovery | Current interpretation |
+| --- | --- | --- | --- |
+| D-001 | 2026-11-04 | Use a familiar coaching practice to discover needs. | Discovery source; a practice-specific setup is not the product specification. |
+| D-002 | 2026-11-04 | Serve solopreneurs and small teams. | Confirmed intended customers; team governance agreed in D-011, with detailed access and collaboration still open. |
+| D-003 | 2026-11-04 | Plan before application coding and maintain a source of truth. | Confirmed working approach. |
+| D-004 | 2026-11-04 | Support client self-booking using synced availability. | General product capability, R-001. |
+| D-005 | 2026-11-04 | Let the business/authorized coach choose parent/student booking and rescheduling rights per client. | General configurable capability, R-002; team authority remains open. |
+| D-006 | 2026-11-04 | Monthly unused sessions expire in the discussed example. | Example configuration for R-003, not a universal product rule; clarified by D-010. |
+| D-007 | 2026-11-04 | A notice cutoff determines preservation/forfeiture, with exceptions, in the discussed example. | Configurable policy capability, R-004; the example cutoff is not a platform default. |
+| D-008 | 2026-11-04 | Preserved sessions may be made up after the original end date in the discussed example. | Supported configurable behavior, R-005; detailed deadline options remain open. |
+| D-009 | 2026-11-04 | Explicitly plan the product as SaaS and review missing team behavior. | Confirmed product scope. |
+| D-010 | 2026-11-04 | The discussed customizations should be available to product customers generally; one coach's specific setup is unnecessary to define individually. | Governing clarification: organize the plan around reusable capabilities and configurable settings. Earlier example values do not establish SaaS defaults. |
+| D-011 | 2026-11-04 | Owners set shared business defaults and permissions; coaches manage availability and customize client arrangements within those permissions. | Founder accepted the proposed starting point. Exact roles, client assignment, and record visibility remain open. |
+| D-012 | 2026-11-04 | A business can enable a shared coach pool if it wants one. | Founder accepted shared pools as an optional business capability. Pool rules and record access remain open. |
+| D-013 | 2026-11-04 | Support intake/enrollment with administrator-led matching, a coach-led first call, and administrator-led money discussions before a contract decision. | Founder supplied this as a workflow the SaaS must accommodate. Generalize it into configurable staff responsibilities and handoffs. |
+| D-014 | 2026-11-04 | Client accounts and portal access follow payment to keep pre-enrollment friction low. | Guest intake/first-call/commercial steps and checkout must work before portal setup. Post-payment invitations and identity mechanics remain open. |
+| D-015 | 2026-11-04 | Only CEO/owner and administrator staff have pricing access. | Coach/assistant roles do not receive prices. A solo owner-coach uses ownership permissions; clients still see their own commercial materials. |
+| D-016 | 2026-11-04 | Coaching occurs only after the session is paid for. | Paid coverage before delivery is required. Proportional fixed-term installment funding was subsequently agreed in D-024, and business-controlled advance reservations in D-025. Funding edge cases, reservation handling, and introductory-call pricing remain open. |
+| D-017 | 2026-11-04 | Purchased allowances can be spent across eligible coaches within the business. | Ten covered sessions can be taken with ten different eligible coaches; session formats and eligibility still apply. |
+| D-018 | 2026-11-04 | CEO/administrator decides whether transcripts are wanted. | General direction recorded; clarify whether this controls capture, raw access, or both before defining permissions. |
+| D-019 | 2026-11-05 | Use schedulefa.st as the marketing brand and domain. | Founder provided the owned domain and requested the website redesign. This records branding, not a completed hosting or DNS change. |
+| D-020 | 2026-11-05 | Focus initially on student-coaching businesses and expand across coaching specialties over time. | Founder chose launch-audience Option A while retaining Option B as the longer-term direction. Keep reusable configuration and intended solo/team support; detailed release scope and expansion timing remain open. |
+| D-021 | 2026-11-05 | Support solo coaches and small teams in the first release. | Founder chose release-timing Option B: owner, administrator, and coach accounts, staff handoffs, and shared allowances are available initially. Exact permissions, team-size limits, other team capabilities, and remaining release boundaries still need definition. |
+| D-022 | 2026-11-05 | Use guided configurable intake/enrollment workflows at launch. | Founder chose workflow-customization Option A: start with solo/team templates, enable supported steps, assign responsibilities, and customize intake questions and reminders. A full builder for arbitrary stages, branching conditions, and automated actions is outside the first release. Existing offering, policy, permission, and payment requirements are preserved. Exact template and configuration options remain open. |
+| D-023 | 2026-11-05 | Measure purchased coaching allowance in session credits. | Founder chose allowance-accounting Option B. Session types have defined credit costs, including fractional costs for permitted splits; service value need not follow duration alone. One-credit standard sessions and half-credit half-sessions are examples, not universal defaults. Credit-cost configuration authority, precision, payment coverage, and usage lifecycle details remain open. Shared allowances across eligible coaches and staff pricing restrictions are preserved. |
+| D-024 | 2026-11-05 | Unlock fixed-term bundle credits automatically in proportion to the package price paid. | Founder chose installment-funding Option A. Successful payments fund the corresponding percentage of purchased credits; e.g., each $400 payment toward an unchanged $1,200, 12-credit package funds 4 additional credits. Per-installment custom credit allocations are not the selected model. Precision/rounding, price/payment adjustments, recurring monthly funding, and advance reservations remain open. Coaching still requires paid coverage before delivery. |
+| D-025 | 2026-11-05 | Let each customer business choose its advance-booking payment policy. | Founder clarified that Decision 6 should be up to the SaaS customer: support both funded-credit-only booking and future reservations ahead of paid coverage for enrolled clients. This is not a universal A/B policy selection. Coaching still requires paid coverage before delivery. Default, configuration/override scope and authority, deadlines, and unpaid-reservation handling remain open. |
+| D-026 | 2026-11-05 | Include optional automatic cancellation of unpaid reservations at launch. | Founder chose unpaid-reservation automation Option B: client reminders and staff notifications, plus a business-controlled setting to automatically cancel reservations still unpaid at the business's chosen cutoff. Manual handling remains available. No global cutoff, default enablement, series-cancellation rule, or late-payment recovery behavior is established. Paid coverage before coaching is required in every mode. |
+| D-027 | 2026-11-05 | Launch with predefined staff roles and configurable supported access. | Founder chose staff-role Option A: owner, administrator, and coach roles with configurable supported access permissions and client assignments. A custom staff-role builder is outside the first release. Owner-controlled governance and CEO/administrator-only staff pricing access are preserved. Exact actions, defaults, adjustment scope, and private-content visibility remain open. |
+| D-028 | 2026-11-05 | Give administrators operational-only content access by default. | Founder chose administrator-access Option A. For authorized clients, administrators not acting as the client's coach can view scheduling, enrollment, contracts, and payment information by default. Private coaching notes and available transcripts require explicit permission; owners can change access. Capture settings, other role defaults, grant scope, and edit/export/financial actions remain separate open decisions. |
+| D-029 | 2026-11-05 | Show coaches assigned or explicitly authorized clients by default. | Founder chose coach-client-visibility Option A. Owners can broaden or restrict visibility. This determines client scope, while pricing restrictions and separate content permissions remain in effect. Booking-triggered shared-pool access was subsequently agreed in D-030; grant duration and content-sharing details remain open. |
+| D-030 | 2026-11-05 | Automatically grant permitted client-record access to a booked shared-pool coach by default. | Founder chose shared-pool record-access Option A. A confirmed booking automatically grants the booked coach access permitted by business settings; owners can configure the behavior. Pricing restrictions and content permissions remain in effect. Session-linked grant lifetime was subsequently selected in D-031; assignment relationships and cancellation/reassignment consequences remain open. |
+| D-031 | 2026-11-05 | Use session-linked access for booking-created shared-pool grants by default. | Founder chose access-duration Option A: access ends after the coach's booked sessions and a business-configured follow-up window. Owners can configure the policy. Ongoing assignments and independent grants have their own rules. Window values, multiple-booking interactions, cancellation/reassignment timing, and historical-work access remain open. |
+| D-032 | 2026-11-05 | Support multiple parent/guardian accounts per student at launch. | Founder chose family-account Option A: each authorized parent/guardian has an individual login and separately controlled permissions. Independent students can use the product without a required parent account, as included in both offered options. Post-payment portal setup is preserved. Detailed invitations, linking, permission fields/defaults, sibling relationships, and age-appropriate conditions remain open. |
+| D-033 | 2026-11-05 | Launch with a focused student coaching portal. | Founder chose student-workspace Option A: authorized booking/rescheduling, meeting links, shared follow-ups, homework, and files. Dedicated goal/progress dashboards, private student journaling, and in-app messaging are outside the first release. Existing account/access rules are preserved; detailed portal behavior and parent-facing views remain open. |
+| D-034 | 2026-11-05 | Use automatic Zoom summary import with manual input as the launch AI-input approach. | Founder chose revised Decision 15 Option B after Zoom feasibility research: import Zoom meeting summaries automatically, with manual notes and pasted/uploaded existing transcripts as fallbacks. Zoom is the first selected automatic input provider. The choice preserves business control and content permissions; it does not establish automatic client sending, mandatory raw-transcript retention, a platform recording pipeline, or other provider integrations. Account-level validation and detailed generation, review/send, retention, and usage rules remain open. |
+| D-035 | 2026-11-05 | Include optional business-enabled automatic AI follow-up sending at launch. | Founder chose sending-capability Option B: businesses can enable automatic sending using configured recipient and content rules, with manual review/editing and approval still available. Existing recipient/content permissions remain in effect. Zoom connection/import alone does not enable sending. Detailed authority, scope, settings, timing, audience versions, publication, and failure recovery remain open; automatic homework assignment is not established. |
+| D-036 | 2026-11-05 | Support separate student and parent follow-up versions at launch. | Founder chose audience-version Option B: distinct student and parent versions when needed, while retaining a shared version. Each version follows recipient permissions and the business's selected manual or optional automatic sending mode. Examples include a student action plan and a parent progress update. Exact templates, source-content controls, per-version configuration/approval, multiple-guardian delivery, and portal visibility remain open. |
+| D-037 | 2026-11-05 | Keep homework coach-written for the first release. | Founder chose Decision 18 Option A after discussing a model API for homework suggestions, stating a preference to avoid overcomplicating the initial product. AI homework suggestions and generation are deferred without a committed delivery date. Manual assignment workflow details remain open. Existing Zoom-summary input, AI follow-up versions, and optional automatic sending remain in scope; no text-model provider has been selected. |
+| D-038 | 2026-11-05 | Automate Zoom meeting links first at launch. | Founder chose Decision 19 Option A: automatically create Zoom links and include them in appointments/reminders. Manually entered meeting links or locations remain available for other arrangements. Automatic Google Meet integration is outside the first release. Coach calendar providers, Zoom account/host ownership, and detailed meeting-link lifecycle and recovery behavior remain open. |
+| D-039 | 2026-11-05 | Support Google Calendar-only coach connections at launch. | Founder chose Decision 20 Option A: Google calendars for coach availability and scheduled appointments. Outlook/Microsoft 365 connections are outside the first release. Clients can receive appointment invitations with this option. Exact synchronization directions/fields, external edits, connected-calendar limits, authorization, and recovery remain open. |
+| D-040 | 2026-11-05 | Integrate guest contract signing within enrollment at launch. | Founder chose Decision 21 Option A: families review and sign through the guest enrollment flow using an e-signature service integration, with automatic contract-status updates. No portal account is required for signing. Provider, document/template behavior, signer identity/authority, signature prerequisites, payment ordering, signed-copy access, costs, and recovery remain open. |
+| D-041 | 2026-11-05 | Use Stripe first for coaching payments at launch. | Founder chose Decision 22 Option A: one payment-provider integration for clients paying coaching businesses, using Stripe. PayPal integration is outside the first release. The separate SaaS subscription-billing provider, platform monetization, Stripe account/fund-flow model, payment methods, countries/currencies, fees, refunds/disputes, and offline payments remain open. |
+| D-042 | 2026-11-05 | Use subscription monetization without a coaching transaction fee. | Founder chose Decision 23 Option A: businesses pay a software subscription; schedulefa.st takes no additional transaction fee or percentage cut on coaching payments. Third-party payment costs remain separate. Subscription prices, billing basis, usage allowances, any usage billing, provider, and lifecycle remain open. This does not establish unlimited usage or change the agreed coaching-payment rules. |
+| D-043 | 2026-11-05 | Base SaaS subscription tiers on staff capacity. | Founder chose Decision 24 Option A: tier capacity is determined by staff, covering owners, administrators, and coaches, rather than active coaching-client count. Parent/student portal access alone does not consume staff capacity. Exact capacities/prices, staff-counting and membership-lifecycle rules, client-account entitlements, and usage allowances remain open. Draft website limits and prices are not confirmed by this choice. |
+| D-044 | 2026-11-05 | Offer an ongoing limited free plan with paid upgrades. | Founder chose Decision 25 Option B: a free software plan with staff/usage limits and paid upgrades for more capacity. The 14-day trial alternative was not selected. Exact caps/entitlements, card requirements, reset/upgrade/downgrade behavior, and client continuity remain open. Free software access does not waive paid coaching coverage or third-party costs. |
+| D-045 | 2026-11-05 | Use manual entry only for existing-client setup at launch. | Founder answered Decision 26 with "A, just manual entry," narrowing the offered manual-plus-CSV option. Businesses enter existing clients manually; CSV/spreadsheet imports and source-specific migration tools are outside the first release. Entry fields, existing appointments/agreements, opening-balance verification, portal eligibility, and any assistance scope/cost remain open. This does not change paid-before-coaching or financial permissions. |
+| D-046 | 2026-11-05 | Launch for U.S.-based coaching businesses with USD pricing/payments. | Founder chose Decision 27 Option A. Additional business countries and currencies are outside the first release; expansion timing is uncommitted. This concerns the coaching business's location, not a determination of student/parent residence eligibility or a removal of timezone support. Detailed SaaS/coaching payment flows, business/client eligibility, provider availability, and applicable tax/privacy/consent requirements remain to be defined and validated. |
+| D-047 | 2026-11-05 | Include email notifications plus optional SMS appointment reminders at launch. | Founder chose Decision 28 Option B: businesses can enable SMS appointment reminders for recipients who opt in, alongside email notifications. SMS is optional, and portal presentation/calendar invitations remain separate. Providers, sender identity, recipient preferences and opt-in/opt-out flow, supported numbers, content/timing, usage allowances/costs, and delivery recovery remain open. This does not establish two-way texting, SMS coaching-summary delivery, or automatic overage charges. |
+| D-048 | 2026-11-05 | Prepare staff reductions before a voluntary lower-capacity downgrade takes effect. | Founder chose Decision 29 Option A: the owner selects which staff remain active and brings the account within the new staff limit before the lower plan activates. Existing records are preserved. Exact effective dates, handover/inactivation, plan reversal, feature/usage limits, failed subscription payments, and retention/deletion remain separate details. This answer confirms the downgrade choice, not the proposed defaults in the forthcoming specification draft. |
+| D-049 | 2026-11-05 | Offer Calendly-style guest booking pages for consultation calls, each optionally paid and with an attached questionnaire. | Founder asked for a Calendly-like system on the guest pages so prospects can book calls such as consultations, with the business choosing whether to charge for each call and attaching a questionnaire, and confirmed recording that businesses can charge for introductory calls. This answers the open free/paid first-call question: each business configures its calls as free or paid. A paid call is a separate purchase from coaching: it does not enroll the client, create session credits, or change the paid-before-coaching rule. Booking-page details shown in the prototype are proposals for review, not confirmed: host assignment and any automatic routing, refund and cancellation terms, booking limits, question types, duplicate-prospect matching, and payment handling. Stripe account/fund-flow, refunds, and provider validation remain open (Q-01, Q-03, Q-04). |
+| D-050 | 2026-11-05 | Build on Supabase and Vercel, using as few separate services as possible. | Founder asked to use Supabase and Vercel and to minimize separate services. Supabase provides the Postgres database, logins, file storage and background jobs (pg_cron and Queues); Vercel hosts the app. Other services are added only where neither covers the need. The framework, ORM, email, SMS and AI provider were confirmed afterwards in D-052. |
+| D-051 | 2026-11-05 | Use DocuSeal as the e-signature provider. | Founder chose DocuSeal for the integrated guest signing confirmed in D-040, after comparing it with DocuSign, Dropbox Sign, BoldSign and building signing in-house. Hosted DocuSeal Cloud was then confirmed in D-052 (self-hosting would have needed a host other than Vercel). Keep a copy of each signed agreement and its audit trail in the business's own storage. Legal sufficiency and required signers remain open (Q-02). |
+| D-052 | 2026-11-05 | Confirm the rest of the technology stack, with the OpenAI API for AI follow-ups. | Founder confirmed the recommended stack and chose the OpenAI API instead of the recommended Claude API: Next.js + React + TypeScript; Tailwind CSS + shadcn/ui; Drizzle ORM with the Supabase client for auth and storage; Stripe Billing for schedulefa.st subscriptions (same Stripe account as Connect); hosted DocuSeal Cloud; Resend for email; Twilio for SMS; OpenAI API for follow-up drafts; Vercel and Supabase dashboards for monitoring. See section 15. The OpenAI model, processing and retention terms, quality tests, usage limits and costs remain open, as do the Stripe Connect account model (Q-01) and legal/privacy reviews (Q-02). |
+
+## 11. Current discussion and next step
+
+Continue the founder-requested decision process one choice at a time, presenting two concrete options, their tradeoffs, and a recommendation. Record each answer as a decision without treating unselected proposals as confirmed. Distinguish product/release capability choices from policies that customer businesses should configure; do not force a platform-wide policy where the founder has chosen customer control. This clarification does not reopen previously confirmed decisions.
+
+This structured A/B round has completed 28 decisions (D-020 through D-047). After decision 12, the founder asked how many questions remained and was given an estimate of another 15–20 major decisions before the first complete product-specification draft, followed by a consolidated review. Sixteen of those decisions are now complete; the corresponding remaining estimate is 0–4. Plan one final major question in this round (Decision 29, voluntary staff-capacity downgrade handling), then prepare the first consolidated product-specification draft for review. This is not a claim that all implementation details will then be settled. The founder's D-037 preference is to keep the initial workflow simple; recommend bounded launch capabilities while preserving agreed features. Draft routine details as clearly labeled proposals for review rather than asking a separate question for every setting. Do not silently confirm assumptions or reopen agreed choices.
+
+Decisions through D-047 establish launch workflows/integrations, staff-capacity paid subscriptions without a coaching transaction fee, an ongoing limited free plan, manual-only existing-client setup, a U.S.-business/USD launch market, and email plus optional opted-in SMS appointment reminders. Next major decision is voluntary downgrades to a plan whose staff capacity is below current active staff: prepare the staff selection/reduction before the lower plan activates, or activate the lower plan with a temporary grace period to reduce active staff. Both proposed options preserve stored records; exact inactive-staff access, pending responsibilities, existing appointments/portal continuity, effective dates, and recovery need drafted rules. Neither downgrade option is confirmed yet. This question does not decide failed-payment/cancellation behavior, feature/usage-limit enforcement, grace-period length, prices, or deletion/retention rules. Draft those details as proposals for consolidated review rather than extending the A/B round for every setting.
+
+Subsequent choices must resolve people/account relationships and permissions, remaining credit-funding edge cases and recurring monthly behavior, scheduling/allowance rules, configuration behavior, workflows and exceptions, communications/AI, coaching delivery, and SaaS operations. The CEO/administrator transcript choice, post-payment invitation mechanics, advance-booking defaults/scope, payment cutoff options, cancellation/recovery details, introductory-call options, and acceptance criteria remain open. Keep confirmed post-payment portal access, restricted staff pricing access, paid-before-coaching delivery, and cross-coach allowances consistent throughout.
+
+## 12. Supporting business research
+
+[Competitive and business analysis](COMPETITIVE_ANALYSIS.md), researched November 5, 2026, compares coaching platforms, adjacent student-service software, and the existing scheduling/tool stack. It includes proposed positioning, pricing analysis, a competitive workflow benchmark, and a pre-implementation validation plan.
+
+The analysis records research and recommendations from that date. Subsequent founder decisions in D-020 through D-047 establish launch scope, account/access and coaching workflows, allowance/funding rules, AI follow-up capabilities, manual homework, integration coverage, an ongoing limited free plan with paid staff-capacity subscriptions and no coaching transaction fee, manual-only existing-client setup, a U.S.-business/USD launch market, and email plus optional opted-in SMS appointment reminders. Its more specific customer-size, packaging, and other release recommendations remain hypotheses awaiting agreement; the analysis does not establish final pricing or authorize application implementation. Later founder decisions are maintained in this product plan.
+
+## 13. Integration research — Zoom meeting summaries
+
+Researched November 5, 2026. Status: selected launch input integration in D-034; manual approval and optional automatic sending in D-035; and distinct student/parent or shared follow-ups in D-036. Public interfaces are documented; implementation and a representative account-level test remain outstanding. Detailed input, versioning, sending, and operational rules remain open.
+
+### Verified public capabilities
+
+- Zoom Meeting Summary generates a recap from speech-to-text. The host needs an eligible licensed Workplace plan; retaining a transcript is optional. [Using Meeting Summary](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0058013).
+- Core meeting-summary AI remains included with eligible paid Workplace plans. This does not establish schedulefa.st's integration or follow-up-generation costs. [Zoom's AI product update](https://www.zoom.com/en/blog/zoom-ai-companion-zoommate/).
+- Hosts/admins can enable automatic summary start and choose host-only sharing. This sharing choice is distinct from the email-only restriction below. [Summary settings](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0057960).
+- Zoom documents `GET /meetings/{meetingId}/meeting_summary`, returning Markdown `summary_content`. The parameter identifies the meeting-instance UUID, important for recurring appointments. The endpoint requires a Pro/Business-or-higher host, summary enabled, and OAuth summary-read permission; E2EE meetings are excluded. Zoom's email-only sharing restriction and IP access controls can block API retrieval. [Meetings API](https://developers.zoom.us/docs/api/meetings/).
+- The `meeting.summary_completed` webhook notifies an authorized app when a summary becomes available after the meeting. [Meetings webhook documentation](https://developers.zoom.us/docs/api/meetings/events/).
+
+### Selected input approach and sending capability
+
+Selected in D-034: connect an authorized Zoom account, associate the meeting instance with the correct coaching session, and automatically retrieve its available summary as an AI follow-up input. Manual session notes and pasted/uploaded existing transcripts remain available as fallbacks; use remains business-controlled and subject to content permissions.
+
+Selected sending capability in D-035: prepare follow-ups inside schedulefa.st with a manual mode for review/editing, permitted-recipient selection, and approval, plus an optional automatic-send mode enabled by the business under configured recipient/content rules. D-036 adds distinct student and parent versions when needed, with a shared version still available. All modes and versions follow existing content permissions. Exact generation, templates, settings, publication, and recovery behavior remain to be specified. Homework is coach-written at launch under D-037; AI homework suggestions/generation are deferred.
+
+A summary-first integration could avoid requiring raw-transcript import or operating our own audio/video capture pipeline for this path. A summary contains less detail than the source conversation; manual notes or a permitted transcript can provide additional context. This is a design inference, not proof that Zoom's summary alone is sufficient for every coaching follow-up.
+
+Recommended provider configuration: keep Zoom's native sharing host-only so schedulefa.st's configured review/send process governs family-facing delivery and avoids a separate raw recap being emailed directly by Zoom. Apply schedulefa.st's staff and parent/student content permissions separately from Zoom connection authorization. Importing a source summary alone should not publish it; automatic sending requires the business's explicit configuration.
+
+Before implementation, validate authorized retrieval and recurring-session matching with a representative paid host account, confirm customer-account OAuth/app distribution requirements, and define unavailable-summary recovery, retention, consent/capture controls, and costs. No recording, raw-transcript visibility, or runtime sending has been enabled by this planning work. Optional automatic delivery is a selected product capability under D-035, subject to the business configuration and detailed rules still to be specified.
+
+## 14. AI homework generation — deferred research
+
+Clarification researched November 5, 2026 after the founder asked which AI would suggest homework. Subsequently, the founder selected manual homework in D-037 to keep the first release simpler. The architecture below is retained as future research, not a launch requirement. No text-model provider or specific model is selected. Decision 18 is complete; the structured-round decision count is 18.
+
+### Possible future approach — outside the first release
+
+Use an existing hosted text-generation model through an API. For example, OpenAI's Responses API accepts instructions and input text and returns generated text or structured data. The proposed approach uses an existing model without requiring us to train a base model or operate model-serving infrastructure. OpenAI is an example candidate, not a confirmed provider. [Official OpenAI text-generation documentation](https://developers.openai.com/api/docs/guides/text).
+
+The deferred Option B flow would supply an imported Zoom summary or manual notes, permitted coaching context, and instructions to a model; it would return homework drafts for coach editing and confirmation. D-037 instead selects coach-written assignments for launch. A coach can still consult session information when writing an assignment. This research does not establish that Zoom's native summary feature generates the proposed tailored homework.
+
+The same model integration could generate the already-selected student/parent follow-up versions. Coaching context can come from permitted notes; a new goal/progress dashboard is not implied by supplying context. Use only information permitted for the task, with provider-processing and retention rules still to define.
+
+An optional structured-output format could return fields such as a task title, instructions, and supporting source context. Formatting constraints do not establish that the homework is accurate or appropriate. [Official OpenAI structured-output documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+API usage is an operating-cost item; OpenAI publishes model-specific input/output token rates. Select a provider/model and define usage allowances after testing representative coaching examples for quality and cost; no cost per session or unlimited AI allowance is established here. [Official OpenAI API pricing](https://developers.openai.com/api/docs/pricing).
+
+### Deferred scope and remaining technical decisions
+
+AI homework drafts are outside the first release under D-037. Reconsidering them later would require a new scope decision and definition of inputs, quality criteria, incomplete-context handling, privacy/retention, costs, and assignment approval. The already-selected AI follow-up features remain in scope and will use the OpenAI API (D-052); the specific model and generation approach are still open; manual homework does not resolve that separate technical choice. No application code, model training, or API-backed feature has been implemented by this research.
+
+## 15. Technology stack
+
+Decided November 5, 2026 (D-050–D-052). The aim is as few separate services as possible: Supabase and Vercel cover everything they reasonably can. More detail, including why each choice was made, is in [TECH_STACK.md](TECH_STACK.md).
+
+### Core platform
+
+| Layer | Choice | Decision |
+| --- | --- | --- |
+| Hosting | Vercel — the app, public booking pages, and endpoints for Stripe, Zoom, Google and DocuSeal notifications | D-050 |
+| Database | Supabase Postgres, with row-level security separating each business's data | D-050 |
+| Logins | Supabase Auth — staff, separate parent and student logins, email sign-in links; expiring database tokens for guest links | D-050 |
+| File storage | Supabase Storage — homework, resources, and a copy of every signed agreement and audit trail | D-050 |
+| Background jobs | Supabase pg_cron + Supabase Queues — reminders, unpaid-reservation cutoffs, summary imports, retries | D-050 |
+| App framework | Next.js + React + TypeScript | D-052 |
+| UI | Tailwind CSS + shadcn/ui | D-052 |
+| Database access | Drizzle ORM, with the Supabase client for auth and storage | D-052 |
+| Monitoring | Vercel and Supabase dashboards; add an error tracker later only if needed | D-052 |
+
+### External services
+
+| Need | Choice | Decision |
+| --- | --- | --- |
+| Coaching payments | Stripe Connect; no schedulefa.st fee | D-041, D-042 |
+| schedulefa.st subscriptions | Stripe Billing, on the same Stripe account | D-052 |
+| E-signatures | DocuSeal Cloud (hosted), embedded React signing | D-051, D-052 |
+| Email | Resend, also used for Supabase Auth email in production | D-052 |
+| SMS reminders | Twilio; optional per D-047, so it can follow launch | D-052 |
+| AI follow-up drafts | OpenAI API | D-052 |
+| Calendar | Google Calendar API; coaches connect their own accounts | D-039 |
+| Video | Zoom API — meeting links and summaries | D-038 |
+
+Accounts to set up: Vercel, Supabase, Stripe, DocuSeal, Resend, OpenAI, and Twilio when SMS is turned on. Google and Zoom each need a registered developer app.
+
+### Still open
+
+- Stripe Connect account type and fund-flow model (Q-01).
+- OpenAI model choice, processing and data-retention terms, quality tests with representative coaching examples, usage limits and costs.
+- Legal review of signing requirements for agreements involving minors (Q-02).
+- Privacy review for minors' data (COPPA, state student-privacy laws) and consent for session recording and AI summaries.
+- Lead times: Google's app verification for calendar access, Zoom marketplace review, and US SMS (A2P 10DLC) registration.
