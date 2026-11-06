@@ -18,15 +18,15 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 | --- | --- | --- | --- |
 | Interview 15–20 businesses using the prototype; aim for 3 paid-pilot commitments | Validation gate in the competitive analysis (§10) | Founder | Not started |
 | Decide the Stripe Connect account type and fund flow (Q-01) | Blocks every payment feature | Founder | Done 2026-11-06: Standard accounts, direct charges (D-055) |
-| Create the schedulefa.st Stripe account, turn on Connect and complete the platform profile | Stripe reviews platforms before businesses can connect; needed for phase 2 | Founder | Not started |
+| Create the schedulefa.st Stripe account, turn on Connect and complete the platform profile | Stripe reviews platforms before businesses can connect; needed for phase 2 | Founder | In progress: the former findatime.org account now has schedulefa.st's details; Connect turned on 2026-11-06 (direct payments, Stripe-hosted onboarding, full Stripe Dashboard, Connect Platform Agreement accepted) with schedulefa.st icon and colors. Left: verify an identity document, then "Confirm final details" so Stripe can review the platform for live accounts. Test mode works now |
 | Start Google OAuth app verification for calendar access | Takes weeks; needed for phase 2 | Founder | Not started |
 | Register the Zoom app | Marketplace review takes time; needed for phase 2 | Founder | Not started |
 | Legal review: e-signing for minors, COPPA and state student-privacy law, recording and AI-summary consent (Q-02) | Required before real families use it | Founder + lawyer | Not started |
 | Twilio A2P 10DLC registration | Only when SMS is turned on (optional, D-047) | Founder | Later |
-| Send Supabase Auth email through Resend (custom SMTP) in prod | Supabase's built-in email only reaches organization members, a few per hour | Founder | Before real customers sign up |
+| Send Supabase Auth email through Resend (custom SMTP) in prod | Supabase's built-in email only reaches organization members, a few per hour | Founder | Done 2026-11-06: schedulefa.st verified in Resend (DKIM, SPF, DMARC at the .st registry); prod sends from no-reply@schedulefa.st via Resend's Supabase integration |
 | Show schedulefa.st on Google's sign-in screen | Google app published (In production), schedulefa.st verified in Search Console (keep the TXT record), branding verified with /privacy and /terms. The Supabase custom domain add-on stays optional | Founder | Done 2026-11-05 |
 | Legal review of the privacy policy and terms at /privacy and /terms | Plain-language versions went live for Google brand verification; part of Q-02 | Founder + lawyer | Before real families use it |
-| Redirect `schedulefa.st` to `www.schedulefa.st` in Vercel → Domains | The bare domain did not load when tested on 2026-11-05 | Founder | Open |
+| Redirect `schedulefa.st` to `www.schedulefa.st` in Vercel → Domains | The bare domain did not load when tested on 2026-11-05 | Founder | Done 2026-11-06: the redirect was already set in Vercel; DNS caught up |
 
 ## Phases
 
