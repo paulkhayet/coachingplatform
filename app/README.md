@@ -54,6 +54,8 @@ npm run db:migrate                           # apply to DATABASE_URL
 
 Every new business-owned table needs a `business_id` column, `ENABLE ROW LEVEL SECURITY`, policies, and tests in `tests/db/`.
 
+**Production migrates itself.** Vercel runs `npm run vercel-build`, which runs `scripts/migrate.mjs` (pending migrations, using the production `DATABASE_URL`) and then `next build`. If a migration fails, the build fails and the previous deployment stays live. Preview and local builds skip it. So: commit the migration with the code that needs it and push; there is no manual production step. Because a migration runs a minute or so before the new code goes live, prefer additive changes, and remove old columns in a later deploy once nothing uses them.
+
 Helper functions that policies call (`is_member`, `has_role`) live in the `private` schema, which the Supabase API doesn't expose. Only functions the app calls as RPCs (like `create_business`) belong in `public`.
 
 ## Tests
@@ -68,4 +70,4 @@ The database tests wipe the target database and load a small stand-in for Supaba
 
 ## Deploy on Vercel
 
-Import the GitHub repository, set **Root Directory** to `app`, and add the environment variables from `.env.example` (with `NEXT_PUBLIC_SITE_URL` set to the deployed URL). For payments, also add `DATABASE_URL` (transaction pooler), `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and create a Stripe webhook endpoint for `https://<your domain>/api/stripe/webhook` listening to **events on connected accounts** (at least `account.updated` and `account.application.deauthorized`). Run new migrations against the production database before deploying code that needs them.
+Import the GitHub repository, set **Root Directory** to `app`, and add the environment variables from `.env.example` (with `NEXT_PUBLIC_SITE_URL` set to the deployed URL). For payments, also add `DATABASE_URL` (transaction pooler), `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and create a Stripe webhook endpoint for `https://<your domain>/api/stripe/webhook` listening to **events on connected accounts** (at least `account.updated` and `account.application.deauthorized`). Migrations run automatically on each production deploy (see Database changes).
