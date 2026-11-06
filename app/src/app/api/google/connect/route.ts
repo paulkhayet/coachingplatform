@@ -7,17 +7,17 @@ import { calendarAllowed, googleClientId, googleRedirectUri, isGoogleCalendarCon
 
 const AVAILABILITY = '/app/availability'
 
-/** Starts connecting the signed-in coach's own Google Calendar. */
+/** Starts connecting the signed-in person's own Google Calendar (used by all their businesses). */
 export async function GET() {
-  const { user, membership } = await requireWorkspace()
+  const { user } = await requireWorkspace()
   if (!isGoogleCalendarConfigured) redirect(`${AVAILABILITY}?calendar=not_configured`)
   if (!calendarAllowed(user.email)) redirect(`${AVAILABILITY}?calendar=not_available`)
 
-  // One-time values tying Google's reply to this browser and this membership (state + PKCE).
+  // One-time values tying Google's reply to this browser and this person (state + PKCE).
   const state = randomBytes(24).toString('base64url')
   const verifier = randomBytes(48).toString('base64url')
   const challenge = createHash('sha256').update(verifier).digest('base64url')
-  ;(await cookies()).set(OAUTH_COOKIE, JSON.stringify({ state, verifier, membershipId: membership.id }), {
+  ;(await cookies()).set(OAUTH_COOKIE, JSON.stringify({ state, verifier, userId: user.id }), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

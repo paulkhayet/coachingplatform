@@ -1,11 +1,14 @@
 'use client'
 
 import { useActionState, useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LOCATION_TYPES, pageSlugify } from '@/lib/booking/schemas'
+import { MAX_QUESTIONS, QUESTION_TYPES, newQuestionId } from '@/lib/booking/questions'
+import type { BookingQuestion } from '@/db/schema'
 import type { BookingPageState } from './actions'
 
 const selectClass =
@@ -23,6 +26,11 @@ export interface PageDefaults {
   bufferBeforeMinutes: number
   bufferAfterMinutes: number
   active: boolean
+  /** Dollars as typed, e.g. "45"; blank means free. */
+  price: string
+  refundCutoffHours: number
+  askStudent: boolean
+  questions: BookingQuestion[]
 }
 
 export const NEW_PAGE: PageDefaults = {
@@ -37,6 +45,10 @@ export const NEW_PAGE: PageDefaults = {
   bufferBeforeMinutes: 0,
   bufferAfterMinutes: 0,
   active: true,
+  price: '',
+  refundCutoffHours: 24,
+  askStudent: false,
+  questions: [],
 }
 
 const locationHint: Record<string, string> = {
@@ -55,9 +67,17 @@ function Field({ id, label, error, hint, ...props }: { id: string; label: string
   )
 }
 
-export function BookingPageForm({ action, defaults, businessSlug, submitLabel }: { action: (prev: BookingPageState, fd: FormData) => Promise<BookingPageState>; defaults: PageDefaults; businessSlug: string; submitLabel: string }) {
+export function BookingPageForm({ action, defaults, businessSlug, submitLabel, paymentsReady }: { action: (prev: BookingPageState, fd: FormData) => Promise<BookingPageState>; defaults: PageDefaults; businessSlug: string; submitLabel: string; paymentsReady: boolean }) {
   const [state, formAction, pending] = useActionState<BookingPageState, FormData>(action, {})
-  const v = (k: keyof PageDefaults) => state.values?.[k] ?? String(defaults[k])
+  const v = (k: Exclude<keyof PageDefaults, 'questions'>) => state.values?.[k] ?? String(defaults[k])
+  const [price, setPrice] = useState(v('price'))
+  const [questions, setQuestions] = useState<BookingQuestion[]>(() => {
+    try {
+      return state.values?.questions ? JSON.parse(state.values.questions) : defaults.questions
+    } catch {
+      return defaults.questions
+    }
+  })
   const [title, setTitle] = useState(v('title'))
   const [slug, setSlug] = useState(v('slug'))
   const [slugEdited, setSlugEdited] = useState(Boolean(defaults.slug))
@@ -101,11 +121,83 @@ export function BookingPageForm({ action, defaults, businessSlug, submitLabel }:
           <Field id="bufferAfterMinutes" label="Buffer after (minutes)" type="number" min={0} max={240} step={5} defaultValue={v('bufferAfterMinutes')} hint="Free time needed after each call." error={e.bufferAfterMinutes} />
         </div>
       </fieldset>
+      <fieldset className="grid gap-4 rounded-lg border p-4">
+        <legend className="px-1 text-sm font-medium">Price</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="price">Price (USD)</Label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground text-sm">$</span>
+              <Input id="price" name="price" inputMode="decimal" value={price} onChange={(ev) => setPrice(ev.target.value)} placeholder="Free" aria-invalid={!!e.priceCents} />
+            </div>
+            {e.priceCents ? <p className="text-destructive text-xs">{e.priceCents}</p> : <p className="text-muted-foreground text-xs">Leave blank for a free call. Paid calls are charged by card when booked.</p>}
+          </div>
+          <Field id="refundCutoffHours" label="Full refund if cancelled at least (hours before)" type="number" min={0} max={720} defaultValue={v('refundCutoffHours')} hint="Guests who cancel later aren’t refunded. If you cancel, they’re always refunded." error={e.refundCutoffHours} />
+        </div>
+        {price.trim() !== '' && !paymentsReady && (
+          <Alert variant="warning"><AlertDescription>Guests can’t book a paid call until Stripe is connected and ready in Payments.</AlertDescription></Alert>
+        )}
+      </fieldset>
+      <fieldset className="grid gap-4 rounded-lg border p-4">
+        <legend className="px-1 text-sm font-medium">Questions for guests</legend>
+        <p className="text-muted-foreground -mt-1 text-xs">Name, email and an optional note are always asked.</p>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="askStudent" defaultChecked={state.values ? state.values.askStudent === 'on' : defaults.askStudent} className="accent-primary size-4" />
+          Ask for the student’s name and grade
+        </label>
+        <input type="hidden" name="questions" value={JSON.stringify(questions)} />
+        <QuestionsEditor questions={questions} onChange={setQuestions} />
+        {e.questions && <p className="text-destructive text-xs">{e.questions}</p>}
+      </fieldset>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="active" defaultChecked={state.values ? state.values.active === 'on' : defaults.active} className="accent-primary size-4" />
         Page is live (guests can book)
       </label>
       <Button type="submit" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : submitLabel}</Button>
     </form>
+  )
+}
+
+function QuestionsEditor({ questions, onChange }: { questions: BookingQuestion[]; onChange: (q: BookingQuestion[]) => void }) {
+  const update = (i: number, patch: Partial<BookingQuestion>) => onChange(questions.map((q, j) => (j === i ? { ...q, ...patch } : q)))
+  return (
+    <div className="grid gap-3">
+      {questions.map((q, i) => {
+        const choice = q.type === 'single' || q.type === 'multiple'
+        return (
+          <div key={q.id} className="bg-muted/40 grid gap-3 rounded-md border p-3">
+            <div className="flex items-start gap-2">
+              <Input aria-label={`Question ${i + 1}`} value={q.label} maxLength={200} placeholder="What would you like to work on?" onChange={(ev) => update(i, { label: ev.target.value })} />
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove question" onClick={() => onChange(questions.filter((_, j) => j !== i))}><Trash2 /></Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <select aria-label="Answer type" value={q.type} className={selectClass} onChange={(ev) => update(i, { type: ev.target.value as BookingQuestion['type'], options: ev.target.value === 'single' || ev.target.value === 'multiple' ? (q.options.length ? q.options : ['', '']) : [] })}>
+                {QUESTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={q.required} onChange={(ev) => update(i, { required: ev.target.checked })} className="accent-primary size-4" />
+                Required
+              </label>
+            </div>
+            {choice && (
+              <div className="grid gap-2">
+                {q.options.map((o, k) => (
+                  <div key={k} className="flex items-center gap-2">
+                    <Input aria-label={`Choice ${k + 1}`} value={o} maxLength={100} placeholder={`Choice ${k + 1}`} onChange={(ev) => update(i, { options: q.options.map((x, m) => (m === k ? ev.target.value : x)) })} />
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove choice" disabled={q.options.length <= 2} onClick={() => update(i, { options: q.options.filter((_, m) => m !== k) })}><Trash2 /></Button>
+                  </div>
+                ))}
+                {q.options.length < 20 && <Button type="button" variant="ghost" size="sm" className="justify-self-start" onClick={() => update(i, { options: [...q.options, ''] })}><Plus /> Add choice</Button>}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {questions.length < MAX_QUESTIONS && (
+        <Button type="button" variant="outline" size="sm" className="justify-self-start" onClick={() => onChange([...questions, { id: newQuestionId(), label: '', type: 'short', options: [], required: false }])}>
+          <Plus /> Add a question
+        </Button>
+      )}
+    </div>
   )
 }

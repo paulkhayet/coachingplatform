@@ -10,8 +10,9 @@ import { requireWorkspace } from '@/lib/workspace'
 import { US_TIME_ZONES } from '@/lib/validation'
 import { weeklyHoursSchema, zonedTime } from '@/lib/slots'
 
-// Every write goes through the signed-in user's Supabase client, so row-level security decides
-// whose availability can be changed. These actions only ever touch the caller's own membership.
+// Every write goes through the signed-in user's Supabase client, so row-level security decides what can
+// be changed. A person's hours, time off and calendar belong to them across all their businesses (D-057);
+// what one business is offered is set per membership.
 
 export interface AvailabilityState {
   ok?: boolean
@@ -22,7 +23,7 @@ const timezoneSchema = z.enum(US_TIME_ZONES.map((t) => t.value) as [string, ...s
 const PATH = '/app/availability'
 
 export async function saveAvailability(_prev: AvailabilityState, formData: FormData): Promise<AvailabilityState> {
-  const { membership, business } = await requireWorkspace()
+  const { user } = await requireWorkspace()
   const tz = timezoneSchema.safeParse(formData.get('timezone'))
   if (!tz.success) return { message: 'Choose a time zone.' }
   let raw: unknown
@@ -36,8 +37,7 @@ export async function saveAvailability(_prev: AvailabilityState, formData: FormD
 
   const supabase = await createClient()
   const { error } = await supabase.from('availability_schedules').upsert({
-    membership_id: membership.id,
-    business_id: business.id,
+    user_id: user.id,
     timezone: tz.data,
     weekly_hours: weekly.data.sort((a, b) => a.day - b.day || a.start - b.start),
     updated_at: new Date().toISOString(),
@@ -49,9 +49,9 @@ export async function saveAvailability(_prev: AvailabilityState, formData: FormD
 
 const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Choose a date and time')
 
-/** Adds time off. The form's date-times are read in the coach's schedule time zone. */
+/** Adds time off. The form's date-times are read in the person's schedule time zone. */
 export async function addTimeOff(_prev: AvailabilityState, formData: FormData): Promise<AvailabilityState> {
-  const { membership, business } = await requireWorkspace()
+  const { user } = await requireWorkspace()
   const parsed = z
     .object({ start: localDateTime, end: localDateTime, note: z.string().trim().max(200, 'Keep the note under 200 characters'), timezone: timezoneSchema })
     .safeParse({ start: formData.get('start'), end: formData.get('end'), note: formData.get('note') ?? '', timezone: formData.get('timezone') })
@@ -70,8 +70,7 @@ export async function addTimeOff(_prev: AvailabilityState, formData: FormData): 
 
   const supabase = await createClient()
   const { error } = await supabase.from('availability_time_off').insert({
-    membership_id: membership.id,
-    business_id: business.id,
+    user_id: user.id,
     starts_at: startsAt.toISOString(),
     ends_at: endsAt.toISOString(),
     note: parsed.data.note || null,
@@ -81,14 +80,14 @@ export async function addTimeOff(_prev: AvailabilityState, formData: FormData): 
   return { ok: true, message: 'Time off added.' }
 }
 
-/** Which calendars block bookings, and which owned calendar new bookings go into. Only your own connection. */
+/** Which calendars block bookings, and the owned calendar bookings go into by default. Only your own connection. */
 export async function saveCalendarChoices(_prev: AvailabilityState, formData: FormData): Promise<AvailabilityState> {
-  const { membership } = await requireWorkspace()
-  const connection = await getConnection(membership.id)
+  const { user } = await requireWorkspace()
+  const connection = await getConnection(user.id)
   if (!connection) return { message: 'Connect Google Calendar first.' }
   let calendars: Awaited<ReturnType<typeof listCalendars>>
   try {
-    calendars = await listCalendars(membership.id)
+    calendars = await listCalendars(user.id)
   } catch {
     return { message: 'We couldn’t reach Google Calendar. Try again, or reconnect.' }
   }
@@ -97,23 +96,65 @@ export async function saveCalendarChoices(_prev: AvailabilityState, formData: Fo
   const destination = String(formData.get('destination') ?? '')
   if (busy.length === 0) return { message: 'Choose at least one calendar to check for conflicts.' }
   if (!calendars.some((c) => c.id === destination && c.owned)) return { message: 'Choose a calendar you own for new bookings.' }
-  await updateCalendarChoices(membership.id, busy, destination)
+  await updateCalendarChoices(user.id, busy, destination)
   revalidatePath(PATH)
   return { ok: true, message: 'Calendar settings saved.' }
 }
 
 export async function disconnectCalendar() {
-  const { membership } = await requireWorkspace()
-  await disconnect(membership.id)
+  const { user } = await requireWorkspace()
+  await disconnect(user.id)
   revalidatePath(PATH)
   redirect(`${PATH}?calendar=disconnected`)
 }
 
 export async function removeTimeOff(formData: FormData) {
-  const { membership } = await requireWorkspace()
+  const { user } = await requireWorkspace()
   const id = z.uuid().safeParse(formData.get('id'))
   if (!id.success) return
   const supabase = await createClient()
-  await supabase.from('availability_time_off').delete().eq('id', id.data).eq('membership_id', membership.id)
+  await supabase.from('availability_time_off').delete().eq('id', id.data).eq('user_id', user.id)
   revalidatePath(PATH)
+}
+
+/**
+ * What this business gets of your time (D-057): all your hours, or only some of them, and which of your
+ * calendars its bookings go into (blank = your default).
+ */
+export async function saveBusinessOffer(_prev: AvailabilityState, formData: FormData): Promise<AvailabilityState> {
+  const { user, membership, business } = await requireWorkspace()
+  const all = formData.get('mode') !== 'some'
+  let offered: z.infer<typeof weeklyHoursSchema> | null = null
+  if (!all) {
+    let raw: unknown
+    try {
+      raw = JSON.parse(String(formData.get('weekly') ?? '[]'))
+    } catch {
+      return { message: 'Something went wrong reading the hours. Try again.' }
+    }
+    const parsed = weeklyHoursSchema.safeParse(raw)
+    if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? 'Check the hours.' }
+    if (parsed.data.length === 0) return { message: `Choose at least one block of time for ${business.name}, or offer all your hours.` }
+    offered = parsed.data.sort((a, b) => a.day - b.day || a.start - b.start)
+  }
+  const destination = String(formData.get('destination') ?? '') || null
+  if (destination) {
+    try {
+      const calendars = await listCalendars(user.id)
+      if (!calendars.some((c) => c.id === destination && c.owned)) return { message: 'Choose a calendar you own.' }
+    } catch {
+      return { message: 'We couldn’t reach Google Calendar. Try again, or reconnect.' }
+    }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.from('membership_availability').upsert({
+    membership_id: membership.id,
+    business_id: business.id,
+    offered_hours: offered,
+    destination_calendar_id: destination,
+    updated_at: new Date().toISOString(),
+  })
+  if (error) return { message: 'We couldn’t save that. Try again in a moment.' }
+  revalidatePath(PATH)
+  return { ok: true, message: `Saved what you offer ${business.name}.` }
 }

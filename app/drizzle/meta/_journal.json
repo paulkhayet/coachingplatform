@@ -50,6 +50,27 @@
       "when": 1794002524641,
       "tag": "0006_booking_pages",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794003428803,
+      "tag": "0007_paid_calls_questions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794004417817,
+      "tag": "0008_people_own_their_time",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794004450960,
+      "tag": "0009_person_keys",
+      "breakpoints": true
     }
   ]
 }

@@ -1,27 +1,23 @@
 'use client'
 
-import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { groupByDay } from '@/lib/booking/schemas'
-import { cn } from '@/lib/utils'
+import { TimeGrid, useGuestTimezone, zoneName } from '@/components/booking/time-grid'
+import type { BookingQuestion } from '@/db/schema'
 import type { GuestBookingState } from './actions'
 
-const DAYS_SHOWN = 14
+const textareaClass =
+  'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]'
 
-export function SlotPicker({ starts, durationMinutes, action }: { starts: string[]; durationMinutes: number; action: (prev: GuestBookingState, fd: FormData) => Promise<GuestBookingState> }) {
+export function SlotPicker({ starts, durationMinutes, askStudent, questions, priceLabel, action }: { starts: string[]; durationMinutes: number; askStudent: boolean; questions: BookingQuestion[]; priceLabel?: string; action: (prev: GuestBookingState, fd: FormData) => Promise<GuestBookingState> }) {
   const router = useRouter()
   const [state, formAction, pending] = useActionState<GuestBookingState, FormData>(action, {})
-  // The guest's own time zone, known only in the browser. Render nothing time-specific until then.
-  const [tz, setTz] = useState<string | null>(null)
-  useEffect(() => setTz(Intl.DateTimeFormat().resolvedOptions().timeZone), [])
-
-  const days = useMemo(() => (tz ? [...groupByDay(starts, tz)] : []), [starts, tz])
-  const [dayIndex, setDayIndex] = useState(0)
+  const tz = useGuestTimezone()
   const [chosen, setChosen] = useState<string | null>(null)
 
   // If the time was taken meanwhile, reload the open times and go back to picking.
@@ -33,70 +29,90 @@ export function SlotPicker({ starts, durationMinutes, action }: { starts: string
   }, [state, router])
 
   if (!tz) return <p className="text-muted-foreground text-sm">Loading times…</p>
-
-  const dayLabel = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' })
-  const longDay = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' })
-  const timeLabel = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
-  const zoneName = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'long' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? tz
-  const current = days[Math.min(dayIndex, days.length - 1)]
-
-  if (chosen) {
-    const start = new Date(chosen)
-    const end = new Date(start.getTime() + durationMinutes * 60_000)
+  if (!chosen) {
     return (
-      <form action={formAction} className="grid gap-4" noValidate>
-        <button type="button" onClick={() => setChosen(null)} className="text-muted-foreground flex items-center gap-1 justify-self-start text-sm hover:underline"><ArrowLeft className="size-4" /> Change time</button>
-        <div>
-          <p className="font-medium">{longDay.format(start)}</p>
-          <p className="text-muted-foreground text-sm">{timeLabel.format(start)} – {timeLabel.format(end)} · {zoneName}</p>
-        </div>
+      <div className="grid gap-4">
         {state.message && <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert>}
-        <input type="hidden" name="start" value={chosen} />
-        <input type="hidden" name="timezone" value={tz} />
-        {/* Hidden from people; bots that fill every field are rejected. */}
-        <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
-        <div className="grid gap-1.5">
-          <Label htmlFor="name">Your name</Label>
-          <Input id="name" name="name" autoComplete="name" aria-invalid={!!state.errors?.name} autoFocus />
-          {state.errors?.name && <p className="text-destructive text-xs">{state.errors.name}</p>}
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" aria-invalid={!!state.errors?.email} />
-          {state.errors?.email ? <p className="text-destructive text-xs">{state.errors.email}</p> : <p className="text-muted-foreground text-xs">We’ll send the calendar invitation here.</p>}
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="notes">Anything you’d like to share? <span className="text-muted-foreground font-normal">(optional)</span></Label>
-          <textarea id="notes" name="notes" rows={3} maxLength={2000} className="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]" />
-        </div>
-        <Button type="submit" disabled={pending}>{pending ? 'Booking…' : 'Confirm booking'}</Button>
-      </form>
+        <TimeGrid starts={starts} tz={tz} onPick={setChosen} />
+      </div>
     )
   }
 
+  const start = new Date(chosen)
+  const end = new Date(start.getTime() + durationMinutes * 60_000)
+  const longDay = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' })
+  const timeLabel = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
+  const e = state.errors ?? {}
+  const val = (k: string) => { const x = state.values?.[k]; return typeof x === 'string' ? x : '' }
+  const picked = (k: string, option: string) => { const x = state.values?.[k]; return Array.isArray(x) ? x.includes(option) : false }
+  const err = (k: string) => e[k] && <p className="text-destructive text-xs">{e[k]}</p>
+
   return (
-    <div className="grid gap-4">
-      <p className="text-muted-foreground text-xs">Times are in {zoneName}.</p>
-      {state.message && <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert>}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {days.slice(0, DAYS_SHOWN).map(([key, list], i) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setDayIndex(i)}
-            className={cn('shrink-0 rounded-md border px-3 py-2 text-sm transition-colors', i === dayIndex ? 'border-primary bg-primary text-primary-foreground' : 'hover:border-primary/50')}
-          >
-            {dayLabel.format(new Date(list[0]))}
-          </button>
-        ))}
+    <form action={formAction} className="grid gap-4" noValidate>
+      <button type="button" onClick={() => setChosen(null)} className="text-muted-foreground flex items-center gap-1 justify-self-start text-sm hover:underline"><ArrowLeft className="size-4" /> Change time</button>
+      <div>
+        <p className="font-medium">{longDay.format(start)}</p>
+        <p className="text-muted-foreground text-sm">{timeLabel.format(start)} – {timeLabel.format(end)} · {zoneName(tz)}</p>
       </div>
-      {current && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {current[1].map((s) => (
-            <Button key={s} type="button" variant="outline" onClick={() => setChosen(s)}>{timeLabel.format(new Date(s))}</Button>
-          ))}
+      {state.message && <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert>}
+      <input type="hidden" name="start" value={chosen} />
+      <input type="hidden" name="timezone" value={tz} />
+      {/* Hidden from people; bots that fill every field are rejected. */}
+      <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
+      <div className="grid gap-1.5">
+        <Label htmlFor="name">Your name</Label>
+        <Input id="name" name="name" autoComplete="name" defaultValue={val('name')} aria-invalid={!!e.name} autoFocus />
+        {err('name')}
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="email">Email</Label>
+        <Input id="email" name="email" type="email" autoComplete="email" defaultValue={val('email')} aria-invalid={!!e.email} />
+        {e.email ? err('email') : <p className="text-muted-foreground text-xs">Your confirmation and calendar invitation go here.</p>}
+      </div>
+      {askStudent && (
+        <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+          <div className="grid gap-1.5">
+            <Label htmlFor="studentName">Student’s name</Label>
+            <Input id="studentName" name="studentName" defaultValue={val('studentName')} aria-invalid={!!e.studentName} />
+            {err('studentName')}
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="studentGrade">Grade <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input id="studentGrade" name="studentGrade" maxLength={40} defaultValue={val('studentGrade')} aria-invalid={!!e.studentGrade} />
+            {err('studentGrade')}
+          </div>
         </div>
       )}
-    </div>
+      {questions.map((q) => {
+        const field = `q_${q.id}`
+        const label = <>{q.label} {!q.required && <span className="text-muted-foreground font-normal">(optional)</span>}</>
+        if (q.type === 'short' || q.type === 'paragraph') {
+          return (
+            <div key={q.id} className="grid gap-1.5">
+              <Label htmlFor={field}>{label}</Label>
+              {q.type === 'short' ? <Input id={field} name={field} maxLength={200} defaultValue={(state.values?.[field] as string[] | undefined)?.[0] ?? ''} aria-invalid={!!e[field]} /> : <textarea id={field} name={field} rows={3} maxLength={2000} defaultValue={(state.values?.[field] as string[] | undefined)?.[0] ?? ''} className={textareaClass} aria-invalid={!!e[field]} />}
+              {err(field)}
+            </div>
+          )
+        }
+        return (
+          <fieldset key={q.id} className="grid gap-1.5">
+            <legend className="mb-1 text-sm font-medium">{label}</legend>
+            {q.options.map((o) => (
+              <label key={o} className="flex items-center gap-2 text-sm">
+                <input type={q.type === 'single' ? 'radio' : 'checkbox'} name={field} value={o} defaultChecked={picked(field, o)} className="accent-primary size-4" />
+                {o}
+              </label>
+            ))}
+            {err(field)}
+          </fieldset>
+        )
+      })}
+      <div className="grid gap-1.5">
+        <Label htmlFor="notes">Anything else you’d like to share? <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <textarea id="notes" name="notes" rows={3} maxLength={2000} defaultValue={val('notes')} className={textareaClass} />
+      </div>
+      <Button type="submit" disabled={pending}>{pending ? (priceLabel ? 'Opening payment…' : 'Booking…') : priceLabel ? `Continue to pay ${priceLabel}` : 'Confirm booking'}</Button>
+    </form>
   )
 }

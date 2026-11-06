@@ -10,6 +10,8 @@ import { requireWorkspace } from '@/lib/workspace'
 import { siteUrl } from '@/lib/env'
 import { BookingPageForm, type PageDefaults } from '../form'
 import { updateBookingPage } from '../actions'
+import { paymentAccount } from '@/lib/booking/server'
+import { parseQuestions } from '@/lib/booking/questions'
 
 export const metadata: Metadata = { title: 'Edit booking page' }
 
@@ -26,6 +28,10 @@ type Row = {
   buffer_before_minutes: number
   buffer_after_minutes: number
   active: boolean
+  price_cents: number | null
+  refund_cutoff_hours: number
+  ask_student: boolean
+  questions: unknown
 }
 
 export default async function EditBookingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
@@ -48,7 +54,12 @@ export default async function EditBookingPage({ params, searchParams }: { params
     bufferBeforeMinutes: p.buffer_before_minutes,
     bufferAfterMinutes: p.buffer_after_minutes,
     active: p.active,
+    price: p.price_cents == null ? '' : (p.price_cents / 100).toFixed(p.price_cents % 100 ? 2 : 0),
+    refundCutoffHours: p.refund_cutoff_hours,
+    askStudent: p.ask_student,
+    questions: parseQuestions(p.questions),
   }
+  const paymentsReady = Boolean(await paymentAccount(business.id))
   const publicUrl = `${siteUrl}/b/${business.slug}/${p.slug}`
 
   return (
@@ -66,7 +77,7 @@ export default async function EditBookingPage({ params, searchParams }: { params
       </Card>
       <Card>
         <CardContent>
-          <BookingPageForm key={p.slug} action={updateBookingPage.bind(null, p.id)} defaults={defaults} businessSlug={business.slug} submitLabel="Save changes" />
+          <BookingPageForm key={p.slug} action={updateBookingPage.bind(null, p.id)} defaults={defaults} businessSlug={business.slug} submitLabel="Save changes" paymentsReady={paymentsReady} />
         </CardContent>
       </Card>
     </div>

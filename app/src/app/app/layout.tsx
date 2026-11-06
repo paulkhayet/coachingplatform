@@ -7,20 +7,15 @@ import { requireWorkspace } from '@/lib/workspace'
 import { roleLabel } from '@/lib/roles'
 import { signOut } from '../(auth)/actions'
 import { Nav } from './nav'
+import { BusinessSwitcher } from './business-switcher'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, membership, business } = await requireWorkspace()
+  const { user, membership, business, workspaces } = await requireWorkspace()
   return (
     <div className="flex min-h-svh">
       <aside className="bg-sidebar border-sidebar-border sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r p-3 md:flex">
         <div className="mb-4 px-1 pt-1"><Logo /></div>
-        <div className="flex items-center gap-2.5 px-1">
-          <div className="bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-md text-sm font-bold">{business.name[0]?.toUpperCase()}</div>
-          <div className="grid min-w-0 leading-tight">
-            <span className="truncate text-sm font-semibold">{business.name}</span>
-            <span className="text-muted-foreground truncate text-xs">schedulefa.st/b/{business.slug}</span>
-          </div>
-        </div>
+        <BusinessSwitcher current={{ id: business.id, name: business.name }} slug={business.slug} workspaces={workspaces} />
         <div className="mt-5 flex-1"><Nav /></div>
         <div className="flex items-center gap-2 border-t pt-3">
           <Avatar name={user.fullName} className="size-7" />
@@ -36,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="bg-background/90 sticky top-0 z-20 flex h-14 items-center gap-2 border-b px-4 backdrop-blur md:px-6">
           <div className="md:hidden"><Logo /></div>
+          <div className="w-48 md:hidden"><BusinessSwitcher current={{ id: business.id, name: business.name }} slug={business.slug} workspaces={workspaces} /></div>
           <span className="text-muted-foreground hidden text-sm md:block">{business.name}</span>
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />

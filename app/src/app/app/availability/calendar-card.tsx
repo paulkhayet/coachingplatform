@@ -18,10 +18,10 @@ const outcomes: Record<string, { ok: boolean; text: string }> = {
   not_configured: { ok: false, text: 'Google Calendar isn’t set up on this server yet.' },
 }
 
-export async function CalendarCard({ membershipId, email, outcome }: { membershipId: string; email: string; outcome?: string }) {
+export async function CalendarCard({ userId, email, outcome }: { userId: string; email: string; outcome?: string }) {
   const message = outcome ? outcomes[outcome] : undefined
   const allowed = isGoogleCalendarConfigured && calendarAllowed(email)
-  const { connection, failed } = allowed ? await lookupConnection(membershipId) : { connection: undefined, failed: false }
+  const { connection, failed } = allowed ? await lookupConnection(userId) : { connection: undefined, failed: false }
   if (failed) {
     return (
       <Card>
@@ -37,7 +37,7 @@ export async function CalendarCard({ membershipId, email, outcome }: { membershi
   let calendars: CalendarSummary[] | null = null
   if (connection?.status === 'active') {
     try {
-      calendars = await listCalendars(membershipId)
+      calendars = await listCalendars(userId)
     } catch (e) {
       console.error('Listing Google calendars failed', e)
     }
@@ -50,7 +50,7 @@ export async function CalendarCard({ membershipId, email, outcome }: { membershi
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><CalendarDays className="size-5" /> Google Calendar</CardTitle>
-        <CardDescription>Keep bookings off your busy times, and add each booking to your calendar.</CardDescription>
+        <CardDescription>Keep bookings off your busy times, and add each booking to your calendar. One connection works for every business you’re in.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {message && <Alert variant={message.ok ? 'success' : 'destructive'}><AlertDescription>{message.text}</AlertDescription></Alert>}

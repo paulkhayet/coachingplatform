@@ -1,13 +1,20 @@
 import 'server-only'
 import { cache } from 'react'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { MemberRole } from '@/db/schema'
+
+/** Remembers which business the person last switched to (D-057). Not a security boundary: every query is
+ *  still checked by row-level security, and an unknown or stale value just falls back to the first business. */
+export const BUSINESS_COOKIE = 'sf_business'
 
 export interface Workspace {
   user: { id: string; email: string; fullName: string }
   membership: { id: string; role: MemberRole; coaches: boolean; financial: boolean; title: string | null }
   business: { id: string; name: string; slug: string; timezone: string }
+  /** Every business this person is an active member of, for the switcher. */
+  workspaces: { businessId: string; name: string; role: MemberRole }[]
 }
 
 type MembershipRow = {
@@ -26,8 +33,8 @@ export const getUser = cache(async () => {
   return data.user
 })
 
-/** The signed-in user's business. Redirects to sign-in or onboarding when either is missing.
- *  Multi-business switching is not a launch feature (spec P-01), so the first active membership is used. */
+/** The signed-in user's current business: the one they last switched to, or their first.
+ *  Redirects to sign-in or onboarding when either is missing. */
 export const requireWorkspace = cache(async (): Promise<Workspace> => {
   const user = await getUser()
   if (!user) redirect('/sign-in')
@@ -38,14 +45,16 @@ export const requireWorkspace = cache(async (): Promise<Workspace> => {
     .eq('user_id', user.id)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
-    .limit(1)
     .returns<MembershipRow[]>()
   if (error) throw new Error(`Couldn't load your workspace: ${error.message}`)
-  const row = data?.[0]
-  if (!row?.business) redirect('/onboarding')
+  const rows = (data ?? []).filter((r) => r.business)
+  if (rows.length === 0) redirect('/onboarding')
+  const chosen = (await cookies()).get(BUSINESS_COOKIE)?.value
+  const row = rows.find((r) => r.business!.id === chosen) ?? rows[0]
   return {
     user: { id: user.id, email: user.email ?? '', fullName: (user.user_metadata?.full_name as string | undefined) ?? user.email ?? 'You' },
     membership: { id: row.id, role: row.role, coaches: row.coaches, financial: row.financial, title: row.title },
-    business: row.business,
+    business: row.business!,
+    workspaces: rows.map((r) => ({ businessId: r.business!.id, name: r.business!.name, role: r.role })),
   }
 })

@@ -65,52 +65,81 @@ export interface WeeklyWindow {
   end: number
 }
 
-/** A coach's weekly hours. One per membership; the coach (or an owner/administrator) edits it. */
+/** A person's weekly hours, shared by every business they work with (D-057). Only they edit it. */
 export const availabilitySchedules = pgTable(
   'availability_schedules',
   {
-    membershipId: uuid('membership_id')
+    userId: uuid('user_id')
       .primaryKey()
-      .references(() => memberships.id, { onDelete: 'cascade' }),
-    businessId: uuid('business_id')
-      .notNull()
-      .references(() => businesses.id, { onDelete: 'cascade' }),
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
     timezone: text('timezone').notNull(),
     weeklyHours: jsonb('weekly_hours').$type<WeeklyWindow[]>().notNull().default([]),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index('availability_schedules_business_idx').on(t.businessId),
     check('availability_schedules_weekly_hours_array', sql`jsonb_typeof(${t.weeklyHours}) = 'array'`),
   ],
 )
 
-/** Blocks of time a coach isn't available (vacation, appointments), whatever their weekly hours say. */
+/** Blocks of time a person isn't available, for every business they work with (D-057). Private to them. */
 export const availabilityTimeOff = pgTable(
   'availability_time_off',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    membershipId: uuid('membership_id')
+    userId: uuid('user_id')
       .notNull()
-      .references(() => memberships.id, { onDelete: 'cascade' }),
-    businessId: uuid('business_id')
-      .notNull()
-      .references(() => businesses.id, { onDelete: 'cascade' }),
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
     endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
     note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index('availability_time_off_membership_idx').on(t.membershipId, t.startsAt),
-    index('availability_time_off_business_idx').on(t.businessId),
+    index('availability_time_off_user_idx').on(t.userId, t.startsAt),
     check('availability_time_off_order', sql`${t.endsAt} > ${t.startsAt}`),
     check('availability_time_off_note_length', sql`char_length(${t.note}) <= 200`),
   ],
 )
 
+/**
+ * What one business gets of a person's time (D-057): a subset of their weekly hours (null means all of
+ * them), and which of their calendars that business's bookings go into (null means their default).
+ */
+export const membershipAvailability = pgTable('membership_availability', {
+  membershipId: uuid('membership_id')
+    .primaryKey()
+    .references(() => memberships.id, { onDelete: 'cascade' }),
+  businessId: uuid('business_id')
+    .notNull()
+    .references(() => businesses.id, { onDelete: 'cascade' }),
+  offeredHours: jsonb('offered_hours').$type<WeeklyWindow[]>(),
+  destinationCalendarId: text('destination_calendar_id'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('membership_availability_business_idx').on(t.businessId),
+  check('membership_availability_offered_array', sql`${t.offeredHours} is null or jsonb_typeof(${t.offeredHours}) = 'array'`),
+])
+
 export const locationType = pgEnum('location_type', ['video_link', 'phone', 'in_person'])
-export const bookingStatus = pgEnum('booking_status', ['confirmed', 'cancelled'])
+/** pending_payment holds the time while a guest pays; expired is a hold that ran out. */
+export const BOOKING_STATUSES = ['pending_payment', 'confirmed', 'cancelled', 'expired'] as const
+export const PAYMENT_STATUSES = ['not_required', 'pending', 'paid', 'refunded', 'refund_failed'] as const
+
+/** A business-authored question on a booking page (D-056). */
+export interface BookingQuestion {
+  id: string
+  label: string
+  type: 'short' | 'paragraph' | 'single' | 'multiple'
+  options: string[]
+  required: boolean
+}
+
+/** A guest's answer, stored with a copy of the question so later edits don't change history. */
+export interface BookingAnswer {
+  questionId: string
+  label: string
+  value: string | string[]
+}
 
 /** A public page guests use to book a call with one coach (D-049, first slice of P-21). */
 export const bookingPages = pgTable(
@@ -135,10 +164,19 @@ export const bookingPages = pgTable(
     bufferBeforeMinutes: integer('buffer_before_minutes').notNull().default(0),
     bufferAfterMinutes: integer('buffer_after_minutes').notNull().default(0),
     active: boolean('active').notNull().default(true),
+    // Paid calls (D-056): null means free. Whole US cents.
+    priceCents: integer('price_cents'),
+    // Guests who cancel at least this long before the call get a full refund.
+    refundCutoffHours: integer('refund_cutoff_hours').notNull().default(24),
+    askStudent: boolean('ask_student').notNull().default(false),
+    questions: jsonb('questions').$type<BookingQuestion[]>().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check('booking_pages_price', sql`${t.priceCents} is null or ${t.priceCents} between 50 and 1000000`),
+    check('booking_pages_refund_cutoff', sql`${t.refundCutoffHours} between 0 and 720`),
+    check('booking_pages_questions_array', sql`jsonb_typeof(${t.questions}) = 'array'`),
     uniqueIndex('booking_pages_business_slug_key').on(t.businessId, t.slug),
     index('booking_pages_host_idx').on(t.hostMembershipId),
     check('booking_pages_slug_format', sql`${t.slug} ~ '^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$'`),
@@ -163,10 +201,27 @@ export const bookings = pgTable(
     hostMembershipId: uuid('host_membership_id')
       .notNull()
       .references(() => memberships.id, { onDelete: 'cascade' }),
+    // The person hosting, across all their businesses (D-057). The double-booking guard uses this.
+    hostUserId: uuid('host_user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
     endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
-    status: bookingStatus('status').notNull().default('confirmed'),
+    status: text('status', { enum: BOOKING_STATUSES }).notNull().default('confirmed'),
+    // While pending_payment, the time is held until this moment.
+    holdExpiresAt: timestamp('hold_expires_at', { withTimezone: true }),
+    paymentStatus: text('payment_status', { enum: PAYMENT_STATUSES }).notNull().default('not_required'),
+    priceCents: integer('price_cents'),
+    stripeAccountId: text('stripe_account_id'),
+    stripeCheckoutSessionId: text('stripe_checkout_session_id'),
+    stripePaymentIntentId: text('stripe_payment_intent_id'),
+    refundCutoffHours: integer('refund_cutoff_hours').notNull().default(24),
+    studentName: text('student_name'),
+    studentGrade: text('student_grade'),
+    answers: jsonb('answers').$type<BookingAnswer[]>().notNull().default([]),
+    reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
+    cancelledBy: text('cancelled_by', { enum: ['guest', 'business'] }),
     guestName: text('guest_name').notNull(),
     guestEmail: text('guest_email').notNull(),
     guestNotes: text('guest_notes'),
@@ -180,8 +235,14 @@ export const bookings = pgTable(
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   },
   (t) => [
+    uniqueIndex('bookings_checkout_session_key').on(t.stripeCheckoutSessionId),
+    check('bookings_status', sql`${t.status} in ('pending_payment', 'confirmed', 'cancelled', 'expired')`),
+    check('bookings_payment_status', sql`${t.paymentStatus} in ('not_required', 'pending', 'paid', 'refunded', 'refund_failed')`),
+    check('bookings_cancelled_by', sql`${t.cancelledBy} is null or ${t.cancelledBy} in ('guest', 'business')`),
+    check('bookings_answers_array', sql`jsonb_typeof(${t.answers}) = 'array'`),
     index('bookings_business_starts_idx').on(t.businessId, t.startsAt),
     index('bookings_host_starts_idx').on(t.hostMembershipId, t.startsAt),
+    index('bookings_host_user_starts_idx').on(t.hostUserId, t.startsAt),
     index('bookings_page_idx').on(t.bookingPageId),
     check('bookings_order', sql`${t.endsAt} > ${t.startsAt}`),
     check('bookings_guest_name_length', sql`char_length(${t.guestName}) between 1 and 120`),
@@ -190,20 +251,19 @@ export const bookings = pgTable(
   ],
 )
 
-/** A coach's connected Google Calendar (D-039). Written only by the server; the team can read it. */
+/** A person's connected Google Calendar (D-039, D-057), used by every business they work with. Written
+ *  only by the server; only the person can read it. */
 export const googleCalendarConnections = pgTable(
   'google_calendar_connections',
   {
-    membershipId: uuid('membership_id')
+    userId: uuid('user_id')
       .primaryKey()
-      .references(() => memberships.id, { onDelete: 'cascade' }),
-    businessId: uuid('business_id')
-      .notNull()
-      .references(() => businesses.id, { onDelete: 'cascade' }),
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
     googleEmail: text('google_email').notNull(),
     googleSub: text('google_sub').notNull(),
     scopes: text('scopes').array().notNull(),
-    // Calendars whose busy times block bookings, and the (owned) calendar bookings are added to.
+    // Calendars whose busy times block bookings, and the (owned) calendar bookings go to by default
+    // (each business can choose another: membership_availability.destination_calendar_id).
     busyCalendarIds: text('busy_calendar_ids').array().notNull().default(sql`'{}'::text[]`),
     destinationCalendarId: text('destination_calendar_id'),
     status: text('status').notNull().default('active'),
@@ -212,16 +272,15 @@ export const googleCalendarConnections = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index('google_calendar_connections_business_idx').on(t.businessId),
     check('google_calendar_connections_status', sql`${t.status} in ('active', 'needs_reconnect')`),
   ],
 )
 
 /** The encrypted refresh token for a connection. No API access at all; only the server reads it. */
 export const googleCalendarTokens = pgTable('google_calendar_tokens', {
-  membershipId: uuid('membership_id')
+  userId: uuid('user_id')
     .primaryKey()
-    .references(() => googleCalendarConnections.membershipId, { onDelete: 'cascade' }),
+    .references(() => googleCalendarConnections.userId, { onDelete: 'cascade' }),
   refreshTokenCiphertext: text('refresh_token_ciphertext').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -266,6 +325,7 @@ export type Profile = typeof profiles.$inferSelect
 export type StripeAccountRow = typeof stripeAccounts.$inferSelect
 export type AvailabilitySchedule = typeof availabilitySchedules.$inferSelect
 export type TimeOff = typeof availabilityTimeOff.$inferSelect
+export type MembershipAvailability = typeof membershipAvailability.$inferSelect
 export type MemberRole = (typeof memberRole.enumValues)[number]
 export type BookingPage = typeof bookingPages.$inferSelect
 export type Booking = typeof bookings.$inferSelect

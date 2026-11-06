@@ -6,7 +6,8 @@ import { decryptSecret, encryptSecret } from '@/lib/crypto'
 import { siteUrl } from '@/lib/env'
 import { calendarAllowedFor } from './scopes'
 
-// Server-side Google Calendar access for connected coaches. Plain HTTPS calls to Google's REST APIs.
+// Server-side Google Calendar access. A connection belongs to a person and serves every business they
+// work with (D-057). Plain HTTPS calls to Google's REST APIs.
 
 const clientId = process.env.GOOGLE_CLIENT_ID ?? ''
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? ''
@@ -63,8 +64,7 @@ export async function revokeToken(token: string) {
 // ── Stored connections ───────────────────────────────────────────────────────────────────────────────
 
 export async function saveConnection(input: {
-  membershipId: string
-  businessId: string
+  userId: string
   googleEmail: string
   googleSub: string
   scopes: string[]
@@ -74,7 +74,6 @@ export async function saveConnection(input: {
 }) {
   const sealed = encryptSecret(input.refreshToken, encryptionKey)
   const fields = {
-    businessId: input.businessId,
     googleEmail: input.googleEmail,
     googleSub: input.googleSub,
     scopes: input.scopes,
@@ -85,37 +84,37 @@ export async function saveConnection(input: {
     updatedAt: sql`now()`,
   }
   await adminDb().transaction(async (tx) => {
-    await tx.insert(googleCalendarConnections).values({ membershipId: input.membershipId, ...fields }).onConflictDoUpdate({ target: googleCalendarConnections.membershipId, set: fields })
+    await tx.insert(googleCalendarConnections).values({ userId: input.userId, ...fields }).onConflictDoUpdate({ target: googleCalendarConnections.userId, set: fields })
     await tx
       .insert(googleCalendarTokens)
-      .values({ membershipId: input.membershipId, refreshTokenCiphertext: sealed })
-      .onConflictDoUpdate({ target: googleCalendarTokens.membershipId, set: { refreshTokenCiphertext: sealed, updatedAt: sql`now()` } })
+      .values({ userId: input.userId, refreshTokenCiphertext: sealed })
+      .onConflictDoUpdate({ target: googleCalendarTokens.userId, set: { refreshTokenCiphertext: sealed, updatedAt: sql`now()` } })
   })
-  accessTokens.delete(input.membershipId)
+  accessTokens.delete(input.userId)
 }
 
-export async function getConnection(membershipId: string) {
-  const [row] = await adminDb().select().from(googleCalendarConnections).where(eq(googleCalendarConnections.membershipId, membershipId)).limit(1)
+export async function getConnection(userId: string) {
+  const [row] = await adminDb().select().from(googleCalendarConnections).where(eq(googleCalendarConnections.userId, userId)).limit(1)
   return row
 }
 
 /** Like getConnection, but a database failure is reported instead of breaking the page. */
-export async function lookupConnection(membershipId: string): Promise<{ connection?: Awaited<ReturnType<typeof getConnection>>; failed: boolean }> {
+export async function lookupConnection(userId: string): Promise<{ connection?: Awaited<ReturnType<typeof getConnection>>; failed: boolean }> {
   try {
-    return { connection: await getConnection(membershipId), failed: false }
+    return { connection: await getConnection(userId), failed: false }
   } catch (error) {
     console.error('Looking up the Google Calendar connection failed', error)
     return { failed: true }
   }
 }
 
-export async function updateCalendarChoices(membershipId: string, busyCalendarIds: string[], destinationCalendarId: string | null) {
-  await adminDb().update(googleCalendarConnections).set({ busyCalendarIds, destinationCalendarId, updatedAt: sql`now()` }).where(eq(googleCalendarConnections.membershipId, membershipId))
+export async function updateCalendarChoices(userId: string, busyCalendarIds: string[], destinationCalendarId: string | null) {
+  await adminDb().update(googleCalendarConnections).set({ busyCalendarIds, destinationCalendarId, updatedAt: sql`now()` }).where(eq(googleCalendarConnections.userId, userId))
 }
 
 /** Forget the connection and revoke our access at Google. */
-export async function disconnect(membershipId: string) {
-  const [token] = await adminDb().select().from(googleCalendarTokens).where(eq(googleCalendarTokens.membershipId, membershipId)).limit(1)
+export async function disconnect(userId: string) {
+  const [token] = await adminDb().select().from(googleCalendarTokens).where(eq(googleCalendarTokens.userId, userId)).limit(1)
   if (token) {
     try {
       await revokeToken(decryptSecret(token.refreshTokenCiphertext, encryptionKey))
@@ -123,43 +122,43 @@ export async function disconnect(membershipId: string) {
       // Revoking is a courtesy; deleting our copy is what matters.
     }
   }
-  await adminDb().delete(googleCalendarConnections).where(eq(googleCalendarConnections.membershipId, membershipId))
-  accessTokens.delete(membershipId)
+  await adminDb().delete(googleCalendarConnections).where(eq(googleCalendarConnections.userId, userId))
+  accessTokens.delete(userId)
 }
 
-async function markNeedsReconnect(membershipId: string, reason: string) {
-  await adminDb().update(googleCalendarConnections).set({ status: 'needs_reconnect', lastError: reason.slice(0, 300), updatedAt: sql`now()` }).where(eq(googleCalendarConnections.membershipId, membershipId))
+async function markNeedsReconnect(userId: string, reason: string) {
+  await adminDb().update(googleCalendarConnections).set({ status: 'needs_reconnect', lastError: reason.slice(0, 300), updatedAt: sql`now()` }).where(eq(googleCalendarConnections.userId, userId))
 }
 
 // Access tokens last an hour; keep them in memory for the life of this server instance.
 const accessTokens = new Map<string, { token: string; expiresAt: number }>()
 
-async function accessTokenFor(membershipId: string): Promise<string> {
-  const cached = accessTokens.get(membershipId)
+async function accessTokenFor(userId: string): Promise<string> {
+  const cached = accessTokens.get(userId)
   if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token
-  const [row] = await adminDb().select().from(googleCalendarTokens).where(eq(googleCalendarTokens.membershipId, membershipId)).limit(1)
+  const [row] = await adminDb().select().from(googleCalendarTokens).where(eq(googleCalendarTokens.userId, userId)).limit(1)
   if (!row) throw new GoogleReconnectNeeded('No stored token')
   try {
     const t = await tokenRequest({ grant_type: 'refresh_token', refresh_token: decryptSecret(row.refreshTokenCiphertext, encryptionKey) })
-    accessTokens.set(membershipId, { token: t.access_token, expiresAt: Date.now() + t.expires_in * 1000 })
+    accessTokens.set(userId, { token: t.access_token, expiresAt: Date.now() + t.expires_in * 1000 })
     return t.access_token
   } catch (error) {
-    if (error instanceof GoogleReconnectNeeded) await markNeedsReconnect(membershipId, 'Google access was revoked or expired. Reconnect to keep syncing.')
+    if (error instanceof GoogleReconnectNeeded) await markNeedsReconnect(userId, 'Google access was revoked or expired. Reconnect to keep syncing.')
     throw error
   }
 }
 
 /** Calls a Google Calendar API endpoint as the coach. */
-export async function calendarApi<T>(membershipId: string, path: string, init: RequestInit = {}): Promise<T> {
-  const token = await accessTokenFor(membershipId)
+export async function calendarApi<T>(userId: string, path: string, init: RequestInit = {}): Promise<T> {
+  const token = await accessTokenFor(userId)
   const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
     ...init,
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...init.headers },
     cache: 'no-store',
   })
   if (res.status === 401) {
-    accessTokens.delete(membershipId)
-    await markNeedsReconnect(membershipId, 'Google rejected our access. Reconnect to keep syncing.')
+    accessTokens.delete(userId)
+    await markNeedsReconnect(userId, 'Google rejected our access. Reconnect to keep syncing.')
     throw new GoogleReconnectNeeded('401 from Google Calendar')
   }
   if (!res.ok) throw new Error(`Google Calendar ${init.method ?? 'GET'} ${path.split('?')[0]} failed: ${res.status}`)

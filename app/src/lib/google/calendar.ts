@@ -13,12 +13,12 @@ export interface CalendarSummary {
 }
 
 /** calendar.calendarlist.readonly: the coach's calendars, so they can choose which count as busy. */
-export async function listCalendars(membershipId: string): Promise<CalendarSummary[]> {
+export async function listCalendars(userId: string): Promise<CalendarSummary[]> {
   const out: CalendarSummary[] = []
   let pageToken: string | undefined
   do {
     const page = await calendarApi<{ items?: { id: string; summary?: string; summaryOverride?: string; primary?: boolean; accessRole: string; hidden?: boolean; deleted?: boolean }[]; nextPageToken?: string }>(
-      membershipId,
+      userId,
       `/users/me/calendarList?maxResults=250${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`,
     )
     for (const c of page.items ?? []) {
@@ -31,9 +31,9 @@ export async function listCalendars(membershipId: string): Promise<CalendarSumma
 }
 
 /** calendar.freebusy: busy blocks only (no titles or details) across the chosen calendars. */
-export async function busyTimes(membershipId: string, calendarIds: string[], from: Date, to: Date): Promise<Interval[]> {
+export async function busyTimes(userId: string, calendarIds: string[], from: Date, to: Date): Promise<Interval[]> {
   if (calendarIds.length === 0) return []
-  const res = await calendarApi<{ calendars: Record<string, { busy?: { start: string; end: string }[]; errors?: unknown[] }> }>(membershipId, '/freeBusy', {
+  const res = await calendarApi<{ calendars: Record<string, { busy?: { start: string; end: string }[]; errors?: unknown[] }> }>(userId, '/freeBusy', {
     method: 'POST',
     body: JSON.stringify({ timeMin: from.toISOString(), timeMax: to.toISOString(), items: calendarIds.map((id) => ({ id })) }),
   })
@@ -74,17 +74,17 @@ function eventBody(e: BookingEvent) {
 }
 
 /** calendar.events.owned: add a booking to the coach's chosen calendar. Returns Google's event ID. */
-export async function createBookingEvent(membershipId: string, calendarId: string, e: BookingEvent): Promise<string> {
-  const created = await calendarApi<{ id: string }>(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=${e.notify ? 'all' : 'none'}`, { method: 'POST', body: JSON.stringify(eventBody(e)) })
+export async function createBookingEvent(userId: string, calendarId: string, e: BookingEvent): Promise<string> {
+  const created = await calendarApi<{ id: string }>(userId, `/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=${e.notify ? 'all' : 'none'}`, { method: 'POST', body: JSON.stringify(eventBody(e)) })
   return created.id
 }
 
 /** calendar.events.owned: change an event schedulefa.st created (reschedules). */
-export async function updateBookingEvent(membershipId: string, calendarId: string, eventId: string, e: BookingEvent) {
-  await calendarApi(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${e.notify ? 'all' : 'none'}`, { method: 'PUT', body: JSON.stringify(eventBody(e)) })
+export async function updateBookingEvent(userId: string, calendarId: string, eventId: string, e: BookingEvent) {
+  await calendarApi(userId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${e.notify ? 'all' : 'none'}`, { method: 'PUT', body: JSON.stringify(eventBody(e)) })
 }
 
 /** calendar.events.owned: remove an event schedulefa.st created (cancellations). */
-export async function deleteBookingEvent(membershipId: string, calendarId: string, eventId: string, notify = false) {
-  await calendarApi(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${notify ? 'all' : 'none'}`, { method: 'DELETE' })
+export async function deleteBookingEvent(userId: string, calendarId: string, eventId: string, notify = false) {
+  await calendarApi(userId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${notify ? 'all' : 'none'}`, { method: 'DELETE' })
 }

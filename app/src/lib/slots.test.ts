@@ -101,3 +101,19 @@ describe('weekly hours', () => {
     expect(weeklyHoursSchema.safeParse([{ day: 1, start: 540, end: 720 }, { day: 1, start: 780, end: 1020 }, { day: 2, start: 540, end: 720 }]).success).toBe(true)
   })
 })
+
+describe('intersect', () => {
+  it('keeps only the overlap, so a business gets just the hours it is offered', async () => {
+    const { intersect } = await import('./slots')
+    const day = [{ start: at('2026-11-10T14:00:00Z'), end: at('2026-11-10T22:00:00Z') }] // 9–5 EST
+    const offered = [
+      { start: at('2026-11-10T13:00:00Z'), end: at('2026-11-10T16:00:00Z') }, // 8–11
+      { start: at('2026-11-10T19:00:00Z'), end: at('2026-11-10T23:00:00Z') }, // 2–6
+    ]
+    expect(intersect(day, offered).map((i) => [iso(i.start), iso(i.end)])).toEqual([
+      ['2026-11-10T14:00:00.000Z', '2026-11-10T16:00:00.000Z'],
+      ['2026-11-10T19:00:00.000Z', '2026-11-10T22:00:00.000Z'],
+    ])
+    expect(intersect(day, [])).toEqual([])
+  })
+})

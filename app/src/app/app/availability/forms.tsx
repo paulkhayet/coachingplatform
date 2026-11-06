@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { US_TIME_ZONES } from '@/lib/validation'
 import { MINUTES_PER_DAY, WEEKDAYS, formatClock, parseClock } from '@/lib/slots'
 import type { WeeklyWindow } from '@/db/schema'
-import { addTimeOff, saveAvailability, saveCalendarChoices, type AvailabilityState } from './actions'
+import { addTimeOff, saveAvailability, saveBusinessOffer, saveCalendarChoices, type AvailabilityState } from './actions'
 
 const selectClass =
   'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]'
@@ -19,19 +19,58 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 type Row = { start: string; end: string }
 
-export function WeeklyHoursForm({ initial, timezone, saved }: { initial: WeeklyWindow[]; timezone: string; saved: boolean }) {
-  const [state, action, pending] = useActionState<AvailabilityState, FormData>(saveAvailability, {})
+function useDays(initial: WeeklyWindow[]) {
   const [days, setDays] = useState<Record<number, Row[]>>(() => {
     const out: Record<number, Row[]> = {}
     for (const w of initial) (out[w.day] ??= []).push({ start: formatClock(w.start), end: w.end === MINUTES_PER_DAY ? '24:00' : formatClock(w.end) })
     return out
   })
-
   const update = (day: number, rows: Row[]) => setDays((d) => ({ ...d, [day]: rows }))
   const weekly: WeeklyWindow[] = DAY_ORDER.flatMap((day) =>
     (days[day] ?? []).map((r) => ({ day, start: parseClock(r.start) ?? -1, end: parseClock(r.end === '00:00' ? '24:00' : r.end) ?? -1 })),
   )
+  return { days, update, weekly }
+}
 
+/** One row per weekday with any number of time ranges. */
+function DayRows({ days, update, offLabel = 'Unavailable' }: { days: Record<number, Row[]>; update: (day: number, rows: Row[]) => void; offLabel?: string }) {
+  return (
+    <div className="divide-y rounded-lg border">
+      {DAY_ORDER.map((day) => {
+        const rows = days[day] ?? []
+        const on = rows.length > 0
+        return (
+          <div key={day} className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3">
+            <label className="flex w-32 shrink-0 items-center gap-2 pt-1.5 text-sm font-medium">
+              <input type="checkbox" className="accent-primary size-4" checked={on} onChange={(e) => update(day, e.target.checked ? [{ start: '09:00', end: '17:00' }] : [])} />
+              {WEEKDAYS[day]}
+            </label>
+            <div className="grid flex-1 gap-2">
+              {!on && <span className="text-muted-foreground pt-1.5 text-sm">{offLabel}</span>}
+              {rows.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input type="time" step={900} value={r.start} aria-label={`${WEEKDAYS[day]} start`} className="w-32" onChange={(e) => update(day, rows.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))} />
+                  <span className="text-muted-foreground text-sm">to</span>
+                  <Input type="time" step={900} value={r.end === '24:00' ? '00:00' : r.end} aria-label={`${WEEKDAYS[day]} end`} className="w-32" onChange={(e) => update(day, rows.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))} />
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove these hours" onClick={() => update(day, rows.filter((_, j) => j !== i))}><X /></Button>
+                </div>
+              ))}
+              {on && (
+                <Button type="button" variant="ghost" size="sm" className="justify-self-start" onClick={() => update(day, [...rows, { start: '13:00', end: '17:00' }])}>
+                  <Plus /> Add hours
+                </Button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function WeeklyHoursForm({ initial, timezone, saved }: { initial: WeeklyWindow[]; timezone: string; saved: boolean }) {
+  const [state, action, pending] = useActionState<AvailabilityState, FormData>(saveAvailability, {})
+  const { days, update, weekly } = useDays(initial)
   return (
     <form action={action} className="grid gap-5">
       <input type="hidden" name="weekly" value={JSON.stringify(weekly)} />
@@ -47,37 +86,47 @@ export function WeeklyHoursForm({ initial, timezone, saved }: { initial: WeeklyW
           {US_TIME_ZONES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
       </div>
-      <div className="divide-y rounded-lg border">
-        {DAY_ORDER.map((day) => {
-          const rows = days[day] ?? []
-          const on = rows.length > 0
-          return (
-            <div key={day} className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3">
-              <label className="flex w-32 shrink-0 items-center gap-2 pt-1.5 text-sm font-medium">
-                <input type="checkbox" className="accent-primary size-4" checked={on} onChange={(e) => update(day, e.target.checked ? [{ start: '09:00', end: '17:00' }] : [])} />
-                {WEEKDAYS[day]}
-              </label>
-              <div className="grid flex-1 gap-2">
-                {!on && <span className="text-muted-foreground pt-1.5 text-sm">Unavailable</span>}
-                {rows.map((r, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input type="time" step={900} value={r.start} aria-label={`${WEEKDAYS[day]} start`} className="w-32" onChange={(e) => update(day, rows.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))} />
-                    <span className="text-muted-foreground text-sm">to</span>
-                    <Input type="time" step={900} value={r.end === '24:00' ? '00:00' : r.end} aria-label={`${WEEKDAYS[day]} end`} className="w-32" onChange={(e) => update(day, rows.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))} />
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove these hours" onClick={() => update(day, rows.filter((_, j) => j !== i))}><X /></Button>
-                  </div>
-                ))}
-                {on && (
-                  <Button type="button" variant="ghost" size="sm" className="justify-self-start" onClick={() => update(day, [...rows, { start: '13:00', end: '17:00' }])}>
-                    <Plus /> Add hours
-                  </Button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      <DayRows days={days} update={update} />
       <Button type="submit" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : 'Save hours'}</Button>
+    </form>
+  )
+}
+
+/** What one business gets of your time (D-057): all your hours or only some, and which calendar its bookings go into. */
+export function BusinessOfferForm({ businessName, offered, personal, calendars, destination }: { businessName: string; offered: WeeklyWindow[] | null; personal: WeeklyWindow[]; calendars: { id: string; name: string; primary: boolean; owned: boolean }[] | null; destination: string }) {
+  const [state, action, pending] = useActionState<AvailabilityState, FormData>(saveBusinessOffer, {})
+  const [mode, setMode] = useState<'all' | 'some'>(offered ? 'some' : 'all')
+  const { days, update, weekly } = useDays(offered ?? personal)
+  return (
+    <form action={action} className="grid gap-5">
+      <input type="hidden" name="weekly" value={JSON.stringify(weekly)} />
+      {state.message && <Alert variant={state.ok ? 'success' : 'destructive'}><AlertDescription>{state.message}</AlertDescription></Alert>}
+      <fieldset className="grid gap-2 text-sm">
+        <label className="flex items-center gap-2">
+          <input type="radio" name="mode" value="all" checked={mode === 'all'} onChange={() => setMode('all')} className="accent-primary size-4" />
+          Offer {businessName} all my weekly hours
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="radio" name="mode" value="some" checked={mode === 'some'} onChange={() => setMode('some')} className="accent-primary size-4" />
+          Only offer {businessName} some of my hours
+        </label>
+      </fieldset>
+      {mode === 'some' && (
+        <>
+          <p className="text-muted-foreground text-xs">{businessName} can book you only when these hours overlap your weekly hours, outside your time off and other bookings.</p>
+          <DayRows days={days} update={update} offLabel="Not offered" />
+        </>
+      )}
+      {calendars && (
+        <div className="grid gap-1.5 sm:max-w-sm">
+          <Label htmlFor="offer-destination">Add {businessName} bookings to</Label>
+          <select id="offer-destination" name="destination" defaultValue={destination} className={selectClass}>
+            <option value="">My default calendar</option>
+            {calendars.filter((c) => c.owned).map((c) => <option key={c.id} value={c.id}>{c.name}{c.primary ? ' (main)' : ''}</option>)}
+          </select>
+        </div>
+      )}
+      <Button type="submit" variant="outline" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : 'Save'}</Button>
     </form>
   )
 }
@@ -88,7 +137,7 @@ export function CalendarChoicesForm({ calendars, busy, destination }: { calendar
     <form action={action} className="grid gap-4">
       {state.message && <Alert variant={state.ok ? 'success' : 'destructive'}><AlertDescription>{state.message}</AlertDescription></Alert>}
       <fieldset className="grid gap-2">
-        <legend className="mb-1 text-sm font-medium">Check these calendars for conflicts</legend>
+        <legend className="mb-1 text-sm font-medium">Check these calendars for conflicts (for all your businesses)</legend>
         {calendars.map((c) => (
           <label key={c.id} className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="busy" value={c.id} defaultChecked={busy.includes(c.id)} className="accent-primary size-4" />
@@ -97,7 +146,7 @@ export function CalendarChoicesForm({ calendars, busy, destination }: { calendar
         ))}
       </fieldset>
       <div className="grid gap-1.5 sm:max-w-sm">
-        <Label htmlFor="destination">Add new bookings to</Label>
+        <Label htmlFor="destination">Add bookings to (default)</Label>
         <select id="destination" name="destination" defaultValue={destination} className={selectClass}>
           {calendars.filter((c) => c.owned).map((c) => <option key={c.id} value={c.id}>{c.name}{c.primary ? ' (main)' : ''}</option>)}
         </select>
@@ -124,7 +173,7 @@ export function TimeOffForm({ timezone }: { timezone: string }) {
         </div>
       </div>
       <div className="grid gap-1.5">
-        <Label htmlFor="note">Note <span className="text-muted-foreground font-normal">(optional, only your team sees it)</span></Label>
+        <Label htmlFor="note">Note <span className="text-muted-foreground font-normal">(optional, only you see it)</span></Label>
         <Input id="note" name="note" maxLength={200} placeholder="Vacation" />
       </div>
       <Button type="submit" variant="outline" className="justify-self-start" disabled={pending}>{pending ? 'Adding…' : 'Add time off'}</Button>

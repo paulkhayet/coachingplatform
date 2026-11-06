@@ -193,6 +193,23 @@ export function merge(intervals: Interval[]): Interval[] {
   return out
 }
 
+/** The times inside both sets of intervals. */
+export function intersect(a: Interval[], b: Interval[]): Interval[] {
+  const out: Interval[] = []
+  const x = merge(a)
+  const y = merge(b)
+  let i = 0
+  let j = 0
+  while (i < x.length && j < y.length) {
+    const start = Math.max(x[i].start.getTime(), y[j].start.getTime())
+    const end = Math.min(x[i].end.getTime(), y[j].end.getTime())
+    if (end > start) out.push({ start: new Date(start), end: new Date(end) })
+    if (x[i].end.getTime() < y[j].end.getTime()) i++
+    else j++
+  }
+  return out
+}
+
 export function subtract(base: Interval[], remove: Interval[]): Interval[] {
   let result = merge(base)
   for (const r of merge(remove)) {

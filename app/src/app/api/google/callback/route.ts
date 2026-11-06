@@ -15,7 +15,7 @@ function sameString(a: string, b: string) {
 
 /** Google sends the coach back here after the consent screen. */
 export async function GET(request: Request) {
-  const { user, membership, business } = await requireWorkspace()
+  const { user } = await requireWorkspace()
   const params = new URL(request.url).searchParams
   const jar = await cookies()
   const raw = jar.get(OAUTH_COOKIE)?.value
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   if (params.get('error')) redirect(`${AVAILABILITY}?calendar=denied`)
   if (!isGoogleCalendarConfigured || !calendarAllowed(user.email)) redirect(`${AVAILABILITY}?calendar=not_available`)
 
-  let saved: { state: string; verifier: string; membershipId: string } | null = null
+  let saved: { state: string; verifier: string; userId: string } | null = null
   try {
     saved = raw ? JSON.parse(raw) : null
   } catch {
@@ -32,8 +32,8 @@ export async function GET(request: Request) {
   }
   const code = params.get('code')
   const state = params.get('state') ?? ''
-  // The reply must match the request this browser started, for this person's membership.
-  if (!saved || !code || !sameString(state, saved.state) || saved.membershipId !== membership.id) redirect(`${AVAILABILITY}?calendar=expired`)
+  // The reply must match the request this browser started, for this same person.
+  if (!saved || !code || !sameString(state, saved.state) || saved.userId !== user.id) redirect(`${AVAILABILITY}?calendar=expired`)
 
   let outcome = 'connected'
   try {
@@ -46,9 +46,9 @@ export async function GET(request: Request) {
       outcome = 'error'
     } else {
       const claims = idTokenClaims(tokens.id_token)
+      // The connection belongs to the person and serves every business they work with (D-057).
       await saveConnection({
-        membershipId: membership.id,
-        businessId: business.id,
+        userId: user.id,
         googleEmail: claims.email,
         googleSub: claims.sub,
         scopes: tokens.scope.split(' '),
