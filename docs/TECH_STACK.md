@@ -24,7 +24,7 @@ Every choice below is confirmed and recorded in the [product plan](PRODUCT_PLAN.
 
 | Need | Choice | Status | Notes |
 | --- | --- | --- | --- |
-| Coaching payments | **Stripe Connect** | Confirmed — D-041 | Families pay each business directly. There is no schedulefa.st fee (D-042). The Connect account and fund-flow model is still open (Q-01). |
+| Coaching payments | **Stripe Connect** | Confirmed — D-041 | Families pay each business directly. There is no schedulefa.st fee (D-042). Standard accounts with direct charges (D-055): each business is the seller and pays Stripe's fees. |
 | schedulefa.st subscriptions | **Stripe Billing** | Confirmed — D-052 | Same Stripe account as Connect, so no extra service. |
 | E-signatures | **DocuSeal Cloud** (hosted) | Confirmed — D-051, D-052 | Embedded React signing inside the guest offer flow, templates, multiple signers, audit trail, and notifications back to the app when a document is signed. Hosted, because self-hosting would need a host other than Vercel. Keep your own copy of each signed PDF in Supabase Storage. |
 | Email | **Resend** | Confirmed — D-052 | Transactional email for the app, and Supabase Auth's production email (Supabase's built-in email is for development only). |
@@ -48,7 +48,7 @@ Google and Zoom each need a registered developer app, but coaches connect their 
 
 ## Still open
 
-- Stripe Connect account type and fund flow (Q-01).
+- Stripe's review of the schedulefa.st platform account and the onboarding flow for businesses (account model decided in D-055).
 - OpenAI model choice, processing and data-retention terms, quality tests with representative coaching examples, usage limits and costs.
 - Legal review of signing requirements for agreements involving minors (Q-02).
 - Privacy review for minors' data (COPPA, state student-privacy laws) and consent for session recording and AI summaries.

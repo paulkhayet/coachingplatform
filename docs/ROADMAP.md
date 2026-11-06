@@ -17,7 +17,8 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 | Task | Why | Owner | Status |
 | --- | --- | --- | --- |
 | Interview 15–20 businesses using the prototype; aim for 3 paid-pilot commitments | Validation gate in the competitive analysis (§10) | Founder | Not started |
-| Decide the Stripe Connect account type and fund flow (Q-01) | Blocks every payment feature | Founder | Open |
+| Decide the Stripe Connect account type and fund flow (Q-01) | Blocks every payment feature | Founder | Done 2026-11-06: Standard accounts, direct charges (D-055) |
+| Create the schedulefa.st Stripe account, turn on Connect and complete the platform profile | Stripe reviews platforms before businesses can connect; needed for phase 2 | Founder | Not started |
 | Start Google OAuth app verification for calendar access | Takes weeks; needed for phase 2 | Founder | Not started |
 | Register the Zoom app | Marketplace review takes time; needed for phase 2 | Founder | Not started |
 | Legal review: e-signing for minors, COPPA and state student-privacy law, recording and AI-summary consent (Q-02) | Required before real families use it | Founder + lawyer | Not started |
@@ -32,7 +33,7 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 | # | Phase | Delivers | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | 1 | **Foundation** | Next.js app in `app/` on Vercel; Supabase dev and prod projects; Drizzle migrations; businesses, staff memberships and row-level security; Supabase Auth sign-in; "create your business" onboarding; shadcn UI brought over from the prototype; CI (typecheck, unit tests, build) | — | Done — live at www.schedulefa.st (2026-11-05) |
-| 2 | **Booking pages** (first usable slice) | Coach availability; Google Calendar connection (busy times in, bookings out); booking pages with questionnaires; public booking flow; double-booking prevented by a Postgres constraint; Stripe Connect checkout and refunds for paid calls; Zoom links; Resend confirmations and reminders via pg_cron; guest reschedule and cancel page | 1, Q-01, Google verification, Zoom app | Not started |
+| 2 | **Booking pages** (first usable slice) | Coach availability; Google Calendar connection (busy times in, bookings out); booking pages with questionnaires; public booking flow; double-booking prevented by a Postgres constraint; Stripe Connect checkout and refunds for paid calls; Zoom links; Resend confirmations and reminders via pg_cron; guest reschedule and cancel page | 1, Stripe platform account, Google verification, Zoom app | Not started |
 | 3 | **Clients and credits** | Students, guardians and their separate permissions; offerings and session types; purchases; the append-only credit ledger and funding rules (ported from the prototype's `credits.ts`, `booking.ts`, `permissions.ts` with tests first) | 1 | Not started |
 | 4 | **Enrollment** | Inquiries and the guided intake workflow; offers and versions; DocuSeal embedded signing; Stripe installments funding credits; portal invitations; parent and student portals | 2, 3, legal review | Not started |
 | 5 | **Coaching** | Sessions, attendance, cancellations and makeups; Zoom summary import; private notes; OpenAI follow-up drafts with recipient permission checks; homework and files | 3, 4 | Not started |
