@@ -15,6 +15,13 @@
       "when": 1793919534413,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793923899562,
+      "tag": "0002_advisor_fixes",
+      "breakpoints": true
     }
   ]
 }

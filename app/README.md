@@ -39,6 +39,8 @@ npm run db:migrate                           # apply to DATABASE_URL
 
 Every new business-owned table needs a `business_id` column, `ENABLE ROW LEVEL SECURITY`, policies, and tests in `tests/db/`.
 
+Helper functions that policies call (`is_member`, `has_role`) live in the `private` schema, which the Supabase API doesn't expose. Only functions the app calls as RPCs (like `create_business`) belong in `public`.
+
 ## Tests
 
 ```sh

@@ -20,6 +20,7 @@ export const businesses = pgTable(
   },
   (t) => [
     uniqueIndex('businesses_slug_key').on(t.slug),
+    index('businesses_created_by_idx').on(t.createdBy),
     check('businesses_slug_format', sql`${t.slug} ~ '^[a-z0-9](?:[a-z0-9-]{1,48}[a-z0-9])$'`),
     check('businesses_name_length', sql`char_length(${t.name}) between 2 and 80`),
   ],

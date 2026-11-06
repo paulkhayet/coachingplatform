@@ -43,8 +43,11 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 - [x] Onboarding: create a business and become its owner (one transaction)
 - [x] Signed-in app shell with the business's workspace and team list
 - [x] Unit tests (Vitest) and GitHub Actions CI
-- [ ] Create Supabase dev and prod projects and add their keys (founder)
-- [ ] Run the migrations against the dev project (`npm run db:migrate`) and sign up end to end
+- [x] Create the Supabase dev project and add its keys to `app/.env.local` (founder)
+- [ ] Create the Supabase prod project and add its keys (founder)
+- [x] Run the migrations against the dev project (`npm run db:migrate`) and sign up end to end (sign up, confirm, create a business, Team page)
+- [x] Fix the Supabase advisor findings (`0002_advisor_fixes`: RLS helpers moved to the `private` schema, index on `businesses.created_by`)
+- [ ] Make email confirmation links work in any browser: in Supabase → Authentication → Email Templates → Confirm signup, link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding` (today's PKCE link fails with "link" error if opened in a different browser than the one used to sign up) (founder, dev and prod)
 - [ ] Connect the repository to Vercel (root directory `app`) and add the environment variables (founder)
 
 ## Changing this roadmap
