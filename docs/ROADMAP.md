@@ -23,7 +23,8 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 | Legal review: e-signing for minors, COPPA and state student-privacy law, recording and AI-summary consent (Q-02) | Required before real families use it | Founder + lawyer | Not started |
 | Twilio A2P 10DLC registration | Only when SMS is turned on (optional, D-047) | Founder | Later |
 | Send Supabase Auth email through Resend (custom SMTP) in prod | Supabase's built-in email only reaches organization members, a few per hour | Founder | Before real customers sign up |
-| Show schedulefa.st instead of the Supabase project address on Google's sign-in screen (Supabase custom domain add-on) | Users currently see "continue to ivabhbbbrggaulfgniem.supabase.co" | Founder | Before real customers sign up |
+| Show schedulefa.st on Google's sign-in screen | Google app published (In production), schedulefa.st verified in Search Console (keep the TXT record), branding verified with /privacy and /terms. The Supabase custom domain add-on stays optional | Founder | Done 2026-11-05 |
+| Legal review of the privacy policy and terms at /privacy and /terms | Plain-language versions went live for Google brand verification; part of Q-02 | Founder + lawyer | Before real families use it |
 | Redirect `schedulefa.st` to `www.schedulefa.st` in Vercel → Domains | The bare domain did not load when tested on 2026-11-05 | Founder | Open |
 
 ## Phases
