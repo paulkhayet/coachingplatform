@@ -22,12 +22,15 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 | Register the Zoom app | Marketplace review takes time; needed for phase 2 | Founder | Not started |
 | Legal review: e-signing for minors, COPPA and state student-privacy law, recording and AI-summary consent (Q-02) | Required before real families use it | Founder + lawyer | Not started |
 | Twilio A2P 10DLC registration | Only when SMS is turned on (optional, D-047) | Founder | Later |
+| Send Supabase Auth email through Resend (custom SMTP) in prod | Supabase's built-in email only reaches organization members, a few per hour | Founder | Before real customers sign up |
+| Show schedulefa.st instead of the Supabase project address on Google's sign-in screen (Supabase custom domain add-on) | Users currently see "continue to ivabhbbbrggaulfgniem.supabase.co" | Founder | Before real customers sign up |
+| Redirect `schedulefa.st` to `www.schedulefa.st` in Vercel → Domains | The bare domain did not load when tested on 2026-11-05 | Founder | Open |
 
 ## Phases
 
 | # | Phase | Delivers | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| 1 | **Foundation** | Next.js app in `app/` on Vercel; Supabase dev and prod projects; Drizzle migrations; businesses, staff memberships and row-level security; Supabase Auth sign-in; "create your business" onboarding; shadcn UI brought over from the prototype; CI (typecheck, unit tests, build) | — | In progress |
+| 1 | **Foundation** | Next.js app in `app/` on Vercel; Supabase dev and prod projects; Drizzle migrations; businesses, staff memberships and row-level security; Supabase Auth sign-in; "create your business" onboarding; shadcn UI brought over from the prototype; CI (typecheck, unit tests, build) | — | Done — live at www.schedulefa.st (2026-11-05) |
 | 2 | **Booking pages** (first usable slice) | Coach availability; Google Calendar connection (busy times in, bookings out); booking pages with questionnaires; public booking flow; double-booking prevented by a Postgres constraint; Stripe Connect checkout and refunds for paid calls; Zoom links; Resend confirmations and reminders via pg_cron; guest reschedule and cancel page | 1, Q-01, Google verification, Zoom app | Not started |
 | 3 | **Clients and credits** | Students, guardians and their separate permissions; offerings and session types; purchases; the append-only credit ledger and funding rules (ported from the prototype's `credits.ts`, `booking.ts`, `permissions.ts` with tests first) | 1 | Not started |
 | 4 | **Enrollment** | Inquiries and the guided intake workflow; offers and versions; DocuSeal embedded signing; Stripe installments funding credits; portal invitations; parent and student portals | 2, 3, legal review | Not started |
@@ -44,15 +47,16 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 - [x] Signed-in app shell with the business's workspace and team list
 - [x] Unit tests (Vitest) and GitHub Actions CI
 - [x] Create the Supabase dev project and add its keys to `app/.env.local` (founder)
-- [ ] Create the Supabase prod project and add its keys (founder)
+- [x] Create the Supabase prod project, apply the migrations and add its keys (founder)
 - [x] Run the migrations against the dev project (`npm run db:migrate`) and sign up end to end (sign up, confirm, create a business, Team page)
 - [x] Fix the Supabase advisor findings (`0002_advisor_fixes`: RLS helpers moved to the `private` schema, index on `businesses.created_by`)
 - [x] Sign in with Google, and with an emailed sign-in link for existing accounts (D-053)
-- [ ] Turn on Google sign-in: create a Google Cloud OAuth client (Web application, redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`), then paste its client ID and secret into Supabase → Authentication → Sign In / Providers → Google (founder; dev done, prod to do)
-- [ ] Make email links work in any browser, in Supabase → Authentication → Emails → Templates (founder; dev done, prod to do). The default links fail with the "link" error if opened in a different browser than the one used to sign up:
+- [x] Turn on Google sign-in: create a Google Cloud OAuth client (Web application, redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`), then paste its client ID and secret into Supabase → Authentication → Sign In / Providers → Google (founder; dev and prod)
+- [x] Make email links work in any browser, in Supabase → Authentication → Emails → Templates (founder; dev and prod). The default links fail with the "link" error if opened in a different browser than the one used to sign up:
   - Confirm signup: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding`
   - Magic Link: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`
-- [ ] Connect the repository to Vercel (root directory `app`) and add the environment variables (founder)
+- [x] Connect the repository to Vercel (root directory `app`), add the environment variables and the www.schedulefa.st domain (founder)
+- [x] Sign up end to end on the live site with Google (sign in, create a business, Team page)
 
 ## Changing this roadmap
 
