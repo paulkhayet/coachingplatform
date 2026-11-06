@@ -112,6 +112,10 @@ export function SignUpForm() {
           <Field id="email" label="Work email" type="email" autoComplete="email" defaultValue={state.values?.email} error={state.errors?.email} />
           <Field id="password" label="Password" type="password" autoComplete="new-password" error={state.errors?.password} />
           <Button type="submit" disabled={pending}>{pending ? 'Creating account…' : 'Create account'}</Button>
+          <p className="text-muted-foreground text-center text-xs">
+            By creating an account you agree to the <Link href="/terms" className="hover:text-foreground underline">Terms of Service</Link> and{' '}
+            <Link href="/privacy" className="hover:text-foreground underline">Privacy Policy</Link>.
+          </p>
           <p className="text-muted-foreground text-center text-sm">Already have an account? <Link href="/sign-in" className="text-primary font-medium hover:underline">Sign in</Link></p>
         </form>
       </CardContent>
