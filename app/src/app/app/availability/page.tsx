@@ -41,6 +41,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
   // Preview: what's open from now to the end of the 7th day, after time off.
   const today = zonedParts(now, timezone)
   const until = zonedTime(today.year, today.month, today.day + PREVIEW_DAYS, 0, timezone)
+  // (The preview shows open ranges, not start times, so clipping at "now" is right here.)
   let open = schedule
     ? openIntervals(weekly, timezone, now, until, (timeOff ?? []).map((t) => ({ start: new Date(t.starts_at), end: new Date(t.ends_at) })))
     : []

@@ -43,6 +43,13 @@
       "when": 1793992407386,
       "tag": "0005_google_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794002524641,
+      "tag": "0006_booking_pages",
+      "breakpoints": true
     }
   ]
 }

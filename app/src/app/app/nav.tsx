@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarClock, CreditCard, Home, UsersRound } from 'lucide-react'
+import { CalendarCheck, CalendarClock, CreditCard, Home, Link2, UsersRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const items = [
   { href: '/app', label: 'Today', icon: Home },
+  { href: '/app/bookings', label: 'Bookings', icon: CalendarCheck },
+  { href: '/app/booking-pages', label: 'Booking pages', icon: Link2 },
   { href: '/app/availability', label: 'Availability', icon: CalendarClock },
   { href: '/app/team', label: 'Team', icon: UsersRound },
   { href: '/app/settings/payments', label: 'Payments', icon: CreditCard },

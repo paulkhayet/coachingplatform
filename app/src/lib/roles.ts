@@ -5,6 +5,8 @@ export const roleLabel: Record<MemberRole, string> = { owner: 'Owner', admin: 'A
 /** Mirrors the database policies; the database remains the source of truth. */
 export const canManageTeam = (role: MemberRole) => role === 'owner'
 export const canSeePricing = (role: MemberRole) => role === 'owner' || role === 'admin'
+/** Who can change a booking: its host, or an owner/administrator of the business. */
+export const canManageBookings = (m: { id: string; role: MemberRole }, hostMembershipId: string) => m.role === 'owner' || m.role === 'admin' || m.id === hostMembershipId
 /** Owners and administrators can see the business's payment setup (stripe_accounts RLS). */
 export const canSeePayments = (role: MemberRole) => role === 'owner' || role === 'admin'
 /** Connecting or changing the Stripe account is a financial action: owners, or administrators with financial delegation (P-02). */

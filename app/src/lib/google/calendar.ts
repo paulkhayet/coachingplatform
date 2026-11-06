@@ -56,6 +56,8 @@ export interface BookingEvent {
   attendees?: { email: string; displayName?: string }[]
   /** Our booking ID, stored privately on the event so we can find it again. */
   bookingId: string
+  /** Whether Google emails attendees an invitation or update ('all') or not ('none'). */
+  notify?: boolean
 }
 
 function eventBody(e: BookingEvent) {
@@ -73,16 +75,16 @@ function eventBody(e: BookingEvent) {
 
 /** calendar.events.owned: add a booking to the coach's chosen calendar. Returns Google's event ID. */
 export async function createBookingEvent(membershipId: string, calendarId: string, e: BookingEvent): Promise<string> {
-  const created = await calendarApi<{ id: string }>(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`, { method: 'POST', body: JSON.stringify(eventBody(e)) })
+  const created = await calendarApi<{ id: string }>(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=${e.notify ? 'all' : 'none'}`, { method: 'POST', body: JSON.stringify(eventBody(e)) })
   return created.id
 }
 
 /** calendar.events.owned: change an event schedulefa.st created (reschedules). */
 export async function updateBookingEvent(membershipId: string, calendarId: string, eventId: string, e: BookingEvent) {
-  await calendarApi(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=none`, { method: 'PUT', body: JSON.stringify(eventBody(e)) })
+  await calendarApi(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${e.notify ? 'all' : 'none'}`, { method: 'PUT', body: JSON.stringify(eventBody(e)) })
 }
 
 /** calendar.events.owned: remove an event schedulefa.st created (cancellations). */
-export async function deleteBookingEvent(membershipId: string, calendarId: string, eventId: string) {
-  await calendarApi(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=none`, { method: 'DELETE' })
+export async function deleteBookingEvent(membershipId: string, calendarId: string, eventId: string, notify = false) {
+  await calendarApi(membershipId, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${notify ? 'all' : 'none'}`, { method: 'DELETE' })
 }

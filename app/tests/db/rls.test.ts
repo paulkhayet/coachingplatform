@@ -179,6 +179,35 @@ describe.skipIf(!DB_URL)('row-level security', () => {
         expect(await sql`SELECT 1 FROM public.google_calendar_tokens WHERE membership_id = ${coachs}`).toHaveLength(0)
       })
 
+      it('lets a coach run their own booking pages, and owners any, but not other coaches', async () => {
+        const coachs = await membershipOf(coach)
+        const owners = await membershipOf(eleni)
+        const [{ id: pageId }] = await as(sql, coach, (tx) => tx<{ id: string }[]>`INSERT INTO public.booking_pages (business_id, host_membership_id, slug, title, duration_minutes) VALUES (${willow}, ${coachs}, 'intro', 'Intro call', 30) RETURNING id`)
+        await expect(as(sql, coach, (tx) => tx`INSERT INTO public.booking_pages (business_id, host_membership_id, slug, title, duration_minutes) VALUES (${willow}, ${owners}, 'sneaky', 'Owner page', 30)`)).rejects.toThrow(/row-level security/)
+        expect(await as(sql, eleni, (tx) => tx`UPDATE public.booking_pages SET title = 'Intro chat' WHERE id = ${pageId} RETURNING title`)).toEqual([{ title: 'Intro chat' }])
+        expect(await as(sql, outsider, (tx) => tx`SELECT 1 FROM public.booking_pages`)).toHaveLength(0)
+        await expect(sql`INSERT INTO public.booking_pages (business_id, host_membership_id, slug, title, duration_minutes) VALUES (${willow}, ${coachs}, 'intro', 'Dup', 30)`).rejects.toThrow(/booking_pages_business_slug_key/)
+        await expect(sql`INSERT INTO public.booking_pages (business_id, host_membership_id, slug, title, duration_minutes) VALUES (${willow}, ${coachs}, 'long', 'Too long', 999)`).rejects.toThrow(/booking_pages_duration/)
+      })
+
+      it('never double-books a host, and keeps bookings read-only to signed-in users', async () => {
+        const coachs = await membershipOf(coach)
+        const book = (start: string, end: string, status = 'confirmed') =>
+          sql`INSERT INTO public.bookings (business_id, host_membership_id, title, starts_at, ends_at, guest_name, guest_email, location_type, status) VALUES (${willow}, ${coachs}, 'Intro', ${start}, ${end}, 'Guest', 'g@example.com', 'video_link', ${status}) RETURNING id`
+        const [first] = await book('2026-12-01T15:00Z', '2026-12-01T15:30Z')
+        await expect(book('2026-12-01T15:15Z', '2026-12-01T15:45Z')).rejects.toThrow(/bookings_no_overlap/)
+        // Back-to-back is fine, and so is overlapping a cancelled booking.
+        await book('2026-12-01T15:30Z', '2026-12-01T16:00Z')
+        await book('2026-12-01T15:00Z', '2026-12-01T15:30Z', 'cancelled')
+        await sql`UPDATE public.bookings SET status = 'cancelled' WHERE id = ${first.id}`
+        await book('2026-12-01T15:00Z', '2026-12-01T15:30Z')
+
+        expect((await as(sql, admin, (tx) => tx`SELECT id FROM public.bookings`)).length).toBeGreaterThan(0)
+        expect(await as(sql, outsider, (tx) => tx`SELECT id FROM public.bookings`)).toHaveLength(0)
+        await expect(as(sql, eleni, (tx) => tx`UPDATE public.bookings SET guest_name = 'x'`)).rejects.toThrow(/permission denied/)
+        await expect(as(sql, null, (tx) => tx`INSERT INTO public.bookings (business_id, host_membership_id, title, starts_at, ends_at, guest_name, guest_email, location_type) VALUES (${willow}, ${coachs}, 'x', now(), now() + interval '1 hour', 'x', 'x@x.co', 'phone')`)).rejects.toThrow(/permission denied/)
+      })
+
       it('rejects malformed data', async () => {
         const coachs = await membershipOf(coach)
         await expect(sql`UPDATE public.availability_schedules SET weekly_hours = '{"day":1}'::jsonb WHERE membership_id = ${coachs}`).rejects.toThrow(/availability_schedules_weekly_hours_array/)

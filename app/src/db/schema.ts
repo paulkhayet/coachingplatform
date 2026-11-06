@@ -109,6 +109,87 @@ export const availabilityTimeOff = pgTable(
   ],
 )
 
+export const locationType = pgEnum('location_type', ['video_link', 'phone', 'in_person'])
+export const bookingStatus = pgEnum('booking_status', ['confirmed', 'cancelled'])
+
+/** A public page guests use to book a call with one coach (D-049, first slice of P-21). */
+export const bookingPages = pgTable(
+  'booking_pages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    hostMembershipId: uuid('host_membership_id')
+      .notNull()
+      .references(() => memberships.id, { onDelete: 'cascade' }),
+    slug: text('slug').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    durationMinutes: integer('duration_minutes').notNull(),
+    locationType: locationType('location_type').notNull().default('video_link'),
+    // The meeting link, phone instructions or address, shown to the guest once booked.
+    locationDetail: text('location_detail'),
+    minNoticeMinutes: integer('min_notice_minutes').notNull().default(240),
+    windowDays: integer('window_days').notNull().default(30),
+    bufferBeforeMinutes: integer('buffer_before_minutes').notNull().default(0),
+    bufferAfterMinutes: integer('buffer_after_minutes').notNull().default(0),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('booking_pages_business_slug_key').on(t.businessId, t.slug),
+    index('booking_pages_host_idx').on(t.hostMembershipId),
+    check('booking_pages_slug_format', sql`${t.slug} ~ '^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$'`),
+    check('booking_pages_title_length', sql`char_length(${t.title}) between 2 and 80`),
+    check('booking_pages_description_length', sql`char_length(${t.description}) <= 1000`),
+    check('booking_pages_duration', sql`${t.durationMinutes} between 5 and 480`),
+    check('booking_pages_notice', sql`${t.minNoticeMinutes} between 0 and 43200`),
+    check('booking_pages_window', sql`${t.windowDays} between 1 and 365`),
+    check('booking_pages_buffers', sql`${t.bufferBeforeMinutes} between 0 and 240 and ${t.bufferAfterMinutes} between 0 and 240`),
+  ],
+)
+
+/** A booked call. The database refuses overlapping confirmed bookings for the same host (see migration). */
+export const bookings = pgTable(
+  'bookings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    bookingPageId: uuid('booking_page_id').references(() => bookingPages.id, { onDelete: 'set null' }),
+    hostMembershipId: uuid('host_membership_id')
+      .notNull()
+      .references(() => memberships.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    status: bookingStatus('status').notNull().default('confirmed'),
+    guestName: text('guest_name').notNull(),
+    guestEmail: text('guest_email').notNull(),
+    guestNotes: text('guest_notes'),
+    guestTimezone: text('guest_timezone'),
+    locationType: locationType('location_type').notNull(),
+    locationDetail: text('location_detail'),
+    googleCalendarId: text('google_calendar_id'),
+    googleEventId: text('google_event_id'),
+    calendarSyncError: text('calendar_sync_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('bookings_business_starts_idx').on(t.businessId, t.startsAt),
+    index('bookings_host_starts_idx').on(t.hostMembershipId, t.startsAt),
+    index('bookings_page_idx').on(t.bookingPageId),
+    check('bookings_order', sql`${t.endsAt} > ${t.startsAt}`),
+    check('bookings_guest_name_length', sql`char_length(${t.guestName}) between 1 and 120`),
+    check('bookings_guest_email_length', sql`char_length(${t.guestEmail}) between 3 and 254`),
+    check('bookings_guest_notes_length', sql`char_length(${t.guestNotes}) <= 2000`),
+  ],
+)
+
 /** A coach's connected Google Calendar (D-039). Written only by the server; the team can read it. */
 export const googleCalendarConnections = pgTable(
   'google_calendar_connections',
@@ -186,3 +267,5 @@ export type StripeAccountRow = typeof stripeAccounts.$inferSelect
 export type AvailabilitySchedule = typeof availabilitySchedules.$inferSelect
 export type TimeOff = typeof availabilityTimeOff.$inferSelect
 export type MemberRole = (typeof memberRole.enumValues)[number]
+export type BookingPage = typeof bookingPages.$inferSelect
+export type Booking = typeof bookings.$inferSelect
