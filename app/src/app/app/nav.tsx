@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, UsersRound } from 'lucide-react'
+import { CreditCard, Home, UsersRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const items = [
   { href: '/app', label: 'Today', icon: Home },
   { href: '/app/team', label: 'Team', icon: UsersRound },
+  { href: '/app/settings/payments', label: 'Payments', icon: CreditCard },
 ]
 
 export function Nav() {

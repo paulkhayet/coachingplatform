@@ -16,7 +16,8 @@ export async function resetDatabase(sql: postgres.Sql) {
       if (statement.trim()) await sql.unsafe(statement)
     }
   }
-  await sql.unsafe('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon, authenticated')
+  // Table privileges come from the stub's default privileges, as on Supabase, so a migration's REVOKE
+  // (e.g. on stripe_accounts) stays in force here too.
 }
 
 export async function createUser(sql: postgres.Sql, email: string, fullName: string) {

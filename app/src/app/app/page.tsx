@@ -15,7 +15,7 @@ export default async function TodayPage() {
   const steps = [
     { label: 'Create your business', done: true },
     { label: 'Connect Google Calendar', done: false, note: 'Coming in phase 2' },
-    { label: 'Connect Stripe to take payments', done: false, note: 'Coming in phase 2' },
+    { label: 'Connect Stripe to take payments', done: false, note: 'In Payments' },
     { label: 'Publish your first booking page', done: false, note: 'Coming in phase 2' },
     { label: 'Invite your team', done: false, note: 'Coming soon' },
   ]

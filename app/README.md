@@ -11,6 +11,20 @@ Next.js 16 + React 19 + TypeScript, Tailwind CSS 4 + shadcn/ui, Supabase (Postgr
 - Create a business and become its owner, with a booking link and time zone
 - A signed-in workspace (Today, Team) for that business
 - Row-level security on every table: people only see businesses they're active members of; only owners manage the team; nobody can grant themselves ownership
+- Payments (phase 2, in progress): an owner, or an administrator trusted with finances, connects the business's own Stripe account (Connect, full Stripe Dashboard, direct charges; D-055). Stripe events arrive at `/api/stripe/webhook`, are signature-checked, and are recorded once each in `stripe_events`
+
+## Stripe in test mode
+
+1. Add `STRIPE_SECRET_KEY` (a `sk_test_…` key) and `DATABASE_URL` to `.env.local`.
+2. Forward Stripe events to your machine with the Stripe CLI:
+   ```sh
+   stripe login
+   stripe listen --forward-to localhost:3100/api/stripe/webhook --forward-connect-to localhost:3100/api/stripe/webhook
+   ```
+   Then start the app with `npm run dev:stripe`, which reads the CLI's signing secret (`stripe listen --print-secret`) into `STRIPE_WEBHOOK_SECRET` for that run, so it never needs saving. (Or put the printed `whsec_…` in `.env.local` and use `npm run dev`.)
+3. Open **Payments** in the app and click **Connect Stripe**. In test mode, Stripe's onboarding accepts its published test values (for example the "Use test data" option where offered).
+
+Only the server writes `stripe_accounts` (through `src/db/server.ts`, which bypasses RLS); owners and administrators can read it.
 
 ## Set up locally
 
@@ -54,4 +68,4 @@ The database tests wipe the target database and load a small stand-in for Supaba
 
 ## Deploy on Vercel
 
-Import the GitHub repository, set **Root Directory** to `app`, and add the environment variables from `.env.example` (with `NEXT_PUBLIC_SITE_URL` set to the deployed URL).
+Import the GitHub repository, set **Root Directory** to `app`, and add the environment variables from `.env.example` (with `NEXT_PUBLIC_SITE_URL` set to the deployed URL). For payments, also add `DATABASE_URL` (transaction pooler), `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and create a Stripe webhook endpoint for `https://<your domain>/api/stripe/webhook` listening to **events on connected accounts** (at least `account.updated` and `account.application.deauthorized`). Run new migrations against the production database before deploying code that needs them.

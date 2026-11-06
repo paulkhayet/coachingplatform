@@ -1,4 +1,4 @@
-import { boolean, check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, check, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { authUsers } from 'drizzle-orm/supabase'
 
@@ -58,7 +58,42 @@ export const memberships = pgTable(
   (t) => [uniqueIndex('memberships_business_user_key').on(t.businessId, t.userId), index('memberships_user_idx').on(t.userId)],
 )
 
+/** A business's connected Stripe account (D-055: Standard account, direct charges). Written only by the
+ *  server (Connect onboarding and Stripe webhooks); owners and administrators can read it. */
+export const stripeAccounts = pgTable(
+  'stripe_accounts',
+  {
+    businessId: uuid('business_id')
+      .primaryKey()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    stripeAccountId: text('stripe_account_id').notNull(),
+    livemode: boolean('livemode').notNull(),
+    detailsSubmitted: boolean('details_submitted').notNull().default(false),
+    chargesEnabled: boolean('charges_enabled').notNull().default(false),
+    payoutsEnabled: boolean('payouts_enabled').notNull().default(false),
+    // Stripe's requirements.disabled_reason, plus how many requirements are currently due.
+    disabledReason: text('disabled_reason'),
+    requirementsDue: integer('requirements_due').notNull().default(0),
+    // Set when the business disconnects schedulefa.st from its Stripe account.
+    disconnectedAt: timestamp('disconnected_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('stripe_accounts_stripe_account_id_key').on(t.stripeAccountId)],
+)
+
+/** Every Stripe event we have accepted, so each one is processed exactly once even if Stripe sends it twice. */
+export const stripeEvents = pgTable('stripe_events', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  account: text('account'),
+  livemode: boolean('livemode').notNull(),
+  stripeCreatedAt: timestamp('stripe_created_at', { withTimezone: true }).notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type Business = typeof businesses.$inferSelect
 export type Membership = typeof memberships.$inferSelect
 export type Profile = typeof profiles.$inferSelect
+export type StripeAccountRow = typeof stripeAccounts.$inferSelect
 export type MemberRole = (typeof memberRole.enumValues)[number]

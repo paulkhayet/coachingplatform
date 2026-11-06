@@ -82,4 +82,52 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     await expect(as(sql, eleni, (tx) => tx`SELECT public.create_business('Bad slug', 'Not OK!')`)).rejects.toThrow(/businesses_slug_format/)
     await expect(as(sql, eleni, (tx) => tx`SELECT public.create_business('Somewhere', 'somewhere', 'Mars/Olympus')`)).rejects.toThrow(/Unknown time zone/)
   })
+
+  describe('stripe connect', () => {
+    let admin: string
+    let coach: string
+
+    beforeAll(async () => {
+      admin = await createUser(sql, 'ada@example.com', 'Ada Admin')
+      coach = await createUser(sql, 'cole@example.com', 'Cole Coach')
+      await as(sql, eleni, async (tx) => {
+        await tx`INSERT INTO public.memberships (business_id, user_id, role) VALUES (${willow}, ${admin}, 'admin')`
+        await tx`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${coach}, 'coach', true)`
+      })
+      // The server writes these rows with its own connection (no RLS), like onboarding and webhooks do.
+      await sql`INSERT INTO public.stripe_accounts (business_id, stripe_account_id, livemode) VALUES (${willow}, 'acct_willow', false)`
+      await sql`INSERT INTO public.stripe_events (id, type, account, livemode, stripe_created_at) VALUES ('evt_1', 'account.updated', 'acct_willow', false, now())`
+    })
+
+    it('shows the connected account to owners and administrators only', async () => {
+      const read = (user: string) => as(sql, user, (tx) => tx`SELECT stripe_account_id FROM public.stripe_accounts`)
+      expect(await read(eleni)).toEqual([{ stripe_account_id: 'acct_willow' }])
+      expect(await read(admin)).toEqual([{ stripe_account_id: 'acct_willow' }])
+      expect(await read(coach)).toHaveLength(0)
+      expect(await read(outsider)).toHaveLength(0)
+      expect(await as(sql, null, (tx) => tx`SELECT 1 FROM public.stripe_accounts`)).toHaveLength(0)
+    })
+
+    it("never lets a signed-in user write the account, even the owner", async () => {
+      await expect(as(sql, eleni, (tx) => tx`UPDATE public.stripe_accounts SET stripe_account_id = 'acct_attacker' WHERE business_id = ${willow}`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, outsider, (tx) => tx`INSERT INTO public.stripe_accounts (business_id, stripe_account_id, livemode) VALUES (${willow}, 'acct_x', false)`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, eleni, (tx) => tx`DELETE FROM public.stripe_accounts WHERE business_id = ${willow}`)).rejects.toThrow(/permission denied/)
+    })
+
+    it('keeps the event log out of the API entirely', async () => {
+      await expect(as(sql, eleni, (tx) => tx`SELECT id FROM public.stripe_events`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, null, (tx) => tx`SELECT id FROM public.stripe_events`)).rejects.toThrow(/permission denied/)
+    })
+
+    it('records each Stripe event only once', async () => {
+      const again = await sql`INSERT INTO public.stripe_events (id, type, livemode, stripe_created_at) VALUES ('evt_1', 'account.updated', false, now()) ON CONFLICT DO NOTHING RETURNING id`
+      expect(again).toHaveLength(0)
+    })
+
+    it('allows one Stripe account per business and one business per Stripe account', async () => {
+      await expect(sql`INSERT INTO public.stripe_accounts (business_id, stripe_account_id, livemode) VALUES (${willow}, 'acct_other', false)`).rejects.toThrow(/stripe_accounts_pkey/)
+      const [{ id: other }] = await sql<{ id: string }[]>`SELECT id FROM public.businesses WHERE slug = 'other-coaching'`
+      await expect(sql`INSERT INTO public.stripe_accounts (business_id, stripe_account_id, livemode) VALUES (${other}, 'acct_willow', false)`).rejects.toThrow(/stripe_accounts_stripe_account_id_key/)
+    })
+  })
 })
