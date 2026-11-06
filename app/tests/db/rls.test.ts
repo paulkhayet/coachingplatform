@@ -129,5 +129,61 @@ describe.skipIf(!DB_URL)('row-level security', () => {
       const [{ id: other }] = await sql<{ id: string }[]>`SELECT id FROM public.businesses WHERE slug = 'other-coaching'`
       await expect(sql`INSERT INTO public.stripe_accounts (business_id, stripe_account_id, livemode) VALUES (${other}, 'acct_willow', false)`).rejects.toThrow(/stripe_accounts_stripe_account_id_key/)
     })
+
+    describe('availability', () => {
+      const hours = [{ day: 1, start: 540, end: 1020 }]
+      const membershipOf = async (user: string, business = willow) => (await sql<{ id: string }[]>`SELECT id FROM public.memberships WHERE user_id = ${user} AND business_id = ${business}`)[0].id
+
+      it('lets a coach set their own hours, which the whole team can read', async () => {
+        const mine = await membershipOf(coach)
+        await as(sql, coach, (tx) => tx`INSERT INTO public.availability_schedules (membership_id, business_id, timezone, weekly_hours) VALUES (${mine}, ${willow}, 'America/Chicago', ${tx.json(hours)})`)
+        await as(sql, coach, (tx) => tx`INSERT INTO public.availability_time_off (membership_id, business_id, starts_at, ends_at) VALUES (${mine}, ${willow}, '2026-12-24', '2026-12-27')`)
+        expect(await as(sql, admin, (tx) => tx`SELECT timezone FROM public.availability_schedules WHERE membership_id = ${mine}`)).toEqual([{ timezone: 'America/Chicago' }])
+        expect(await as(sql, eleni, (tx) => tx`SELECT id FROM public.availability_time_off WHERE membership_id = ${mine}`)).toHaveLength(1)
+      })
+
+      it("stops a coach from editing a colleague's hours, but lets owners and administrators", async () => {
+        const owners = await membershipOf(eleni)
+        await expect(as(sql, coach, (tx) => tx`INSERT INTO public.availability_schedules (membership_id, business_id, timezone) VALUES (${owners}, ${willow}, 'America/Chicago')`)).rejects.toThrow(/row-level security/)
+        const coachs = await membershipOf(coach)
+        expect(await as(sql, eleni, (tx) => tx`UPDATE public.availability_schedules SET timezone = 'America/Denver' WHERE membership_id = ${coachs} RETURNING timezone`)).toEqual([{ timezone: 'America/Denver' }])
+        expect(await as(sql, admin, (tx) => tx`DELETE FROM public.availability_time_off WHERE membership_id = ${coachs} RETURNING id`)).toHaveLength(1)
+      })
+
+      it('keeps availability private to the business and tied to it', async () => {
+        const coachs = await membershipOf(coach)
+        expect(await as(sql, outsider, (tx) => tx`SELECT 1 FROM public.availability_schedules`)).toHaveLength(0)
+        await expect(as(sql, outsider, (tx) => tx`INSERT INTO public.availability_time_off (membership_id, business_id, starts_at, ends_at) VALUES (${coachs}, ${willow}, now(), now() + interval '1 hour')`)).rejects.toThrow(/row-level security/)
+        // A coach can't attach their membership to a different business's rows.
+        const [{ id: other }] = await sql<{ id: string }[]>`SELECT id FROM public.businesses WHERE slug = 'other-coaching'`
+        await expect(as(sql, coach, (tx) => tx`INSERT INTO public.availability_time_off (membership_id, business_id, starts_at, ends_at) VALUES (${coachs}, ${other}, now(), now() + interval '1 hour')`)).rejects.toThrow(/row-level security/)
+      })
+
+      it('ignores edits from someone whose membership is inactive', async () => {
+        const marcuss = await membershipOf(marcus)
+        await expect(as(sql, marcus, (tx) => tx`INSERT INTO public.availability_schedules (membership_id, business_id, timezone) VALUES (${marcuss}, ${willow}, 'America/Chicago')`)).rejects.toThrow(/row-level security/)
+      })
+
+      it('shows Google Calendar connections to the team but never the tokens, and lets nobody write them', async () => {
+        const coachs = await membershipOf(coach)
+        // The server writes these after its own checks, like the OAuth callback does.
+        await sql`INSERT INTO public.google_calendar_connections (membership_id, business_id, google_email, google_sub, scopes) VALUES (${coachs}, ${willow}, 'cole@gmail.com', '123', '{openid}')`
+        await sql`INSERT INTO public.google_calendar_tokens (membership_id, refresh_token_ciphertext) VALUES (${coachs}, 'v1.x.y.z')`
+        expect(await as(sql, eleni, (tx) => tx`SELECT google_email FROM public.google_calendar_connections`)).toEqual([{ google_email: 'cole@gmail.com' }])
+        expect(await as(sql, outsider, (tx) => tx`SELECT 1 FROM public.google_calendar_connections`)).toHaveLength(0)
+        await expect(as(sql, coach, (tx) => tx`SELECT refresh_token_ciphertext FROM public.google_calendar_tokens`)).rejects.toThrow(/permission denied/)
+        await expect(as(sql, coach, (tx) => tx`UPDATE public.google_calendar_connections SET destination_calendar_id = 'x' WHERE membership_id = ${coachs}`)).rejects.toThrow(/permission denied/)
+        await expect(sql`UPDATE public.google_calendar_connections SET status = 'broken' WHERE membership_id = ${coachs}`).rejects.toThrow(/google_calendar_connections_status/)
+        // Removing the connection removes its token.
+        await sql`DELETE FROM public.google_calendar_connections WHERE membership_id = ${coachs}`
+        expect(await sql`SELECT 1 FROM public.google_calendar_tokens WHERE membership_id = ${coachs}`).toHaveLength(0)
+      })
+
+      it('rejects malformed data', async () => {
+        const coachs = await membershipOf(coach)
+        await expect(sql`UPDATE public.availability_schedules SET weekly_hours = '{"day":1}'::jsonb WHERE membership_id = ${coachs}`).rejects.toThrow(/availability_schedules_weekly_hours_array/)
+        await expect(sql`INSERT INTO public.availability_time_off (membership_id, business_id, starts_at, ends_at) VALUES (${coachs}, ${willow}, '2026-12-27', '2026-12-24')`).rejects.toThrow(/availability_time_off_order/)
+      })
+    })
   })
 })

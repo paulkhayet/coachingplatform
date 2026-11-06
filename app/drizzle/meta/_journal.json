@@ -29,6 +29,20 @@
       "when": 1793989131167,
       "tag": "0003_stripe_connect",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793991509661,
+      "tag": "0004_availability",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793992407386,
+      "tag": "0005_google_calendar",
+      "breakpoints": true
     }
   ]
 }
