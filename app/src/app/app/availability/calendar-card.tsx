@@ -3,7 +3,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listCalendars, type CalendarSummary } from '@/lib/google/calendar'
-import { calendarAllowed, getConnection, isGoogleCalendarConfigured } from '@/lib/google/server'
+import { calendarAllowed, isGoogleCalendarConfigured, lookupConnection } from '@/lib/google/server'
 import { disconnectCalendar } from './actions'
 import { CalendarChoicesForm } from './forms'
 
@@ -21,7 +21,19 @@ const outcomes: Record<string, { ok: boolean; text: string }> = {
 export async function CalendarCard({ membershipId, email, outcome }: { membershipId: string; email: string; outcome?: string }) {
   const message = outcome ? outcomes[outcome] : undefined
   const allowed = isGoogleCalendarConfigured && calendarAllowed(email)
-  const connection = allowed ? await getConnection(membershipId) : undefined
+  const { connection, failed } = allowed ? await lookupConnection(membershipId) : { connection: undefined, failed: false }
+  if (failed) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><CalendarDays className="size-5" /> Google Calendar</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="warning"><TriangleAlert /><AlertDescription>We couldn’t check your Google Calendar connection just now. Refresh to try again.</AlertDescription></Alert>
+        </CardContent>
+      </Card>
+    )
+  }
   let calendars: CalendarSummary[] | null = null
   if (connection?.status === 'active') {
     try {

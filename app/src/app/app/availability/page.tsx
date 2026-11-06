@@ -7,7 +7,7 @@ import { requireWorkspace } from '@/lib/workspace'
 import { US_TIME_ZONES } from '@/lib/validation'
 import { openIntervals, parseWeeklyHours, subtract, zonedParts, zonedTime, type Interval } from '@/lib/slots'
 import { busyTimes } from '@/lib/google/calendar'
-import { calendarAllowed, getConnection, isGoogleCalendarConfigured } from '@/lib/google/server'
+import { calendarAllowed, isGoogleCalendarConfigured, lookupConnection } from '@/lib/google/server'
 import type { WeeklyWindow } from '@/db/schema'
 import { TimeOffForm, WeeklyHoursForm } from './forms'
 import { removeTimeOff } from './actions'
@@ -46,7 +46,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
     : []
   // Busy times from Google Calendar, when connected. If Google can't be read, say so rather than guess.
   let calendarBusy: 'none' | 'applied' | 'failed' = 'none'
-  const connection = isGoogleCalendarConfigured && calendarAllowed(user.email) ? await getConnection(membership.id) : undefined
+  const { connection } = isGoogleCalendarConfigured && calendarAllowed(user.email) ? await lookupConnection(membership.id) : { connection: undefined }
   if (schedule && connection?.status === 'active') {
     try {
       const busy: Interval[] = await busyTimes(membership.id, connection.busyCalendarIds, now, until)

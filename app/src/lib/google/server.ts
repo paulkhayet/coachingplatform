@@ -99,6 +99,16 @@ export async function getConnection(membershipId: string) {
   return row
 }
 
+/** Like getConnection, but a database failure is reported instead of breaking the page. */
+export async function lookupConnection(membershipId: string): Promise<{ connection?: Awaited<ReturnType<typeof getConnection>>; failed: boolean }> {
+  try {
+    return { connection: await getConnection(membershipId), failed: false }
+  } catch (error) {
+    console.error('Looking up the Google Calendar connection failed', error)
+    return { failed: true }
+  }
+}
+
 export async function updateCalendarChoices(membershipId: string, busyCalendarIds: string[], destinationCalendarId: string | null) {
   await adminDb().update(googleCalendarConnections).set({ busyCalendarIds, destinationCalendarId, updatedAt: sql`now()` }).where(eq(googleCalendarConnections.membershipId, membershipId))
 }
