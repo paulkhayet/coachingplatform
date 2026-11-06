@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { businessSchema, safeNext, signUpSchema, slugify, SLUG_PATTERN } from './validation'
+import { authCallbackUrl, businessSchema, emailLinkSchema, safeNext, signUpSchema, slugify, SLUG_PATTERN } from './validation'
 import { canManageTeam, canSeePricing } from './roles'
 
 describe('slugify', () => {
@@ -38,6 +38,22 @@ describe('safeNext', () => {
     expect(safeNext('https://evil.example')).toBe('/app')
     expect(safeNext('//evil.example')).toBe('/app')
     expect(safeNext(null)).toBe('/app')
+    expect(safeNext('/\\evil.example')).toBe('/app')
+  })
+})
+
+describe('authCallbackUrl', () => {
+  it('builds the /auth/confirm link with a safe next path', () => {
+    expect(authCallbackUrl('http://localhost:3100', '/onboarding')).toBe('http://localhost:3100/auth/confirm?next=%2Fonboarding')
+    expect(authCallbackUrl('http://localhost:3100', '/app/team', 'google')).toBe('http://localhost:3100/auth/confirm?next=%2Fapp%2Fteam&via=google')
+    expect(authCallbackUrl('http://localhost:3100', 'https://evil.example')).toBe('http://localhost:3100/auth/confirm?next=%2Fapp')
+  })
+})
+
+describe('emailLinkSchema', () => {
+  it('normalizes the email', () => {
+    expect(emailLinkSchema.parse({ email: '  Eleni@Example.com ' }).email).toBe('eleni@example.com')
+    expect(emailLinkSchema.safeParse({ email: 'nope' }).success).toBe(false)
   })
 })
 

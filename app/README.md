@@ -7,6 +7,7 @@ Next.js 16 + React 19 + TypeScript, Tailwind CSS 4 + shadcn/ui, Supabase (Postgr
 ## What works today
 
 - Sign up with email and password, email confirmation, sign in, sign out
+- Continue with Google, and emailed sign-in links for existing accounts (Google must be turned on in Supabase → Authentication → Sign In / Providers)
 - Create a business and become its owner, with a booking link and time zone
 - A signed-in workspace (Today, Team) for that business
 - Row-level security on every table: people only see businesses they're active members of; only owners manage the team; nobody can grant themselves ownership

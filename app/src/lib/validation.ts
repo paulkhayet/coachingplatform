@@ -25,7 +25,8 @@ export const US_TIME_ZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii Time' },
 ] as const
 
-const email = z.email('Enter a valid email address').trim().toLowerCase()
+// Trim before checking, so a pasted address with a stray space still works.
+const email = z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address'))
 
 export const signInSchema = z.object({
   email,
@@ -56,7 +57,16 @@ export function fieldErrors(error: z.ZodError): FieldErrors {
   return out
 }
 
-/** Only allow redirects to paths inside this app. */
+/** Only allow redirects to paths inside this app. Browsers treat `/\host` like `//host`, so backslashes are rejected too. */
 export function safeNext(next: string | null | undefined, fallback = '/app') {
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : fallback
+  return next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') ? next : fallback
+}
+
+export const emailLinkSchema = z.object({ email })
+
+/** Where Supabase sends people back after Google sign-in or an email link. `via` lets /auth/confirm explain failures. */
+export function authCallbackUrl(siteUrl: string, next: string | null | undefined, via?: 'google') {
+  const params = new URLSearchParams({ next: safeNext(next) })
+  if (via) params.set('via', via)
+  return `${siteUrl}/auth/confirm?${params}`
 }

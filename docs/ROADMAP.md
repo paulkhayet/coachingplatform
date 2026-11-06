@@ -47,7 +47,11 @@ How we get from the prototype to a pilot-ready product. It follows the decisions
 - [ ] Create the Supabase prod project and add its keys (founder)
 - [x] Run the migrations against the dev project (`npm run db:migrate`) and sign up end to end (sign up, confirm, create a business, Team page)
 - [x] Fix the Supabase advisor findings (`0002_advisor_fixes`: RLS helpers moved to the `private` schema, index on `businesses.created_by`)
-- [ ] Make email confirmation links work in any browser: in Supabase → Authentication → Email Templates → Confirm signup, link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding` (today's PKCE link fails with "link" error if opened in a different browser than the one used to sign up) (founder, dev and prod)
+- [x] Sign in with Google, and with an emailed sign-in link for existing accounts (D-053)
+- [ ] Turn on Google sign-in: create a Google Cloud OAuth client (Web application, redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`), then paste its client ID and secret into Supabase → Authentication → Sign In / Providers → Google (founder, dev and prod)
+- [ ] Make email links work in any browser, in Supabase → Authentication → Email Templates (founder, dev and prod). Today's links fail with the "link" error if opened in a different browser than the one used to sign up:
+  - Confirm signup: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/onboarding`
+  - Magic Link: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`
 - [ ] Connect the repository to Vercel (root directory `app`) and add the environment variables (founder)
 
 ## Changing this roadmap

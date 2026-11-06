@@ -4,7 +4,8 @@ import { SignInForm } from '../forms'
 export const metadata: Metadata = { title: 'Sign in' }
 
 const notices: Record<string, string> = {
-  link: 'That sign-in link has expired or was already used. Sign in with your password, or request a new link.',
+  link: 'That link has expired, was already used, or was opened in a different browser. Sign in below, or request a new link.',
+  oauth: 'Google sign-in didn’t finish. Try again, or sign in with your email.',
 }
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {

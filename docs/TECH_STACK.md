@@ -12,7 +12,7 @@ Every choice below is confirmed and recorded in the [product plan](PRODUCT_PLAN.
 | --- | --- | --- | --- |
 | Hosting | **Vercel** | Confirmed — D-050 | Runs the Next.js app, public booking pages, and the endpoints that receive notifications from Stripe, Zoom, Google and DocuSeal. Vercel Cron can trigger jobs. |
 | Database | **Supabase Postgres** | Confirmed — D-050 | One database for every business. Row-level security keeps each business's data separate. Postgres rules prevent double-booking a coach, and transactions keep credits and payments consistent. |
-| Logins | **Supabase Auth** | Confirmed — D-050 | Staff, separate parent and student logins, and email sign-in links. Guest booking and offer links use expiring tokens stored in the database. |
+| Logins | **Supabase Auth** | Confirmed — D-050, D-053 | Staff, separate parent and student logins, and email sign-in links. Staff sign in with Google, email and password, or an emailed sign-in link (D-053). Guest booking and offer links use expiring tokens stored in the database. |
 | File storage | **Supabase Storage** | Confirmed — D-050 | Homework, resources, and a copy of every signed agreement and its audit trail. |
 | Background jobs | **Supabase pg_cron + Supabase Queues** | Confirmed — D-050 | Reminders, unpaid-reservation cutoffs, Zoom summary imports, and retrying incoming notifications. Tables of processed event IDs make sure nothing is charged, credited or sent twice. |
 | App framework | **Next.js + React + TypeScript** | Confirmed — D-052 | One codebase for the staff app, family portal and public pages. |

@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { siteUrl } from '@/lib/env'
-import { fieldErrors, safeNext, signInSchema, signUpSchema, type FieldErrors } from '@/lib/validation'
+import { authCallbackUrl, emailLinkSchema, fieldErrors, safeNext, signInSchema, signUpSchema, type FieldErrors } from '@/lib/validation'
 
 export interface FormState {
   errors?: FieldErrors
@@ -33,7 +33,7 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: `${siteUrl}/auth/confirm?next=/onboarding` },
+    options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: authCallbackUrl(siteUrl, '/onboarding') },
   })
   if (error) {
     const message = error.code === 'user_already_exists' ? 'An account with that email already exists. Sign in instead.' : error.code === 'weak_password' ? 'Choose a stronger password.' : 'We couldn’t create your account. Try again in a moment.'
@@ -42,6 +42,34 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   // With email confirmation on (recommended), there is no session until the link is clicked.
   if (!data.session) redirect(`/check-email?email=${encodeURIComponent(parsed.data.email)}`)
   redirect('/onboarding')
+}
+
+/** Starts Google sign-in. New and returning people both use this; /app sends anyone without a business to onboarding. */
+export async function signInWithGoogle(formData: FormData) {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: authCallbackUrl(siteUrl, String(formData.get('next') ?? ''), 'google') },
+  })
+  if (error || !data.url) redirect('/sign-in?error=oauth')
+  redirect(data.url)
+}
+
+/** Emails a one-time sign-in link to an existing account. Never says whether the account exists. */
+export async function sendSignInLink(_prev: FormState, formData: FormData): Promise<FormState> {
+  const raw = { email: String(formData.get('email') ?? '') }
+  const parsed = emailLinkSchema.safeParse(raw)
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw }
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signInWithOtp({
+    email: parsed.data.email,
+    // Accounts are created on the sign-up page, so every account starts with a name.
+    options: { shouldCreateUser: false, emailRedirectTo: authCallbackUrl(siteUrl, String(formData.get('next') ?? '')) },
+  })
+  if (error?.name === 'AuthRetryableFetchError') return { message: 'We couldn’t reach the sign-in service. Try again in a moment.', values: raw }
+  if (error?.status === 429) return { message: 'Too many sign-in emails. Wait a minute, then try again.', values: raw }
+  // Any other error (including "no account with that email") still shows the same confirmation.
+  redirect(`/check-email?kind=sign-in&email=${encodeURIComponent(parsed.data.email)}`)
 }
 
 export async function signOut() {
