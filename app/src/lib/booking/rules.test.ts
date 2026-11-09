@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BookingQuestion } from '@/db/schema'
 import { parseQuestions, questionsSchema, readAnswers } from './questions'
-import { deriveKey, formatCents, guestCanChange, manageToken, parseDollars, refundOnCancel, verifyManageToken } from './policy'
+import { deriveKey, fairestFirst, formatCents, guestCanChange, manageToken, parseDollars, refundOnCancel, verifyManageToken } from './policy'
 import { guestCancelled, guestConfirmation, whenText } from './emails'
 
 const q = (over: Partial<BookingQuestion>): BookingQuestion => ({ id: 'abc123', label: 'Goals?', type: 'short', options: [], required: false, ...over })
@@ -92,5 +92,14 @@ describe('emails', () => {
   it('explains the refund on cancellation', () => {
     expect(guestCancelled(d, 'guest', 'none').text).toContain('after the refund cutoff')
     expect(guestCancelled(d, 'business', 'full').text).toContain('full refund')
+  })
+})
+
+describe('shared pages (D-061)', () => {
+  it('offers the call to the coach with the fewest calls first, ties at random', () => {
+    const load = new Map([['a', 3], ['b', 1]])
+    expect(fairestFirst(['a', 'b', 'c'], load, () => 0.5)).toEqual(['c', 'b', 'a'])
+    const seq = [0.9, 0.1]
+    expect(fairestFirst(['x', 'y'], new Map(), () => seq.shift()!)).toEqual(['y', 'x'])
   })
 })

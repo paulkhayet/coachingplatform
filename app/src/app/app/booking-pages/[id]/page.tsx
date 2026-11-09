@@ -12,6 +12,8 @@ import { BookingPageForm, type PageDefaults } from '../form'
 import { updateBookingPage } from '../actions'
 import { paymentAccount } from '@/lib/booking/server'
 import { parseQuestions } from '@/lib/booking/questions'
+import { canAssignHosts } from '@/lib/roles'
+import { coachOptions, sharedHosts } from '../hosts'
 
 export const metadata: Metadata = { title: 'Edit booking page' }
 
@@ -30,13 +32,14 @@ type Row = {
   active: boolean
   price_cents: number | null
   refund_cutoff_hours: number
-  ask_student: boolean
   questions: unknown
+  ask_notes: boolean
+  host_membership_id: string | null
 }
 
-export default async function EditBookingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
-  const { business } = await requireWorkspace()
-  const [{ id }, { saved }] = await Promise.all([params, searchParams])
+export default async function EditBookingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; hosts?: string }> }) {
+  const { business, membership } = await requireWorkspace()
+  const [{ id }, { saved, hosts }] = await Promise.all([params, searchParams])
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound()
   const supabase = await createClient()
   const { data: p } = await supabase.from('booking_pages').select('*').eq('id', id).eq('business_id', business.id).maybeSingle<Row>()
@@ -56,10 +59,14 @@ export default async function EditBookingPage({ params, searchParams }: { params
     active: p.active,
     price: p.price_cents == null ? '' : (p.price_cents / 100).toFixed(p.price_cents % 100 ? 2 : 0),
     refundCutoffHours: p.refund_cutoff_hours,
-    askStudent: p.ask_student,
     questions: parseQuestions(p.questions),
+    askNotes: p.ask_notes,
   }
   const paymentsReady = Boolean(await paymentAccount(business.id))
+  const manager = canAssignHosts(membership.role)
+  const hostChoice = manager
+    ? { options: await coachOptions(business.id), mode: p.host_membership_id ? ('one' as const) : ('shared' as const), hostId: p.host_membership_id ?? '', pool: (await sharedHosts(business.id)).get(p.id) ?? [], businessName: business.name }
+    : undefined
   const publicUrl = `${siteUrl}/b/${business.slug}/${p.slug}`
 
   return (
@@ -69,6 +76,7 @@ export default async function EditBookingPage({ params, searchParams }: { params
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">{p.title}</h1>
       </div>
       {saved && <Alert variant="success"><AlertDescription>Saved.</AlertDescription></Alert>}
+      {hosts === 'failed' && <Alert variant="destructive"><AlertDescription>The page was created but its group of coaches couldn’t be saved, so it’s turned off. Choose the coaches again and save.</AlertDescription></Alert>}
       <Card className="py-4">
         <CardContent className="flex flex-wrap items-center gap-3">
           <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">{publicUrl}</span>
@@ -77,7 +85,7 @@ export default async function EditBookingPage({ params, searchParams }: { params
       </Card>
       <Card>
         <CardContent>
-          <BookingPageForm key={p.slug} action={updateBookingPage.bind(null, p.id)} defaults={defaults} businessSlug={business.slug} submitLabel="Save changes" paymentsReady={paymentsReady} />
+          <BookingPageForm key={p.slug} action={updateBookingPage.bind(null, p.id)} defaults={defaults} businessSlug={business.slug} submitLabel="Save changes" paymentsReady={paymentsReady} hostChoice={hostChoice} />
         </CardContent>
       </Card>
     </div>

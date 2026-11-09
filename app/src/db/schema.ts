@@ -1,4 +1,4 @@
-import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { authUsers } from 'drizzle-orm/supabase'
 
@@ -15,6 +15,8 @@ export const businesses = pgTable(
     name: text('name').notNull(),
     slug: text('slug').notNull(),
     timezone: text('timezone').notNull().default('America/New_York'),
+    // When the business takes bookings at all, for everyone (D-059), in its own time zone. Null = no limit.
+    openingHours: jsonb('opening_hours').$type<WeeklyWindow[]>(),
     createdBy: uuid('created_by').references(() => authUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -23,6 +25,7 @@ export const businesses = pgTable(
     index('businesses_created_by_idx').on(t.createdBy),
     check('businesses_slug_format', sql`${t.slug} ~ '^[a-z0-9](?:[a-z0-9-]{1,48}[a-z0-9])$'`),
     check('businesses_name_length', sql`char_length(${t.name}) between 2 and 80`),
+    check('businesses_opening_hours_array', sql`${t.openingHours} is null or jsonb_typeof(${t.openingHours}) = 'array'`),
   ],
 )
 
@@ -56,6 +59,39 @@ export const memberships = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('memberships_business_user_key').on(t.businessId, t.userId), index('memberships_user_idx').on(t.userId)],
+)
+
+/** An owner's invitation to join their business (D-060). The link carries a random token; only its SHA-256
+ *  hash is stored. Written only by the server; owners can read their business's invitations. */
+export const invitations = pgTable(
+  'invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    // Lower-cased. Only someone signed in with this email can accept.
+    email: text('email').notNull(),
+    role: memberRole('role').notNull(),
+    coaches: boolean('coaches').notNull().default(true),
+    title: text('title'),
+    tokenHash: text('token_hash').notNull(),
+    invitedBy: uuid('invited_by').references(() => authUsers.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedBy: uuid('accepted_by').references(() => authUsers.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    uniqueIndex('invitations_token_hash_key').on(t.tokenHash),
+    // One open invitation per person per business; inviting again replaces it.
+    uniqueIndex('invitations_open_email_key').on(t.businessId, t.email).where(sql`${t.acceptedAt} is null`),
+    index('invitations_email_idx').on(t.email),
+    index('invitations_invited_by_idx').on(t.invitedBy),
+    index('invitations_accepted_by_idx').on(t.acceptedBy),
+    check('invitations_not_owner', sql`${t.role} <> 'owner'`),
+    check('invitations_email_lower', sql`${t.email} = lower(${t.email}) and position('@' in ${t.email}) > 1`),
+  ],
 )
 
 /** A weekly working window in the coach's own time zone, in minutes after local midnight (0 = Sunday). */
@@ -102,8 +138,8 @@ export const availabilityTimeOff = pgTable(
 )
 
 /**
- * What one business gets of a person's time (D-057): a subset of their weekly hours (null means all of
- * them), and which of their calendars that business's bookings go into (null means their default).
+ * A person's arrangement with one business (D-057, D-059): their own weekly hours for that business
+ * (null means their default hours), and which of their calendars its bookings go into (null = default).
  */
 export const membershipAvailability = pgTable('membership_availability', {
   membershipId: uuid('membership_id')
@@ -149,9 +185,8 @@ export const bookingPages = pgTable(
     businessId: uuid('business_id')
       .notNull()
       .references(() => businesses.id, { onDelete: 'cascade' }),
-    hostMembershipId: uuid('host_membership_id')
-      .notNull()
-      .references(() => memberships.id, { onDelete: 'cascade' }),
+    // The one coach who takes these calls. Null = any available coach from booking_page_hosts (D-061).
+    hostMembershipId: uuid('host_membership_id').references(() => memberships.id, { onDelete: 'cascade' }),
     slug: text('slug').notNull(),
     title: text('title').notNull(),
     description: text('description'),
@@ -168,8 +203,11 @@ export const bookingPages = pgTable(
     priceCents: integer('price_cents'),
     // Guests who cancel at least this long before the call get a full refund.
     refundCutoffHours: integer('refund_cutoff_hours').notNull().default(24),
+    // Unused since D-063 (moved into custom questions); drop in a later deploy.
     askStudent: boolean('ask_student').notNull().default(false),
     questions: jsonb('questions').$type<BookingQuestion[]>().notNull().default([]),
+    // Whether guests get the optional "anything else?" note (D-064).
+    askNotes: boolean('ask_notes').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -319,8 +357,27 @@ export const stripeEvents = pgTable('stripe_events', {
   receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/** D-061: the coaches who share a booking page with no single host. Each booking goes to one of them. */
+export const bookingPageHosts = pgTable(
+  'booking_page_hosts',
+  {
+    bookingPageId: uuid('booking_page_id')
+      .notNull()
+      .references(() => bookingPages.id, { onDelete: 'cascade' }),
+    membershipId: uuid('membership_id')
+      .notNull()
+      .references(() => memberships.id, { onDelete: 'cascade' }),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.bookingPageId, t.membershipId] }), index('booking_page_hosts_membership_idx').on(t.membershipId), index('booking_page_hosts_business_idx').on(t.businessId)],
+)
+
 export type Business = typeof businesses.$inferSelect
 export type Membership = typeof memberships.$inferSelect
+export type Invitation = typeof invitations.$inferSelect
 export type Profile = typeof profiles.$inferSelect
 export type StripeAccountRow = typeof stripeAccounts.$inferSelect
 export type AvailabilitySchedule = typeof availabilitySchedules.$inferSelect

@@ -5,13 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { createClient } from '@/lib/supabase/server'
 import { requireWorkspace } from '@/lib/workspace'
 import { US_TIME_ZONES } from '@/lib/validation'
-import { openIntervals, parseWeeklyHours, subtract, zonedParts, zonedTime, type Interval } from '@/lib/slots'
+import { parseWeeklyHours, subtract, zonedParts, zonedTime, type Interval } from '@/lib/slots'
 import { busyTimes } from '@/lib/google/calendar'
 import { calendarAllowed, isGoogleCalendarConfigured, lookupConnection } from '@/lib/google/server'
-import type { WeeklyWindow } from '@/db/schema'
 import { BusinessOfferForm, TimeOffForm, WeeklyHoursForm } from './forms'
 import { listCalendars, type CalendarSummary } from '@/lib/google/calendar'
-import { intersect } from '@/lib/slots'
+import { DEFAULT_WEEKLY_HOURS, describeHours, hoursForBusiness } from '@/lib/slots'
 import { adminDb } from '@/db/server'
 import { bookings } from '@/db/schema'
 import { and, eq, gt, inArray, lt } from 'drizzle-orm'
@@ -20,7 +19,6 @@ import { CalendarCard } from './calendar-card'
 
 export const metadata: Metadata = { title: 'Availability' }
 
-const SUGGESTED: WeeklyWindow[] = [1, 2, 3, 4, 5].map((day) => ({ day, start: 9 * 60, end: 17 * 60 }))
 const PREVIEW_DAYS = 7
 
 export default async function AvailabilityPage({ searchParams }: { searchParams: Promise<{ calendar?: string }> }) {
@@ -29,7 +27,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
   const supabase = await createClient()
   const now = new Date()
   // Hours, time off and calendar belong to the person, across all their businesses (D-057).
-  const [{ data: schedule }, { data: timeOff }, { data: offer }] = await Promise.all([
+  const [{ data: schedule }, { data: timeOff }, { data: offer }, { data: biz }] = await Promise.all([
     supabase.from('availability_schedules').select('timezone, weekly_hours').eq('user_id', user.id).maybeSingle<{ timezone: string; weekly_hours: unknown }>(),
     supabase.from('availability_time_off')
       .select('id, starts_at, ends_at, note')
@@ -38,34 +36,42 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
       .order('starts_at')
       .returns<{ id: string; starts_at: string; ends_at: string; note: string | null }[]>(),
     supabase.from('membership_availability').select('offered_hours, destination_calendar_id').eq('membership_id', membership.id).maybeSingle<{ offered_hours: unknown; destination_calendar_id: string | null }>(),
+    supabase.from('businesses').select('opening_hours').eq('id', business.id).maybeSingle<{ opening_hours: unknown }>(),
   ])
+  const openingHours = biz?.opening_hours ? parseWeeklyHours(biz.opening_hours) : null
   const offered = offer?.offered_hours ? parseWeeklyHours(offer.offered_hours) : null
   const multiBusiness = workspaces.length > 1
 
   const timezone = schedule?.timezone ?? business.timezone
-  const weekly = schedule ? parseWeeklyHours(schedule.weekly_hours) : SUGGESTED
+  // Not saved yet: the default (weekdays 9 to 5 in the business's time zone) already applies.
+  const weekly = schedule ? parseWeeklyHours(schedule.weekly_hours) : DEFAULT_WEEKLY_HOURS
   const zoneLabel = US_TIME_ZONES.find((t) => t.value === timezone)?.label ?? timezone
 
   // Preview: what's open from now to the end of the 7th day, after time off.
   const today = zonedParts(now, timezone)
   const until = zonedTime(today.year, today.month, today.day + PREVIEW_DAYS, 0, timezone)
   // (The preview shows open ranges, not start times, so clipping at "now" is right here.)
-  let open = schedule
-    ? openIntervals(weekly, timezone, now, until, (timeOff ?? []).map((t) => ({ start: new Date(t.starts_at), end: new Date(t.ends_at) })))
-    : []
+  // D-059: your hours for this business (or your default hours), inside its opening hours, minus time off.
+  let open = hoursForBusiness({
+    personTimezone: timezone,
+    defaultHours: weekly,
+    businessHours: offered,
+    openingHours,
+    businessTimezone: business.timezone,
+    from: now,
+    to: until,
+    timeOff: (timeOff ?? []).map((t) => ({ start: new Date(t.starts_at), end: new Date(t.ends_at) })),
+  })
   // Busy times from Google Calendar, when connected. If Google can't be read, say so rather than guess.
   let calendarBusy: 'none' | 'applied' | 'failed' = 'none'
   const { connection } = isGoogleCalendarConfigured && calendarAllowed(user.email) ? await lookupConnection(user.id) : { connection: undefined }
-  // This business's share of your hours, and your bookings from every business (only times, no details).
-  if (schedule && offered) open = intersect(open, openIntervals(offered, timezone, now, until))
-  if (schedule) {
-    const booked = await adminDb()
-      .select({ start: bookings.startsAt, end: bookings.endsAt })
-      .from(bookings)
-      .where(and(eq(bookings.hostUserId, user.id), inArray(bookings.status, ['confirmed', 'pending_payment']), lt(bookings.startsAt, until), gt(bookings.endsAt, now)))
-    open = subtract(open, booked)
-  }
-  if (schedule && connection?.status === 'active') {
+  // Your bookings from every business (only times, no details).
+  const booked = await adminDb()
+    .select({ start: bookings.startsAt, end: bookings.endsAt })
+    .from(bookings)
+    .where(and(eq(bookings.hostUserId, user.id), inArray(bookings.status, ['confirmed', 'pending_payment']), lt(bookings.startsAt, until), gt(bookings.endsAt, now)))
+  open = subtract(open, booked)
+  if (connection?.status === 'active') {
     try {
       const busy: Interval[] = await busyTimes(user.id, connection.busyCalendarIds, now, until)
       open = subtract(open, busy)
@@ -104,8 +110,10 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
 
       <Card>
         <CardHeader>
-          <CardTitle>Weekly hours</CardTitle>
-          <CardDescription>Times are in your own time zone and stay the same when the clocks change.</CardDescription>
+          <CardTitle>{multiBusiness ? 'Your default hours' : 'Weekly hours'}</CardTitle>
+          <CardDescription>
+            {multiBusiness ? 'Used for any business where you haven’t set your own hours. ' : ''}Times are in your own time zone and stay the same when the clocks change.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <WeeklyHoursForm initial={weekly} timezone={timezone} saved={Boolean(schedule)} />
@@ -117,8 +125,8 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
       {multiBusiness && (
         <Card>
           <CardHeader>
-            <CardTitle>What {business.name} gets</CardTitle>
-            <CardDescription>You work with {workspaces.length} businesses. Choose which of your hours {business.name} can book, and where its bookings go. Other businesses only ever see that you’re busy.</CardDescription>
+            <CardTitle>Your hours for {business.name}</CardTitle>
+            <CardDescription>You work with {workspaces.length} businesses. Set when you work for {business.name}, and where its bookings go. Your time off and bookings apply everywhere, so you’re never double-booked; other businesses only see that you’re busy.</CardDescription>
           </CardHeader>
           <CardContent>
             <BusinessOfferForm
@@ -127,6 +135,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
               personal={weekly}
               calendars={offerCalendars}
               destination={offer?.destination_calendar_id ?? ''}
+              openingNote={openingHours ? `${business.name} is open ${describeHours(openingHours)} (${US_TIME_ZONES.find((t) => t.value === business.timezone)?.label ?? business.timezone}). You can only be booked inside those hours.` : `${business.name} hasn’t limited its opening hours.`}
             />
           </CardContent>
         </Card>
@@ -172,9 +181,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {!schedule ? (
-              <p className="text-muted-foreground text-sm">Save your weekly hours to see your open times.</p>
-            ) : byDay.size === 0 ? (
+            {byDay.size === 0 ? (
               <p className="text-muted-foreground text-sm">Nothing open in the next week.</p>
             ) : (
               <dl className="grid gap-2 text-sm">

@@ -29,11 +29,13 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   const raw = { fullName: String(formData.get('fullName') ?? ''), email: String(formData.get('email') ?? ''), password: String(formData.get('password') ?? '') }
   const parsed = signUpSchema.safeParse(raw)
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: { fullName: raw.fullName, email: raw.email } }
+  // Usually onboarding; an invitation link sends people back to it instead (D-060).
+  const next = safeNext(String(formData.get('next') ?? ''), '/onboarding')
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: authCallbackUrl(siteUrl, '/onboarding') },
+    options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: authCallbackUrl(siteUrl, next) },
   })
   if (error) {
     const message = error.code === 'user_already_exists' ? 'An account with that email already exists. Sign in instead.' : error.code === 'weak_password' ? 'Choose a stronger password.' : 'We couldn’t create your account. Try again in a moment.'
@@ -41,7 +43,7 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   }
   // With email confirmation on (recommended), there is no session until the link is clicked.
   if (!data.session) redirect(`/check-email?email=${encodeURIComponent(parsed.data.email)}`)
-  redirect('/onboarding')
+  redirect(next)
 }
 
 /** Starts Google sign-in. New and returning people both use this; /app sends anyone without a business to onboarding. */
@@ -72,8 +74,10 @@ export async function sendSignInLink(_prev: FormState, formData: FormData): Prom
   redirect(`/check-email?kind=sign-in&email=${encodeURIComponent(parsed.data.email)}`)
 }
 
-export async function signOut() {
+export async function signOut(formData?: FormData) {
   const supabase = await createClient()
   await supabase.auth.signOut()
-  redirect('/sign-in')
+  // An invitation page signs the wrong account out and comes straight back (D-060).
+  const next = formData?.get('next')
+  redirect(typeof next === 'string' && next ? safeNext(next) : '/sign-in')
 }

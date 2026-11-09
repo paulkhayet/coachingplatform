@@ -1,9 +1,10 @@
 import 'server-only'
-import { and, eq, gt, isNull, lt, lte, ne, or, sql } from 'drizzle-orm'
+import { and, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm'
 import { adminDb, type AdminDb } from '@/db/server'
 import {
   availabilitySchedules,
   availabilityTimeOff,
+  bookingPageHosts,
   bookingPages,
   bookings,
   businesses,
@@ -16,13 +17,13 @@ import {
   type BookingPage,
 } from '@/db/schema'
 import { siteUrl } from '@/lib/env'
-import { bookableStarts, intersect, openIntervals, parseWeeklyHours, type Interval } from '@/lib/slots'
+import { DEFAULT_WEEKLY_HOURS, bookableStarts, hoursForBusiness, parseWeeklyHours, subtract, type Interval } from '@/lib/slots'
 import { busyTimes, createBookingEvent, deleteBookingEvent, updateBookingEvent } from '@/lib/google/calendar'
 import { getConnection } from '@/lib/google/server'
 import { stripe } from '@/lib/stripe/server'
 import { sendEmail } from '@/lib/email/server'
 import { formatAnswer } from './questions'
-import { deriveKey, formatCents, guestCanChange, manageToken, refundOnCancel, verifyManageToken } from './policy'
+import { deriveKey, fairestFirst, formatCents, guestCanChange, manageToken, refundOnCancel, verifyManageToken } from './policy'
 import { guestCancelled, guestConfirmation, guestReminder, guestRescheduled, hostGuestChange, hostNewBooking, type CallDetails } from './emails'
 import type { GuestBookingInput } from './schemas'
 
@@ -59,22 +60,28 @@ export function bookingIdFromToken(token: string) {
 export interface PublicPage {
   page: BookingPage
   business: { id: string; name: string; slug: string; timezone: string }
+  /** The host's name, or for a shared page (D-061) a description of who takes the call. */
   hostName: string
   hostEmail: string | null
+  /** Any available coach from a group takes the call (D-061). */
+  shared: boolean
 }
 
 export async function findPublicPage(businessSlug: string, pageSlug: string): Promise<PublicPage | null> {
   const rows = await adminDb()
-    .select({ page: bookingPages, business: { id: businesses.id, name: businesses.name, slug: businesses.slug, timezone: businesses.timezone }, hostName: profiles.fullName, hostEmail: profiles.email })
+    .select({ page: bookingPages, business: { id: businesses.id, name: businesses.name, slug: businesses.slug, timezone: businesses.timezone }, hostName: profiles.fullName, hostEmail: profiles.email, hostActive: memberships.id })
     .from(bookingPages)
     .innerJoin(businesses, eq(businesses.id, bookingPages.businessId))
-    .innerJoin(memberships, and(eq(memberships.id, bookingPages.hostMembershipId), eq(memberships.status, 'active')))
+    .leftJoin(memberships, and(eq(memberships.id, bookingPages.hostMembershipId), eq(memberships.status, 'active')))
     .leftJoin(profiles, eq(profiles.id, memberships.userId))
     .where(and(eq(businesses.slug, businessSlug), eq(bookingPages.slug, pageSlug), eq(bookingPages.active, true)))
     .limit(1)
   const r = rows[0]
   if (!r) return null
-  return { page: r.page, business: r.business, hostName: r.hostName ?? r.business.name, hostEmail: r.hostEmail }
+  if (!r.page.hostMembershipId) return { page: r.page, business: r.business, hostName: `a ${r.business.name} coach`, hostEmail: null, shared: true }
+  // A single-host page whose host has left isn't bookable.
+  if (!r.hostActive) return null
+  return { page: r.page, business: r.business, hostName: r.hostName ?? r.business.name, hostEmail: r.hostEmail, shared: false }
 }
 
 export async function listPublicPages(businessSlug: string) {
@@ -97,13 +104,21 @@ export async function paymentAccount(businessId: string): Promise<string | null>
 // ── Availability ─────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Who a membership's bookings belong to, and what that business gets of their time (D-057): the person,
- * the hours offered to this business (null = all their hours), and where its bookings go on their calendar.
+ * Who a membership's bookings belong to and the hours that apply (D-057, D-059): the person, their own
+ * hours for this business (null = their default hours), where its bookings go on their calendar, and the
+ * business's opening hours and time zone.
  */
 async function hostContext(membershipId: string) {
   const [row] = await adminDb()
-    .select({ userId: memberships.userId, offeredHours: membershipAvailability.offeredHours, destinationCalendarId: membershipAvailability.destinationCalendarId })
+    .select({
+      userId: memberships.userId,
+      businessHours: membershipAvailability.offeredHours,
+      destinationCalendarId: membershipAvailability.destinationCalendarId,
+      openingHours: businesses.openingHours,
+      businessTimezone: businesses.timezone,
+    })
     .from(memberships)
+    .innerJoin(businesses, eq(businesses.id, memberships.businessId))
     .leftJoin(membershipAvailability, eq(membershipAvailability.membershipId, memberships.id))
     .where(eq(memberships.id, membershipId))
     .limit(1)
@@ -118,36 +133,35 @@ export type SlotsResult = { starts: Date[]; calendarUnavailable: boolean }
  * confirmed bookings and unexpired payment holds in every business they work with (D-057). If their
  * calendar can't be read, nothing is offered: an unknown time isn't a free one.
  */
-export async function availableStarts(page: BookingPage, from: Date, to: Date, now = new Date(), ignoreBookingId?: string): Promise<SlotsResult> {
+/**
+ * A member's time for one business between the given bounds: their open hours (see hoursForBusiness:
+ * their hours for that business inside its opening hours, minus time off) and everything that makes them busy (bookings and
+ * payment holds in every business they work with, plus Google Calendar busy times). `unknown` when their
+ * calendar can't be read: an unknown time is never treated as free.
+ */
+async function memberTime(membershipId: string, open: { from: Date; to: Date }, busyRange: { from: Date; to: Date }, now: Date, ignoreBookingId?: string): Promise<{ open: Interval[]; busy: Interval[] } | 'unknown' | null> {
   const db = adminDb()
-  const host = await hostContext(page.hostMembershipId)
-  if (!host) return { starts: [], calendarUnavailable: false }
-  const [schedule] = await db.select().from(availabilitySchedules).where(eq(availabilitySchedules.userId, host.userId)).limit(1)
-  if (!schedule) return { starts: [], calendarUnavailable: false }
-
-  // A day either side: open hours start from the coach's day (so starts line up 9:00, 9:30 … not
-  // 11:02, 11:32 …), and slots near the edges still get their full length, buffers and time off checked.
-  const outerFrom = new Date(from.getTime() - DAY_MS)
-  const outerTo = new Date(to.getTime() + DAY_MS)
-  const pad = (page.bufferBeforeMinutes + page.bufferAfterMinutes + page.durationMinutes) * 60_000
-  const busyFrom = new Date(from.getTime() - pad)
-  const busyTo = new Date(to.getTime() + pad)
+  const host = await hostContext(membershipId)
+  if (!host) return null
+  // Nobody needs to save hours before they can be booked: until they do, weekdays 9 to 5 in this business's time zone.
+  const [saved] = await db.select().from(availabilitySchedules).where(eq(availabilitySchedules.userId, host.userId)).limit(1)
+  const schedule = saved ?? { timezone: host.businessTimezone, weeklyHours: DEFAULT_WEEKLY_HOURS }
 
   const holding = or(eq(bookings.status, 'confirmed'), and(eq(bookings.status, 'pending_payment'), gt(bookings.holdExpiresAt, now)))
   const [timeOff, booked] = await Promise.all([
-    db.select({ start: availabilityTimeOff.startsAt, end: availabilityTimeOff.endsAt }).from(availabilityTimeOff).where(and(eq(availabilityTimeOff.userId, host.userId), lt(availabilityTimeOff.startsAt, outerTo), gt(availabilityTimeOff.endsAt, outerFrom))),
+    db.select({ start: availabilityTimeOff.startsAt, end: availabilityTimeOff.endsAt }).from(availabilityTimeOff).where(and(eq(availabilityTimeOff.userId, host.userId), lt(availabilityTimeOff.startsAt, open.to), gt(availabilityTimeOff.endsAt, open.from))),
     db
       .select({ start: bookings.startsAt, end: bookings.endsAt })
       .from(bookings)
-      .where(and(eq(bookings.hostUserId, host.userId), holding, lt(bookings.startsAt, busyTo), gt(bookings.endsAt, busyFrom), ignoreBookingId ? ne(bookings.id, ignoreBookingId) : undefined)),
+      .where(and(eq(bookings.hostUserId, host.userId), holding, lt(bookings.startsAt, busyRange.to), gt(bookings.endsAt, busyRange.from), ignoreBookingId ? ne(bookings.id, ignoreBookingId) : undefined)),
   ])
 
   const busy: Interval[] = [...booked]
   const connection = await getConnection(host.userId)
   if (connection) {
-    if (connection.status !== 'active') return { starts: [], calendarUnavailable: true }
+    if (connection.status !== 'active') return 'unknown'
     try {
-      let googleBusy = await busyTimes(host.userId, connection.busyCalendarIds, busyFrom, busyTo)
+      let googleBusy = await busyTimes(host.userId, connection.busyCalendarIds, busyRange.from, busyRange.to)
       // When rescheduling, the booking's own Google event shows as busy; don't let it block itself.
       if (ignoreBookingId) {
         const [own] = await db.select({ start: bookings.startsAt, end: bookings.endsAt }).from(bookings).where(eq(bookings.id, ignoreBookingId)).limit(1)
@@ -155,27 +169,105 @@ export async function availableStarts(page: BookingPage, from: Date, to: Date, n
       }
       busy.push(...googleBusy)
     } catch (error) {
-      console.error('Reading Google busy times for booking failed', error)
-      return { starts: [], calendarUnavailable: true }
+      console.error('Reading Google busy times failed', error)
+      return 'unknown'
     }
   }
 
-  let open = openIntervals(parseWeeklyHours(schedule.weeklyHours), schedule.timezone, outerFrom, outerTo, timeOff)
-  // Only the hours this business is offered, if the person limited them (in the person's time zone).
-  if (host.offeredHours) open = intersect(open, openIntervals(parseWeeklyHours(host.offeredHours), schedule.timezone, outerFrom, outerTo))
-  const all = bookableStarts(open, {
+  const openHours = hoursForBusiness({
+    personTimezone: schedule.timezone,
+    defaultHours: parseWeeklyHours(schedule.weeklyHours),
+    businessHours: host.businessHours ? parseWeeklyHours(host.businessHours) : null,
+    openingHours: host.openingHours ? parseWeeklyHours(host.openingHours) : null,
+    businessTimezone: host.businessTimezone,
+    from: open.from,
+    to: open.to,
+    timeOff,
+  })
+  return { open: openHours, busy }
+}
+
+/** The coaches who take a page's calls: its host, or for a shared page every active coach on it (D-061). */
+export async function pageHosts(page: Pick<BookingPage, 'id' | 'hostMembershipId'>): Promise<string[]> {
+  if (page.hostMembershipId) return [page.hostMembershipId]
+  const rows = await adminDb()
+    .select({ id: bookingPageHosts.membershipId })
+    .from(bookingPageHosts)
+    .innerJoin(memberships, and(eq(memberships.id, bookingPageHosts.membershipId), eq(memberships.status, 'active')))
+    .where(eq(bookingPageHosts.bookingPageId, page.id))
+  return rows.map((r) => r.id)
+}
+
+export type HostSlots = SlotsResult & { byHost: Map<string, Date[]> }
+
+/**
+ * Bookable start times for a page between `from` and `to`. One host: their time for this business (see
+ * memberTime) with the page's length, buffers and notice. A shared page (D-061): every time at least one
+ * of its coaches is free. A coach whose calendar can't be read offers nothing (an unknown time isn't a
+ * free one); `calendarUnavailable` says so when that leaves no times at all. `hostMembershipId` limits
+ * it to one coach, e.g. when a guest moves a call that's already theirs.
+ */
+export async function availableStarts(page: BookingPage, from: Date, to: Date, now = new Date(), opts: { ignoreBookingId?: string; hostMembershipId?: string } = {}): Promise<HostSlots> {
+  const hosts = opts.hostMembershipId ? [opts.hostMembershipId] : await pageHosts(page)
+  const results = await Promise.all(hosts.map(async (h) => [h, await hostStarts(page, h, from, to, now, opts.ignoreBookingId)] as const))
+  const byHost = new Map(results.map(([h, r]) => [h, r.starts]))
+  const seen = new Map<number, Date>()
+  for (const [, r] of results) for (const d of r.starts) seen.set(d.getTime(), d)
+  const starts = [...seen.values()].sort((a, b) => a.getTime() - b.getTime())
+  return { starts, calendarUnavailable: starts.length === 0 && results.some(([, r]) => r.calendarUnavailable), byHost }
+}
+
+async function hostStarts(page: BookingPage, hostMembershipId: string, from: Date, to: Date, now: Date, ignoreBookingId?: string): Promise<SlotsResult> {
+  // A day either side: open hours start from the coach's day (so starts line up 9:00, 9:30 … not
+  // 11:02, 11:32 …), and slots near the edges still get their full length, buffers and time off checked.
+  const pad = (page.bufferBeforeMinutes + page.bufferAfterMinutes + page.durationMinutes) * 60_000
+  const time = await memberTime(
+    hostMembershipId,
+    { from: new Date(from.getTime() - DAY_MS), to: new Date(to.getTime() + DAY_MS) },
+    { from: new Date(from.getTime() - pad), to: new Date(to.getTime() + pad) },
+    now,
+    ignoreBookingId,
+  )
+  if (time === 'unknown') return { starts: [], calendarUnavailable: true }
+  if (!time) return { starts: [], calendarUnavailable: false }
+  const all = bookableStarts(time.open, {
     durationMinutes: page.durationMinutes,
     bufferBeforeMinutes: page.bufferBeforeMinutes,
     bufferAfterMinutes: page.bufferAfterMinutes,
     minNoticeMinutes: page.minNoticeMinutes,
     now,
-    busy,
+    busy: time.busy,
   })
   return { starts: all.filter((s) => s >= from && s <= to), calendarUnavailable: false }
 }
 
+/**
+ * When a member is free for this business between `from` and `to` (D-058): the owner's team view.
+ * Only free ranges come back, never what makes someone busy. Null if they haven't set hours.
+ */
+export async function freeTimes(membershipId: string, from: Date, to: Date, now = new Date()): Promise<Interval[] | 'unknown' | null> {
+  const time = await memberTime(membershipId, { from, to }, { from, to }, now)
+  if (time === 'unknown' || time === null) return time
+  return subtract(time.open, time.busy)
+}
+
 export function bookingWindow(page: BookingPage, now = new Date()) {
   return { from: now, to: new Date(now.getTime() + Math.min(page.windowDays, MAX_LOOKAHEAD_DAYS) * DAY_MS) }
+}
+
+/** How many live calls each coach already has from this page, recent and upcoming, for spreading calls evenly. */
+async function pageLoad(pageId: string, hosts: string[], now: Date) {
+  const rows = await adminDb()
+    .select({ host: bookings.hostMembershipId, n: sql<number>`count(*)::int` })
+    .from(bookings)
+    .where(and(eq(bookings.bookingPageId, pageId), inArray(bookings.hostMembershipId, hosts), or(eq(bookings.status, 'confirmed'), and(eq(bookings.status, 'pending_payment'), gt(bookings.holdExpiresAt, now))), gt(bookings.startsAt, new Date(now.getTime() - 30 * DAY_MS))))
+    .groupBy(bookings.hostMembershipId)
+  return new Map(rows.map((r) => [r.host, r.n]))
+}
+
+async function memberName(membershipId: string, fallback: string) {
+  const [r] = await adminDb().select({ name: profiles.fullName }).from(memberships).innerJoin(profiles, eq(profiles.id, memberships.userId)).where(eq(memberships.id, membershipId)).limit(1)
+  return r?.name ?? fallback
 }
 
 // ── Booking ──────────────────────────────────────────────────────────────────────────────────────────
@@ -184,8 +276,6 @@ export type BookResult = { ok: true; bookingId: string; checkoutUrl?: string } |
 
 export interface GuestExtras {
   answers: BookingAnswer[]
-  studentName: string | null
-  studentGrade: string | null
 }
 
 /** The admin connection, or a transaction on it (so callers inside a transaction don't need a second connection). */
@@ -209,55 +299,61 @@ export async function bookCall(pub: PublicPage, input: GuestBookingInput, extras
   if (paid && !account) return { ok: false, reason: 'payments' }
 
   const check = await availableStarts(page, start, start, now)
-  if (check.calendarUnavailable) return { ok: false, reason: 'calendar' }
-  if (!check.starts.some((s) => s.getTime() === start.getTime())) return { ok: false, reason: 'taken' }
+  const free = [...check.byHost].filter(([, starts]) => starts.some((s) => s.getTime() === start.getTime())).map(([h]) => h)
+  if (free.length === 0) return { ok: false, reason: check.calendarUnavailable ? 'calendar' : 'taken' }
 
   const db = adminDb()
-  const host = await hostContext(page.hostMembershipId)
-  if (!host) return { ok: false, reason: 'taken' }
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(bookings)
     .where(and(eq(bookings.bookingPageId, page.id), eq(bookings.guestEmail, input.email), or(eq(bookings.status, 'confirmed'), and(eq(bookings.status, 'pending_payment'), gt(bookings.holdExpiresAt, now))), gt(bookings.startsAt, now)))
   if (count >= MAX_UPCOMING_PER_GUEST) return { ok: false, reason: 'limit' }
 
-  // Free up times held by guests who never finished paying, so they don't block this booking.
-  await db.update(bookings).set({ status: 'expired' }).where(and(eq(bookings.hostUserId, host.userId), eq(bookings.status, 'pending_payment'), lte(bookings.holdExpiresAt, now)))
-
-  let bookingId: string
-  try {
-    const [row] = await db
-      .insert(bookings)
-      .values({
-        businessId: pub.business.id,
-        bookingPageId: page.id,
-        hostMembershipId: page.hostMembershipId,
-        hostUserId: host.userId,
-        title: page.title,
-        startsAt: start,
-        endsAt: end,
-        status: paid ? 'pending_payment' : 'confirmed',
-        holdExpiresAt: paid ? new Date(now.getTime() + HOLD_MINUTES * 60_000) : null,
-        paymentStatus: paid ? 'pending' : 'not_required',
-        priceCents: page.priceCents,
-        stripeAccountId: account,
-        refundCutoffHours: page.refundCutoffHours,
-        guestName: input.name,
-        guestEmail: input.email,
-        guestNotes: input.notes || null,
-        guestTimezone: input.timezone || null,
-        studentName: extras.studentName,
-        studentGrade: extras.studentGrade,
-        answers: extras.answers,
-        locationType: page.locationType,
-        locationDetail: page.locationDetail,
-      })
-      .returning({ id: bookings.id })
-    bookingId = row.id
-  } catch (error) {
-    if (isOverlap(error)) return { ok: false, reason: 'taken' }
-    throw error
+  // A shared page gives the call to the free coach with the fewest recent calls from it (D-061). If the
+  // database says that coach was just booked by someone else, try the next one.
+  const order = free.length > 1 ? fairestFirst(free, await pageLoad(page.id, free, now)) : free
+  let bookingId: string | null = null
+  let hostMembershipId = order[0]
+  for (const candidate of order) {
+    const host = await hostContext(candidate)
+    if (!host) continue
+    // Free up times held by guests who never finished paying, so they don't block this booking.
+    await db.update(bookings).set({ status: 'expired' }).where(and(eq(bookings.hostUserId, host.userId), eq(bookings.status, 'pending_payment'), lte(bookings.holdExpiresAt, now)))
+    try {
+      const [row] = await db
+        .insert(bookings)
+        .values({
+          businessId: pub.business.id,
+          bookingPageId: page.id,
+          hostMembershipId: candidate,
+          hostUserId: host.userId,
+          title: page.title,
+          startsAt: start,
+          endsAt: end,
+          status: paid ? 'pending_payment' : 'confirmed',
+          holdExpiresAt: paid ? new Date(now.getTime() + HOLD_MINUTES * 60_000) : null,
+          paymentStatus: paid ? 'pending' : 'not_required',
+          priceCents: page.priceCents,
+          stripeAccountId: account,
+          refundCutoffHours: page.refundCutoffHours,
+          guestName: input.name,
+          guestEmail: input.email,
+          guestNotes: input.notes || null,
+          guestTimezone: input.timezone || null,
+          answers: extras.answers,
+          locationType: page.locationType,
+          locationDetail: page.locationDetail,
+        })
+        .returning({ id: bookings.id })
+      bookingId = row.id
+      hostMembershipId = candidate
+      break
+    } catch (error) {
+      if (isOverlap(error)) continue
+      throw error
+    }
   }
+  if (!bookingId) return { ok: false, reason: 'taken' }
 
   if (!paid) {
     await afterConfirmed(bookingId)
@@ -270,7 +366,7 @@ export async function bookCall(pub: PublicPage, input: GuestBookingInput, extras
       {
         mode: 'payment',
         customer_email: input.email,
-        line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: page.priceCents!, product_data: { name: `${page.title} with ${pub.hostName}`, description: `${pub.business.name} · ${page.durationMinutes} minutes` } } }],
+        line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: page.priceCents!, product_data: { name: `${page.title} with ${pub.shared ? await memberName(hostMembershipId, pub.business.name) : pub.hostName}`, description: `${pub.business.name} · ${page.durationMinutes} minutes` } } }],
         metadata: { booking_id: bookingId },
         payment_intent_data: { metadata: { booking_id: bookingId } },
         success_url: `${siteUrl}${pagePath}/booked/${bookingId}?session_id={CHECKOUT_SESSION_ID}`,
@@ -367,6 +463,7 @@ function details(c: Ctx, forGuest: boolean): CallDetails {
 function eventDescription(c: Ctx) {
   const b = c.booking
   const lines = [`Booked through schedulefa.st (${c.business.name}).`, `Guest: ${b.guestName} <${b.guestEmail}>`]
+  // Bookings made before D-063 may carry the old student fields.
   if (b.studentName) lines.push(`Student: ${b.studentName}${b.studentGrade ? ` (${b.studentGrade})` : ''}`)
   if (b.locationDetail) lines.push(`Where: ${b.locationDetail}`)
   for (const a of b.answers) lines.push(`${a.label}: ${formatAnswer(a.value)}`)
@@ -465,7 +562,8 @@ export async function rescheduleBooking(bookingId: string, newStart: Date, now =
 
   const window = bookingWindow(page, now)
   if (newStart < window.from || newStart > window.to) return { ok: false, reason: 'taken' }
-  const check = await availableStarts(page, newStart, newStart, now, b.id)
+  // The call stays with its coach, also on a shared page (D-061).
+  const check = await availableStarts(page, newStart, newStart, now, { ignoreBookingId: b.id, hostMembershipId: b.hostMembershipId })
   if (check.calendarUnavailable) return { ok: false, reason: 'calendar' }
   if (!check.starts.some((s) => s.getTime() === newStart.getTime())) return { ok: false, reason: 'taken' }
 
@@ -506,6 +604,29 @@ export async function rescheduleBooking(bookingId: string, newStart: Date, now =
   await sendEmail(b.guestEmail, guestRescheduled(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `moved:${b.id}:${stamp}` })
   if (c.hostEmail) await sendEmail(c.hostEmail, hostGuestChange({ ...details(c, false), guestEmail: b.guestEmail }, 'rescheduled'), { replyTo: b.guestEmail, idempotencyKey: `host-moved:${b.id}:${stamp}` })
   return { ok: true }
+}
+
+/**
+ * Someone was removed from a business or left it (D-058): cancel their upcoming bookings with that
+ * business as business cancellations (paid guests are refunded in full), release any payment holds, and
+ * stop their booking pages there. Their other businesses are untouched. Returns how many were cancelled.
+ */
+export async function releaseMember(membershipId: string, now = new Date()) {
+  const db = adminDb()
+  await db.update(bookingPages).set({ active: false, updatedAt: sql`now()` }).where(eq(bookingPages.hostMembershipId, membershipId))
+  // Shared pages carry on with the other coaches (D-061).
+  await db.delete(bookingPageHosts).where(eq(bookingPageHosts.membershipId, membershipId))
+  await db.update(bookings).set({ status: 'expired' }).where(and(eq(bookings.hostMembershipId, membershipId), eq(bookings.status, 'pending_payment')))
+  const upcoming = await db.select({ id: bookings.id }).from(bookings).where(and(eq(bookings.hostMembershipId, membershipId), eq(bookings.status, 'confirmed'), gt(bookings.endsAt, now)))
+  let cancelled = 0
+  for (const { id } of upcoming) {
+    try {
+      if ((await cancelBooking(id, 'business', now)).ok) cancelled++
+    } catch (error) {
+      console.error(`Cancelling booking ${id} for a removed member failed`, error)
+    }
+  }
+  return { cancelled, total: upcoming.length }
 }
 
 // ── Guest views ──────────────────────────────────────────────────────────────────────────────────────

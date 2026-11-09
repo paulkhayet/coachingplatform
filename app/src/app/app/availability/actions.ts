@@ -118,8 +118,8 @@ export async function removeTimeOff(formData: FormData) {
 }
 
 /**
- * What this business gets of your time (D-057): all your hours, or only some of them, and which of your
- * calendars its bookings go into (blank = your default).
+ * Your hours for this business (D-059): your default hours, or separate hours just for it; and which of
+ * your calendars its bookings go into (blank = your default).
  */
 export async function saveBusinessOffer(_prev: AvailabilityState, formData: FormData): Promise<AvailabilityState> {
   const { user, membership, business } = await requireWorkspace()
@@ -134,7 +134,7 @@ export async function saveBusinessOffer(_prev: AvailabilityState, formData: Form
     }
     const parsed = weeklyHoursSchema.safeParse(raw)
     if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? 'Check the hours.' }
-    if (parsed.data.length === 0) return { message: `Choose at least one block of time for ${business.name}, or offer all your hours.` }
+    if (parsed.data.length === 0) return { message: `Choose at least one block of time for ${business.name}, or use your default hours.` }
     offered = parsed.data.sort((a, b) => a.day - b.day || a.start - b.start)
   }
   const destination = String(formData.get('destination') ?? '') || null
@@ -156,5 +156,5 @@ export async function saveBusinessOffer(_prev: AvailabilityState, formData: Form
   })
   if (error) return { message: 'We couldn’t save that. Try again in a moment.' }
   revalidatePath(PATH)
-  return { ok: true, message: `Saved what you offer ${business.name}.` }
+  return { ok: true, message: `Saved your hours for ${business.name}.` }
 }

@@ -42,7 +42,7 @@ export default async function PublicBookingPage({ params, searchParams }: { para
         <p className="text-muted-foreground text-sm">{pub.business.name}</p>
         <h1 className="text-2xl font-semibold tracking-tight">{pub.page.title}</h1>
         <div className="text-muted-foreground grid gap-1.5 text-sm">
-          <span className="flex items-center gap-2"><Clock className="size-4" /> {pub.page.durationMinutes} minutes with {pub.hostName}</span>
+          <span className="flex items-center gap-2"><Clock className="size-4" /> {pub.page.durationMinutes} minutes with {pub.shared ? `one of ${pub.business.name}’s coaches` : pub.hostName}</span>
           <span className="flex items-center gap-2"><W.icon className="size-4" /> {W.label}</span>
           {price != null && (
             <span className="flex items-center gap-2"><CreditCard className="size-4" /> {formatCents(price)}, paid when you book. Full refund if you cancel {pub.page.refundCutoffHours} hours or more before.</span>
@@ -63,8 +63,8 @@ export default async function PublicBookingPage({ params, searchParams }: { para
             <SlotPicker
               starts={starts.map((s) => s.toISOString())}
               durationMinutes={pub.page.durationMinutes}
-              askStudent={pub.page.askStudent}
               questions={parseQuestions(pub.page.questions)}
+              askNotes={pub.page.askNotes}
               priceLabel={price != null ? formatCents(price) : undefined}
               action={bookAction.bind(null, business, page)}
             />

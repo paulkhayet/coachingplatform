@@ -56,3 +56,14 @@ export function parseDollars(input: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return Number.NaN
   return Math.round(Number(cleaned) * 100)
 }
+
+/**
+ * D-061: the order to offer a shared page's call to its free coaches: fewest live calls from that page
+ * first (`load`), ties broken at random so nobody is always first.
+ */
+export function fairestFirst(hosts: string[], load: Map<string, number>, random = Math.random): string[] {
+  return hosts
+    .map((h) => ({ h, n: load.get(h) ?? 0, r: random() }))
+    .sort((a, b) => a.n - b.n || a.r - b.r)
+    .map((x) => x.h)
+}

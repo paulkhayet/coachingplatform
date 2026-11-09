@@ -4,6 +4,9 @@ import { Logo } from '@/components/brand'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/server'
 import { getUser } from '@/lib/workspace'
+import { openInvitationsFor } from '@/lib/team/invitations'
+import { roleLabel } from '@/lib/roles'
+import { JoinButton } from '../(auth)/join/form'
 import { OnboardingForm } from './form'
 
 export const metadata: Metadata = { title: 'Set up your business' }
@@ -16,10 +19,28 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const supabase = await createClient()
   const { count } = await supabase.from('memberships').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active')
   if (count && !another) redirect('/app')
+  // D-060: someone invited by email who signed up without the link can still join from here.
+  const invites = user.email_confirmed_at && user.email ? await openInvitationsFor(user.email) : []
   return (
     <main className="bg-muted/30 grid min-h-svh place-items-center p-6">
       <div className="grid w-full max-w-md justify-items-center gap-6">
         <Logo className="text-xl [&_svg]:size-7" />
+        {invites.length > 0 && (
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-xl">You’ve been invited</CardTitle>
+              <CardDescription>Join a business that invited {user.email}. You can still create your own as well.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {invites.map((inv) => (
+                <div key={inv.id} className="grid gap-2">
+                  <p className="text-sm"><strong>{inv.businessName}</strong> <span className="text-muted-foreground">as {roleLabel[inv.role].toLowerCase()}</span></p>
+                  <JoinButton invitationId={inv.id} businessName={inv.businessName} />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
         <Card className="w-full">
           <CardHeader>
             <CardTitle className="text-xl">{another ? 'Create another business' : 'Set up your coaching business'}</CardTitle>

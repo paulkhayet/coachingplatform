@@ -93,3 +93,21 @@ export function hostGuestChange(d: CallDetails & { guestEmail: string }, change:
   if (refund === 'none') lines.push('It was after the refund cutoff, so no refund was made.')
   return { subject, ...render(subject, lines, [...detailRows(d), ['Guest', `${d.guestName} <${d.guestEmail}>`]]) }
 }
+
+/** D-060: an owner invites someone to join their business. */
+export function teamInviteEmail(d: { businessName: string; inviterName: string; roleLabel: string; url: string; expires: Date }): EmailMessage {
+  const until = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(d.expires)
+  return {
+    subject: `${d.inviterName} invited you to join ${d.businessName}`,
+    ...render(
+      `Join ${d.businessName} on schedulefa.st`,
+      [
+        `${d.inviterName} invited you to join ${d.businessName} as ${/^[aeiou]/i.test(d.roleLabel) ? 'an' : 'a'} ${d.roleLabel.toLowerCase()}.`,
+        'If you already use schedulefa.st, your account, hours and calendar carry over, and you can switch between your businesses. If you’re new, you’ll create a free account first.',
+      ],
+      [['Business', d.businessName], ['Role', d.roleLabel]],
+      { label: 'Accept the invitation', url: d.url },
+      `The link works once and expires on ${until}. If you weren’t expecting this, you can ignore it.`,
+    ),
+  }
+}

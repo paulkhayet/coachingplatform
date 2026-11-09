@@ -47,6 +47,30 @@ export function parseWeeklyHours(value: unknown): WeeklyWindow[] {
   return parsed.success ? parsed.data : []
 }
 
+/** "Mon 9:00 AM–5:00 PM, Fri 9:00 AM–12:00 PM" for showing a weekly schedule in a sentence. */
+/** Until someone saves their own weekly hours they work weekdays 9 to 5, in their business's time zone. */
+export const DEFAULT_WEEKLY_HOURS: WeeklyWindow[] = [1, 2, 3, 4, 5].map((day) => ({ day, start: 9 * 60, end: 17 * 60 }))
+
+export function describeHours(weekly: WeeklyWindow[]) {
+  const short = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const t = (m: number) => {
+    const h = Math.floor(m / 60) % 24
+    return `${((h + 11) % 12) + 1}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+  }
+  const order = [1, 2, 3, 4, 5, 6, 0]
+  // Each day's hours as text, then consecutive days with the same hours joined: "Mon–Fri 9:00 AM–5:00 PM".
+  const days = order
+    .map((day) => ({ day, text: weekly.filter((w) => w.day === day).sort((a, b) => a.start - b.start).map((w) => `${t(w.start)}–${w.end === MINUTES_PER_DAY ? '12:00 AM' : t(w.end)}`).join(' and ') }))
+  const runs: { from: number; to: number; text: string }[] = []
+  days.forEach(({ day, text }, i) => {
+    if (!text) return
+    const last = runs.at(-1)
+    if (last && last.text === text && days[i - 1]?.day === last.to) last.to = day
+    else runs.push({ from: day, to: day, text })
+  })
+  return runs.map((r) => `${short[r.from]}${r.from === r.to ? '' : (order.indexOf(r.to) - order.indexOf(r.from) === 1 ? ', ' : '–') + short[r.to]} ${r.text}`).join('; ') || 'never'
+}
+
 /** "09:30" → 570. Returns null for anything that isn't HH:MM. "24:00" is allowed as an end of day. */
 export function parseClock(value: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim())
@@ -137,6 +161,27 @@ export function openIntervals(weekly: WeeklyWindow[], timeZone: string, from: Da
     }
   }
   return subtract(merge(raw), timeOff)
+}
+
+/**
+ * The hours one business can book a person (D-059): their own hours for that business, or their default
+ * hours if they haven't set any, kept inside the business's opening hours, minus their time off. Each
+ * schedule is wall-clock time in its own zone (the person's, the business's).
+ */
+export function hoursForBusiness(opts: {
+  personTimezone: string
+  defaultHours: WeeklyWindow[]
+  /** The person's own hours for this business; null = use their default hours. */
+  businessHours: WeeklyWindow[] | null
+  /** When the business takes bookings at all; null = no limit. */
+  openingHours: WeeklyWindow[] | null
+  businessTimezone: string
+  from: Date
+  to: Date
+  timeOff?: Interval[]
+}): Interval[] {
+  const mine = openIntervals(opts.businessHours ?? opts.defaultHours, opts.personTimezone, opts.from, opts.to, opts.timeOff ?? [])
+  return opts.openingHours ? intersect(mine, openIntervals(opts.openingHours, opts.businessTimezone, opts.from, opts.to)) : mine
 }
 
 export interface SlotOptions {

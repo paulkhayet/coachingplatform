@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarCheck, CalendarClock, CreditCard, Home, Link2, UsersRound } from 'lucide-react'
+import { CalendarCheck, CalendarClock, Clock, CreditCard, Home, Link2, UsersRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const items = [
@@ -11,6 +11,7 @@ const items = [
   { href: '/app/booking-pages', label: 'Booking pages', icon: Link2 },
   { href: '/app/availability', label: 'Availability', icon: CalendarClock },
   { href: '/app/team', label: 'Team', icon: UsersRound },
+  { href: '/app/settings/business', label: 'Business hours', icon: Clock },
   { href: '/app/settings/payments', label: 'Payments', icon: CreditCard },
 ]
 

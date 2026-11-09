@@ -1,7 +1,6 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { z } from 'zod'
 import { fieldErrors, type FieldErrors } from '@/lib/validation'
 import { guestBookingSchema } from '@/lib/booking/schemas'
 import { parseQuestions, readAnswers } from '@/lib/booking/questions'
@@ -23,47 +22,32 @@ const reasons = {
   payments: 'This call can’t be booked online right now. Please contact the business.',
 }
 
-const student = z.object({
-  name: z.string().trim().min(1, 'Enter the student’s name').max(120, 'Keep the name under 120 characters'),
-  grade: z.string().trim().max(40, 'Keep the grade under 40 characters'),
-})
-
 export async function bookAction(businessSlug: string, pageSlug: string, _prev: GuestBookingState, formData: FormData): Promise<GuestBookingState> {
   const pub = await findPublicPage(businessSlug, pageSlug)
   if (!pub) return { message: 'This booking page isn’t available any more.' }
   const values: Record<string, string | string[]> = {}
   for (const key of new Set(formData.keys())) {
-    if (key === 'name' || key === 'email' || key === 'notes' || key === 'studentName' || key === 'studentGrade') values[key] = String(formData.get(key) ?? '')
+    if (key === 'name' || key === 'email' || key === 'notes') values[key] = String(formData.get(key) ?? '')
     else if (key.startsWith('q_')) values[key] = formData.getAll(key).map(String)
   }
   const parsed = guestBookingSchema.safeParse({
     start: formData.get('start'),
     name: formData.get('name') ?? '',
     email: formData.get('email') ?? '',
-    notes: formData.get('notes') ?? '',
+    // Only pages that offer the note accept one (D-064).
+    notes: pub.page.askNotes ? (formData.get('notes') ?? '') : '',
     timezone: formData.get('timezone') ?? '',
     website: formData.get('website') ?? '',
   })
   const errors: FieldErrors = parsed.success ? {} : fieldErrors(parsed.error)
 
-  let studentName: string | null = null
-  let studentGrade: string | null = null
-  if (pub.page.askStudent) {
-    const s = student.safeParse({ name: formData.get('studentName') ?? '', grade: formData.get('studentGrade') ?? '' })
-    if (s.success) {
-      studentName = s.data.name
-      studentGrade = s.data.grade || null
-    } else {
-      for (const issue of s.error.issues) errors[issue.path[0] === 'name' ? 'studentName' : 'studentGrade'] ??= issue.message
-    }
-  }
   const { answers, errors: answerErrors } = readAnswers(parseQuestions(pub.page.questions), (n) => formData.getAll(n).map(String))
   Object.assign(errors, answerErrors)
   if (!parsed.success || Object.keys(errors).length) return { errors, values }
 
   let result: Awaited<ReturnType<typeof bookCall>>
   try {
-    result = await bookCall(pub, parsed.data, { answers, studentName, studentGrade })
+    result = await bookCall(pub, parsed.data, { answers })
   } catch (error) {
     console.error('Booking failed', error)
     return { message: 'Something went wrong booking your call. Please try again.', values }

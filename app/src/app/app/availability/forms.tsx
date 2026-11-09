@@ -19,7 +19,7 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 type Row = { start: string; end: string }
 
-function useDays(initial: WeeklyWindow[]) {
+export function useDays(initial: WeeklyWindow[]) {
   const [days, setDays] = useState<Record<number, Row[]>>(() => {
     const out: Record<number, Row[]> = {}
     for (const w of initial) (out[w.day] ??= []).push({ start: formatClock(w.start), end: w.end === MINUTES_PER_DAY ? '24:00' : formatClock(w.end) })
@@ -33,7 +33,7 @@ function useDays(initial: WeeklyWindow[]) {
 }
 
 /** One row per weekday with any number of time ranges. */
-function DayRows({ days, update, offLabel = 'Unavailable' }: { days: Record<number, Row[]>; update: (day: number, rows: Row[]) => void; offLabel?: string }) {
+export function DayRows({ days, update, offLabel = 'Unavailable' }: { days: Record<number, Row[]>; update: (day: number, rows: Row[]) => void; offLabel?: string }) {
   return (
     <div className="divide-y rounded-lg border">
       {DAY_ORDER.map((day) => {
@@ -78,7 +78,7 @@ export function WeeklyHoursForm({ initial, timezone, saved }: { initial: WeeklyW
         <Alert variant={state.ok ? 'success' : 'destructive'}><AlertDescription>{state.message}</AlertDescription></Alert>
       )}
       {!saved && !state.ok && (
-        <Alert variant="info"><AlertDescription>You haven’t saved any hours yet, so nobody can book you. We’ve suggested weekdays 9 to 5 to start.</AlertDescription></Alert>
+        <Alert variant="info"><AlertDescription>You’re using the default hours, weekdays 9 to 5, so families can already book you. Change them below and save if they don’t suit you.</AlertDescription></Alert>
       )}
       <div className="grid gap-1.5 sm:max-w-xs">
         <Label htmlFor="timezone">Your time zone</Label>
@@ -92,8 +92,8 @@ export function WeeklyHoursForm({ initial, timezone, saved }: { initial: WeeklyW
   )
 }
 
-/** What one business gets of your time (D-057): all your hours or only some, and which calendar its bookings go into. */
-export function BusinessOfferForm({ businessName, offered, personal, calendars, destination }: { businessName: string; offered: WeeklyWindow[] | null; personal: WeeklyWindow[]; calendars: { id: string; name: string; primary: boolean; owned: boolean }[] | null; destination: string }) {
+/** Your hours for one business (D-059): your default hours, or separate hours just for this business. */
+export function BusinessOfferForm({ businessName, offered, personal, calendars, destination, openingNote }: { businessName: string; offered: WeeklyWindow[] | null; personal: WeeklyWindow[]; calendars: { id: string; name: string; primary: boolean; owned: boolean }[] | null; destination: string; openingNote: string }) {
   const [state, action, pending] = useActionState<AvailabilityState, FormData>(saveBusinessOffer, {})
   const [mode, setMode] = useState<'all' | 'some'>(offered ? 'some' : 'all')
   const { days, update, weekly } = useDays(offered ?? personal)
@@ -104,19 +104,15 @@ export function BusinessOfferForm({ businessName, offered, personal, calendars, 
       <fieldset className="grid gap-2 text-sm">
         <label className="flex items-center gap-2">
           <input type="radio" name="mode" value="all" checked={mode === 'all'} onChange={() => setMode('all')} className="accent-primary size-4" />
-          Offer {businessName} all my weekly hours
+          Use my default hours for {businessName}
         </label>
         <label className="flex items-center gap-2">
           <input type="radio" name="mode" value="some" checked={mode === 'some'} onChange={() => setMode('some')} className="accent-primary size-4" />
-          Only offer {businessName} some of my hours
+          Set different hours just for {businessName}
         </label>
       </fieldset>
-      {mode === 'some' && (
-        <>
-          <p className="text-muted-foreground text-xs">{businessName} can book you only when these hours overlap your weekly hours, outside your time off and other bookings.</p>
-          <DayRows days={days} update={update} offLabel="Not offered" />
-        </>
-      )}
+      {mode === 'some' && <DayRows days={days} update={update} offLabel={`Not working for ${businessName}`} />}
+      <p className="text-muted-foreground text-xs">{openingNote}</p>
       {calendars && (
         <div className="grid gap-1.5 sm:max-w-sm">
           <Label htmlFor="offer-destination">Add {businessName} bookings to</Label>

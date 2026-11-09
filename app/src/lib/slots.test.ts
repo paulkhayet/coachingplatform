@@ -117,3 +117,44 @@ describe('intersect', () => {
     expect(intersect(day, [])).toEqual([])
   })
 })
+
+describe('hoursForBusiness (D-059)', () => {
+  it('handles Ariel: Mon–Thu for her practice, Fridays only for an agency open Mon–Fri 9–5 Eastern', async () => {
+    const { hoursForBusiness } = await import('./slots')
+    const weekdays = (days: number[]) => days.map((day) => ({ day, start: 9 * 60, end: 17 * 60 }))
+    const week = { from: at('2026-11-09T00:00:00Z'), to: at('2026-11-16T00:00:00Z') } // Mon Nov 9 – Sun Nov 15
+    const practice = hoursForBusiness({ personTimezone: LA, defaultHours: weekdays([1, 2, 3, 4]), businessHours: null, openingHours: null, businessTimezone: LA, ...week })
+    expect(practice.map((i) => iso(i.start).slice(0, 10))).toEqual(['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12'])
+    const agency = hoursForBusiness({ personTimezone: LA, defaultHours: weekdays([1, 2, 3, 4]), businessHours: weekdays([5]), openingHours: weekdays([1, 2, 3, 4, 5]), businessTimezone: NY, ...week })
+    // Friday 9–5 Pacific, cut off at 5 p.m. Eastern (2 p.m. Pacific).
+    expect(agency.map((i) => [iso(i.start), iso(i.end)])).toEqual([['2026-11-13T17:00:00.000Z', '2026-11-13T22:00:00.000Z']])
+  })
+
+  it('applies time off to every business', async () => {
+    const { hoursForBusiness } = await import('./slots')
+    const fri = [{ day: 5, start: 9 * 60, end: 17 * 60 }]
+    const open = hoursForBusiness({ personTimezone: LA, defaultHours: [], businessHours: fri, openingHours: null, businessTimezone: LA, from: at('2026-11-13T00:00:00Z'), to: at('2026-11-14T08:00:00Z'), timeOff: [{ start: at('2026-11-13T00:00:00Z'), end: at('2026-11-14T08:00:00Z') }] })
+    expect(open).toEqual([])
+  })
+})
+
+describe('describeHours', () => {
+  it('joins consecutive days with the same hours', async () => {
+    const { describeHours } = await import('./slots')
+    const nineToFive = (day: number) => ({ day, start: 540, end: 1020 })
+    expect(describeHours([1, 2, 3, 4, 5].map(nineToFive))).toBe('Mon–Fri 9:00 AM–5:00 PM')
+    expect(describeHours([nineToFive(1), nineToFive(2), nineToFive(4), { day: 6, start: 600, end: 720 }, { day: 6, start: 780, end: 840 }]))
+      .toBe('Mon, Tue 9:00 AM–5:00 PM; Thu 9:00 AM–5:00 PM; Sat 10:00 AM–12:00 PM and 1:00 PM–2:00 PM')
+    expect(describeHours([])).toBe('never')
+  })
+})
+
+describe('default hours', () => {
+  it('opens weekdays 9 to 5 in the business time zone for someone who never saved hours', async () => {
+    const { DEFAULT_WEEKLY_HOURS, hoursForBusiness } = await import('./slots')
+    // Week of Mon Nov 16 2026 in New York (UTC-5).
+    const open = hoursForBusiness({ personTimezone: 'America/New_York', defaultHours: DEFAULT_WEEKLY_HOURS, businessHours: null, openingHours: null, businessTimezone: 'America/New_York', from: new Date('2026-11-16T05:00:00Z'), to: new Date('2026-11-23T05:00:00Z') })
+    expect(open).toHaveLength(5)
+    expect(open[0]).toEqual({ start: new Date('2026-11-16T14:00:00Z'), end: new Date('2026-11-16T22:00:00Z') })
+  })
+})

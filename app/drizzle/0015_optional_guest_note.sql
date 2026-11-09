@@ -1,0 +1,1 @@
+ALTER TABLE "booking_pages" ADD COLUMN "ask_notes" boolean DEFAULT true NOT NULL;

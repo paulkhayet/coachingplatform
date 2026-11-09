@@ -14,7 +14,7 @@ import type { GuestBookingState } from './actions'
 const textareaClass =
   'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]'
 
-export function SlotPicker({ starts, durationMinutes, askStudent, questions, priceLabel, action }: { starts: string[]; durationMinutes: number; askStudent: boolean; questions: BookingQuestion[]; priceLabel?: string; action: (prev: GuestBookingState, fd: FormData) => Promise<GuestBookingState> }) {
+export function SlotPicker({ starts, durationMinutes, questions, askNotes, priceLabel, action }: { starts: string[]; durationMinutes: number; askNotes: boolean; questions: BookingQuestion[]; priceLabel?: string; action: (prev: GuestBookingState, fd: FormData) => Promise<GuestBookingState> }) {
   const router = useRouter()
   const [state, formAction, pending] = useActionState<GuestBookingState, FormData>(action, {})
   const tz = useGuestTimezone()
@@ -69,20 +69,6 @@ export function SlotPicker({ starts, durationMinutes, askStudent, questions, pri
         <Input id="email" name="email" type="email" autoComplete="email" defaultValue={val('email')} aria-invalid={!!e.email} />
         {e.email ? err('email') : <p className="text-muted-foreground text-xs">Your confirmation and calendar invitation go here.</p>}
       </div>
-      {askStudent && (
-        <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
-          <div className="grid gap-1.5">
-            <Label htmlFor="studentName">Student’s name</Label>
-            <Input id="studentName" name="studentName" defaultValue={val('studentName')} aria-invalid={!!e.studentName} />
-            {err('studentName')}
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="studentGrade">Grade <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Input id="studentGrade" name="studentGrade" maxLength={40} defaultValue={val('studentGrade')} aria-invalid={!!e.studentGrade} />
-            {err('studentGrade')}
-          </div>
-        </div>
-      )}
       {questions.map((q) => {
         const field = `q_${q.id}`
         const label = <>{q.label} {!q.required && <span className="text-muted-foreground font-normal">(optional)</span>}</>
@@ -108,10 +94,12 @@ export function SlotPicker({ starts, durationMinutes, askStudent, questions, pri
           </fieldset>
         )
       })}
-      <div className="grid gap-1.5">
-        <Label htmlFor="notes">Anything else you’d like to share? <span className="text-muted-foreground font-normal">(optional)</span></Label>
-        <textarea id="notes" name="notes" rows={3} maxLength={2000} defaultValue={val('notes')} className={textareaClass} />
-      </div>
+      {askNotes && (
+        <div className="grid gap-1.5">
+          <Label htmlFor="notes">Anything else you’d like to share? <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <textarea id="notes" name="notes" rows={3} maxLength={2000} defaultValue={val('notes')} className={textareaClass} />
+        </div>
+      )}
       <Button type="submit" disabled={pending}>{pending ? (priceLabel ? 'Opening payment…' : 'Booking…') : priceLabel ? `Continue to pay ${priceLabel}` : 'Confirm booking'}</Button>
     </form>
   )

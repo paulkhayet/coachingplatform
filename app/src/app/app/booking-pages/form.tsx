@@ -29,8 +29,8 @@ export interface PageDefaults {
   /** Dollars as typed, e.g. "45"; blank means free. */
   price: string
   refundCutoffHours: number
-  askStudent: boolean
   questions: BookingQuestion[]
+  askNotes: boolean
 }
 
 export const NEW_PAGE: PageDefaults = {
@@ -47,8 +47,8 @@ export const NEW_PAGE: PageDefaults = {
   active: true,
   price: '',
   refundCutoffHours: 24,
-  askStudent: false,
   questions: [],
+  askNotes: true,
 }
 
 const locationHint: Record<string, string> = {
@@ -67,7 +67,54 @@ function Field({ id, label, error, hint, ...props }: { id: string; label: string
   )
 }
 
-export function BookingPageForm({ action, defaults, businessSlug, submitLabel, paymentsReady }: { action: (prev: BookingPageState, fd: FormData) => Promise<BookingPageState>; defaults: PageDefaults; businessSlug: string; submitLabel: string; paymentsReady: boolean }) {
+/** Who takes the page's calls (D-061): shown to owners and administrators only. */
+export interface HostChoice {
+  options: { id: string; name: string }[]
+  mode: 'one' | 'shared'
+  hostId: string
+  pool: string[]
+  businessName: string
+}
+
+function HostPicker({ choice, values, error }: { choice: HostChoice; values?: Record<string, string>; error?: string }) {
+  const [mode, setMode] = useState<'one' | 'shared'>((values?.hostMode as 'one' | 'shared' | undefined) ?? choice.mode)
+  const [pool, setPool] = useState<string[]>(values?.poolHost !== undefined ? values.poolHost.split(',').filter(Boolean) : choice.pool)
+  const hostId = values?.hostMembershipId || choice.hostId || choice.options[0]?.id || ''
+  return (
+    <fieldset className="grid gap-3 rounded-lg border p-4">
+      <legend className="px-1 text-sm font-medium">Who takes these calls?</legend>
+      <input type="hidden" name="hostMode" value={mode} />
+      <label className="flex items-center gap-2 text-sm">
+        <input type="radio" checked={mode === 'one'} onChange={() => setMode('one')} className="accent-primary size-4" />
+        One coach
+      </label>
+      {mode === 'one' && (
+        <select name="hostMembershipId" defaultValue={hostId} aria-label="Coach" className={`${selectClass} ml-6 max-w-xs`}>
+          {choice.options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      )}
+      <label className="flex items-center gap-2 text-sm">
+        <input type="radio" checked={mode === 'shared'} onChange={() => setMode('shared')} className="accent-primary size-4" />
+        Any available coach from a group
+      </label>
+      {mode === 'shared' && (
+        <div className="ml-6 grid gap-2">
+          <p className="text-muted-foreground text-xs">Families see every time at least one of these coaches is free. Each call goes to a free coach, spreading calls evenly; it stays with that coach if it’s moved.</p>
+          {choice.options.map((o) => (
+            <label key={o.id} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="poolHost" value={o.id} checked={pool.includes(o.id)} onChange={(ev) => setPool(ev.target.checked ? [...pool, o.id] : pool.filter((x) => x !== o.id))} className="accent-primary size-4" />
+              {o.name}
+            </label>
+          ))}
+        </div>
+      )}
+      {choice.options.length <= 1 && <p className="text-muted-foreground text-xs">Only people who take calls can host. Invite coaches from Team.</p>}
+      {error && <p className="text-destructive text-xs">{error}</p>}
+    </fieldset>
+  )
+}
+
+export function BookingPageForm({ action, defaults, businessSlug, submitLabel, paymentsReady, hostChoice }: { action: (prev: BookingPageState, fd: FormData) => Promise<BookingPageState>; defaults: PageDefaults; businessSlug: string; submitLabel: string; paymentsReady: boolean; hostChoice?: HostChoice }) {
   const [state, formAction, pending] = useActionState<BookingPageState, FormData>(action, {})
   const v = (k: Exclude<keyof PageDefaults, 'questions'>) => state.values?.[k] ?? String(defaults[k])
   const [price, setPrice] = useState(v('price'))
@@ -102,6 +149,7 @@ export function BookingPageForm({ action, defaults, businessSlug, submitLabel, p
         <textarea id="description" name="description" defaultValue={v('description')} rows={3} maxLength={1000} placeholder="A short call to talk about your goals and see if we’re a good fit." className="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]" />
         {e.description && <p className="text-destructive text-xs">{e.description}</p>}
       </div>
+      {hostChoice && <HostPicker choice={hostChoice} values={state.values} error={e.host} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="durationMinutes" label="Length (minutes)" type="number" min={5} max={480} step={5} defaultValue={v('durationMinutes')} error={e.durationMinutes} />
         <div className="grid gap-1.5">
@@ -140,10 +188,10 @@ export function BookingPageForm({ action, defaults, businessSlug, submitLabel, p
       </fieldset>
       <fieldset className="grid gap-4 rounded-lg border p-4">
         <legend className="px-1 text-sm font-medium">Questions for guests</legend>
-        <p className="text-muted-foreground -mt-1 text-xs">Name, email and an optional note are always asked.</p>
+        <p className="text-muted-foreground -mt-1 text-xs">Guests always give their name and email. Ask anything else you need here.</p>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="askStudent" defaultChecked={state.values ? state.values.askStudent === 'on' : defaults.askStudent} className="accent-primary size-4" />
-          Ask for the student’s name and grade
+          <input type="checkbox" name="askNotes" defaultChecked={state.values ? state.values.askNotes === 'on' : defaults.askNotes} className="accent-primary size-4" />
+          Let guests add an optional note (“Anything else you’d like to share?”)
         </label>
         <input type="hidden" name="questions" value={JSON.stringify(questions)} />
         <QuestionsEditor questions={questions} onChange={setQuestions} />

@@ -26,7 +26,7 @@ export default async function ManageBookingPage({ params, searchParams }: { para
   let starts: string[] = []
   if (changeable && page) {
     const { from, to } = bookingWindow(page, now)
-    const result = await availableStarts(page, from, to, now, booking.id)
+    const result = await availableStarts(page, from, to, now, { ignoreBookingId: booking.id, hostMembershipId: booking.hostMembershipId })
     starts = result.calendarUnavailable ? [] : result.starts.filter((s) => s.getTime() !== booking.startsAt.getTime()).map((s) => s.toISOString())
   }
 

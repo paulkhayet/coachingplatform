@@ -89,34 +89,36 @@ export function SignInForm({ next, notice }: { next?: string; notice?: string })
               <Button type="button" variant="ghost" onClick={() => setMode('password')}>Use my password instead</Button>
             </>
           )}
-          <p className="text-muted-foreground text-center text-sm">New to schedulefa.st? <Link href="/sign-up" className="text-primary font-medium hover:underline">Create an account</Link></p>
+          <p className="text-muted-foreground text-center text-sm">New to schedulefa.st? <Link href={next ? `/sign-up?next=${encodeURIComponent(next)}` : '/sign-up'} className="text-primary font-medium hover:underline">Create an account</Link></p>
         </form>
       </CardContent>
     </Card>
   )
 }
 
-export function SignUpForm() {
+/** `invite` is set when someone arrives from an invitation link: they join that business instead of creating one. */
+export function SignUpForm({ next, invite }: { next?: string; invite?: { businessName: string; email: string } }) {
   const [state, action, pending] = useActionState<FormState, FormData>(signUp, {})
   return (
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="text-xl">Create your account</CardTitle>
-        <CardDescription>Then set up your coaching business. Free to start.</CardDescription>
+        <CardDescription>{invite ? `Then you’ll join ${invite.businessName}. Free for you.` : 'Then set up your coaching business. Free to start.'}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <GoogleSignIn next="/onboarding" />
+        <GoogleSignIn next={next ?? '/onboarding'} />
         <form action={action} className="grid gap-4" noValidate>
           {state.message && <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert>}
+          <input type="hidden" name="next" value={next ?? ''} />
           <Field id="fullName" label="Full name" autoComplete="name" defaultValue={state.values?.fullName} error={state.errors?.fullName} />
-          <Field id="email" label="Work email" type="email" autoComplete="email" defaultValue={state.values?.email} error={state.errors?.email} />
+          <Field id="email" label={invite ? 'Email' : 'Work email'} type="email" autoComplete="email" defaultValue={state.values?.email ?? invite?.email} error={state.errors?.email} />
           <Field id="password" label="Password" type="password" autoComplete="new-password" error={state.errors?.password} />
           <Button type="submit" disabled={pending}>{pending ? 'Creating account…' : 'Create account'}</Button>
           <p className="text-muted-foreground text-center text-xs">
             By creating an account you agree to the <Link href="/terms" className="hover:text-foreground underline">Terms of Service</Link> and{' '}
             <Link href="/privacy" className="hover:text-foreground underline">Privacy Policy</Link>.
           </p>
-          <p className="text-muted-foreground text-center text-sm">Already have an account? <Link href="/sign-in" className="text-primary font-medium hover:underline">Sign in</Link></p>
+          <p className="text-muted-foreground text-center text-sm">Already have an account? <Link href={next ? `/sign-in?next=${encodeURIComponent(next)}` : '/sign-in'} className="text-primary font-medium hover:underline">Sign in</Link></p>
         </form>
       </CardContent>
     </Card>

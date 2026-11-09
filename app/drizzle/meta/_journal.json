@@ -71,6 +71,48 @@
       "when": 1794004450960,
       "tag": "0009_person_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794005828562,
+      "tag": "0010_only_people_set_their_offer",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794006282545,
+      "tag": "0011_business_opening_hours",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794067359586,
+      "tag": "0012_team_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794068313569,
+      "tag": "0013_shared_booking_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794248858024,
+      "tag": "0014_general_purpose_questions",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794249197207,
+      "tag": "0015_optional_guest_note",
+      "breakpoints": true
     }
   ]
 }
