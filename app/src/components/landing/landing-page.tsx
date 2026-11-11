@@ -77,8 +77,8 @@ interface Plan {
   name: string
   icon: string
   description: string
-  /** Monthly price in USD, or null for "contact us". */
-  price: number | null
+  /** Monthly price in USD. */
+  price: number
   unit?: string
   featured?: string
   seats: string
@@ -86,11 +86,10 @@ interface Plan {
   cta: { label: string; href: string }
 }
 
-// Planned prices (D-067). Nothing is charged yet; billing isn't built.
+// Planned prices (D-067, D-068: Solo and Team only for now). Nothing is charged yet; billing isn't built.
 const plans: Plan[] = [
   { id: 'solo', name: 'Solo', icon: 'home', description: 'Everything a solo coaching business needs.', price: 10, unit: '/ month', seats: 'Just you', includes: ['Booking pages & custom questions', 'Google Calendar & Zoom', 'Card payments & refunds', 'Email confirmations & reminders'], cta: { label: 'Start free', href: '/sign-up' } },
   { id: 'team', name: 'Team', icon: 'people', description: 'For coaching and tutoring teams of any size.', price: 15, unit: '/ person / month', featured: 'FOR GROWING TEAMS', seats: 'Priced per person on your team', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Business hours & team free times'], cta: { label: 'Start free', href: '/sign-up' } },
-  { id: 'corporate', name: 'Corporate', icon: 'layers', description: 'For larger organizations with many coaches.', price: null, seats: 'Pricing for your organization', includes: ['Everything in Team', 'Pricing for larger teams', 'Several businesses, one account', 'Help getting your team set up'], cta: { label: 'Contact us', href: '/contact?plan=corporate' } },
 ]
 
 function PricingPlans() {
@@ -104,12 +103,8 @@ function PricingPlans() {
             <h3>{p.name}</h3>
           </div>
           <p className="plan-description">{p.description}</p>
-          {p.price != null ? (
-            <div className="price"><span>$</span><strong>{p.price}</strong><span>{p.unit}</span></div>
-          ) : (
-            <div className="price price-custom"><strong>Let’s talk</strong></div>
-          )}
-          <p className="billing-note">{p.price != null ? 'Planned price · not charged today' : 'Tell us about your organization'}</p>
+          <div className="price"><span>$</span><strong>{p.price}</strong><span>{p.unit}</span></div>
+          <p className="billing-note">Planned price · not charged today</p>
           <Link className={`button price-button${p.featured ? '' : ' button-outline'}`} href={p.cta.href}>
             {p.cta.label} <Icon id="arrow-up-right" className="icon" />
           </Link>

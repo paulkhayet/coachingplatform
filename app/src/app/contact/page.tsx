@@ -7,9 +7,9 @@ import { ContactForm } from './form'
 
 export const metadata: Metadata = { title: 'Contact us' }
 
-/** Sales enquiries, e.g. the Corporate plan on the home page (D-067). */
+/** The public contact form, linked from the home page footer (D-067, D-068). */
 export default async function ContactPage({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
-  const plan = (await searchParams).plan ?? 'corporate'
+  const plan = (await searchParams).plan ?? 'other'
   const corporate = plan === 'corporate'
   return (
     <main className="bg-muted/30 grid min-h-svh place-items-center p-6">

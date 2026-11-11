@@ -704,4 +704,8 @@ html:has(.lp) {scroll-behavior: auto;}
 
 /* Pricing without the monthly/yearly switch (D-067): keep the space it used to give the cards. */
 .lp .pricing-heading + .pricing-grid { margin-top: 43px; }
-.lp .price-custom strong { font-size: 44px; letter-spacing: -1.5px; }
+
+/* Two plans for now (D-068): centred side by side, one column on phones as before. */
+@media (min-width: 601px) {
+  .lp .pricing-grid { grid-template-columns: repeat(2, 1fr); max-width: 780px; margin-inline: auto; }
+}
