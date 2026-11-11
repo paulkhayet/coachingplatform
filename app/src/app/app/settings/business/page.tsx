@@ -7,16 +7,21 @@ import { requireWorkspace } from '@/lib/workspace'
 import { canManageTeam } from '@/lib/roles'
 import { describeHours, parseWeeklyHours } from '@/lib/slots'
 import { US_TIME_ZONES } from '@/lib/validation'
-import { saveBusinessName, saveReservationSettings } from './actions'
-import { BusinessNameForm, OpeningHoursForm, ReservationSettingsForm } from './form'
+import { BusinessMark } from '@/components/business-mark'
+import { businessLogoUrl } from '@/lib/business-logo'
+import { saveBusinessLogo, saveBusinessName, saveBusinessProfile, saveReservationSettings } from './actions'
+import { BusinessLogoForm, BusinessNameForm, BusinessProfileForm, OpeningHoursForm, ReservationSettingsForm } from './form'
 
 export const metadata: Metadata = { title: 'Business settings' }
 
 export default async function BusinessSettingsPage() {
   const { business, membership } = await requireWorkspace()
   const supabase = await createClient()
-  const { data, error } = await supabase.from('businesses').select('opening_hours, payment_reminder_hours, unpaid_cancellation_hours').eq('id', business.id)
-    .maybeSingle<{ opening_hours: unknown; payment_reminder_hours: number | null; unpaid_cancellation_hours: number | null }>()
+  const { data, error } = await supabase.from('businesses')
+    .select('opening_hours, payment_reminder_hours, unpaid_cancellation_hours, logo_path, about, website_url, contact_email').eq('id', business.id)
+    .maybeSingle<{ opening_hours: unknown; payment_reminder_hours: number | null; unpaid_cancellation_hours: number | null
+      logo_path: string | null; about: string | null; website_url: string | null; contact_email: string | null }>()
+  const logoUrl = businessLogoUrl(data?.logo_path)
   const hours = data?.opening_hours ? parseWeeklyHours(data.opening_hours) : null
   const zone = US_TIME_ZONES.find((t) => t.value === business.timezone)?.label ?? business.timezone
   const owner = canManageTeam(membership.role)
@@ -30,6 +35,31 @@ export default async function BusinessSettingsPage() {
         <CardContent className="grid gap-4">
           {owner ? <BusinessNameForm name={business.name} save={saveBusinessName.bind(null, business.id)} /> : <p className="text-sm">{business.name}</p>}
           <Button asChild variant="outline" className="justify-self-start"><Link href="/app/team">{owner ? 'Manage team' : 'View team'}</Link></Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Business profile</CardTitle>
+          <CardDescription>What clients see on your booking pages at schedulefa.st/b/{business.slug}.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6">
+          {error ? <p className="text-sm">Couldn’t load the business profile. Refresh the page to try again.</p> : owner ? <>
+            <BusinessLogoForm key={data?.logo_path ?? 'none'} name={business.name} logoUrl={logoUrl} save={saveBusinessLogo.bind(null, business.id, data?.logo_path ?? null)} />
+            <div className="border-t pt-5">
+              <BusinessProfileForm save={saveBusinessProfile.bind(null, business.id)}
+                initial={{ about: data?.about ?? null, websiteUrl: data?.website_url ?? null, contactEmail: data?.contact_email ?? null }} />
+            </div>
+          </> : (
+            <div className="flex items-start gap-4">
+              <BusinessMark name={business.name} logoUrl={logoUrl} className="size-16 rounded-lg text-2xl" />
+              <div className="grid gap-1 text-sm">
+                <p className="whitespace-pre-line">{data?.about || 'No description yet.'}</p>
+                {data?.website_url && <a href={data.website_url} className="text-primary hover:underline" target="_blank" rel="noreferrer">{data.website_url}</a>}
+                {data?.contact_email && <p>{data.contact_email}</p>}
+                <p className="text-muted-foreground text-xs">Only the owner can change the business profile.</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
       <Card>

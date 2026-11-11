@@ -1,6 +1,7 @@
 'use client'
 
 import { startTransition, useActionState, useState } from 'react'
+import { BusinessMark } from '@/components/business-mark'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -71,6 +72,71 @@ export function ReservationSettingsForm({ initial, save }: {
       <p className="text-muted-foreground text-xs">Leave either field blank to turn it off. Payment reminders go to the selected client or guardian. These settings apply to new reservations.</p>
       {state.message && <Alert variant={state.ok ? 'success' : 'destructive'}><AlertDescription>{state.message}</AlertDescription></Alert>}
       <Button type="submit" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : 'Save reservation settings'}</Button>
+    </form>
+  )
+}
+
+function Feedback({ state }: { state: OpeningHoursState }) {
+  return state.message ? <Alert variant={state.ok ? 'success' : 'destructive'}><AlertDescription>{state.message}</AlertDescription></Alert> : null
+}
+
+export function BusinessLogoForm({ name, logoUrl, save }: {
+  name: string
+  logoUrl: string | null
+  save: (state: OpeningHoursState, form: FormData) => Promise<OpeningHoursState>
+}) {
+  const [state, action, pending] = useActionState(save, {})
+  return (
+    <form action={action} className="flex flex-wrap items-start gap-4">
+      <BusinessMark name={name} logoUrl={logoUrl} className="size-16 rounded-lg text-2xl" />
+      <div className="grid min-w-0 flex-1 gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="business-logo">Logo</Label>
+          <Input id="business-logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="business-logo-help" required />
+          <p id="business-logo-help" className="text-muted-foreground text-xs">A square JPG, PNG, or WebP works best, up to 750 KB. Shown on your booking pages.</p>
+        </div>
+        <Feedback state={state} />
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" variant="outline" disabled={pending}>{pending ? 'Saving…' : 'Upload logo'}</Button>
+          {logoUrl && <Button type="submit" name="intent" value="remove" variant="ghost" formNoValidate disabled={pending}>Remove logo</Button>}
+        </div>
+      </div>
+    </form>
+  )
+}
+
+export function BusinessProfileForm({ initial, save }: {
+  initial: { about: string | null; websiteUrl: string | null; contactEmail: string | null }
+  save: (state: OpeningHoursState, form: FormData) => Promise<OpeningHoursState>
+}) {
+  const [state, action, pending] = useActionState(save, {})
+  // Submitted in a transition so React doesn't reset the fields to their old values after saving.
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    startTransition(() => action(form))
+  }
+  return (
+    <form onSubmit={submit} className="grid gap-4">
+      <div className="grid gap-1.5">
+        <Label htmlFor="business-about">About</Label>
+        <textarea id="business-about" name="about" defaultValue={initial.about ?? ''} maxLength={600} rows={4}
+          placeholder="What you coach, who you work with, and what to expect."
+          className="border-input bg-background focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]" />
+        <p className="text-muted-foreground text-xs">Shown on your booking pages. Up to 600 characters.</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="business-website">Website</Label>
+          <Input id="business-website" name="websiteUrl" type="text" inputMode="url" autoComplete="url" placeholder="example.com" defaultValue={initial.websiteUrl ?? ''} maxLength={200} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="business-contact">Contact email</Label>
+          <Input id="business-contact" name="contactEmail" type="email" autoComplete="email" placeholder="hello@example.com" defaultValue={initial.contactEmail ?? ''} maxLength={254} />
+        </div>
+      </div>
+      <Feedback state={state} />
+      <Button type="submit" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : 'Save profile'}</Button>
     </form>
   )
 }

@@ -20,6 +20,11 @@ export const businesses = pgTable(
     allowAdvanceReservations: boolean('allow_advance_reservations').notNull().default(false),
     paymentReminderHours: integer('payment_reminder_hours'),
     unpaidCancellationHours: integer('unpaid_cancellation_hours'),
+    // Public profile shown on booking pages (D-071). The logo lives in the public `business-logos` bucket.
+    logoPath: text('logo_path'),
+    about: text('about'),
+    websiteUrl: text('website_url'),
+    contactEmail: text('contact_email'),
     createdBy: uuid('created_by').references(() => authUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -32,6 +37,9 @@ export const businesses = pgTable(
     check('businesses_reservation_hours', sql`(${t.paymentReminderHours} is null or ${t.paymentReminderHours} between 1 and 720)
       and (${t.unpaidCancellationHours} is null or ${t.unpaidCancellationHours} between 1 and 720)
       and ${t.paymentReminderHours} > ${t.unpaidCancellationHours}`),
+    check('businesses_logo_path_owner', sql`${t.logoPath} is null or split_part(${t.logoPath}, '/', 1) = ${t.id}::text`),
+    check('businesses_profile_lengths', sql`char_length(${t.about}) <= 600 and char_length(${t.contactEmail}) <= 254`),
+    check('businesses_website_url', sql`${t.websiteUrl} is null or (char_length(${t.websiteUrl}) <= 200 and ${t.websiteUrl} ~ '^https?://')`),
   ],
 )
 
@@ -200,6 +208,33 @@ export const clientGuardians = pgTable('client_guardians', {
   check('client_guardians_name', sql`char_length(btrim(${t.name})) between 2 and 100`),
   check('client_guardians_contact', sql`(${t.email} is not null or ${t.phone} is not null) and char_length(coalesce(${t.email}, '')) <= 254 and char_length(coalesce(${t.phone}, '')) <= 40`),
   check('client_guardians_relationship', sql`char_length(${t.relationship}) <= 80`),
+])
+
+/**
+ * Files staff keep on a client's record (D-070). The bytes live in the private `client-files` Storage
+ * bucket at `path` (`{business_id}/{client_id}/{id}`); this row decides who may read them. A row starts
+ * `pending` when the upload link is issued and becomes `ready` once the server has checked the upload.
+ */
+export const clientFiles = pgTable('client_files', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  uploadedBy: uuid('uploaded_by').references(() => profiles.id, { onDelete: 'set null' }),
+  fileName: text('file_name').notNull(),
+  path: text('path').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes'),
+  status: text('status', { enum: ['pending', 'ready'] }).notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId], foreignColumns: [coachingClients.businessId, coachingClients.id], name: 'client_files_client_fk' }).onDelete('cascade'),
+  uniqueIndex('client_files_path_key').on(t.path),
+  index('client_files_client_idx').on(t.businessId, t.clientId, t.createdAt),
+  index('client_files_uploaded_by_idx').on(t.uploadedBy),
+  check('client_files_name', sql`char_length(btrim(${t.fileName})) between 1 and 200`),
+  check('client_files_status', sql`${t.status} in ('pending', 'ready')`),
+  check('client_files_size', sql`${t.sizeBytes} is null or ${t.sizeBytes} between 1 and 26214400`),
+  check('client_files_path', sql`${t.path} = ${t.businessId}::text || '/' || ${t.clientId}::text || '/' || ${t.id}::text`),
 ])
 
 /** Copy of the terms in force when staff assign a package to a client. */

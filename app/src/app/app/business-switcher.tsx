@@ -3,16 +3,17 @@
 import Link from 'next/link'
 import { Check, ChevronsUpDown, Plus } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { BusinessMark } from '@/components/business-mark'
 import { roleLabel } from '@/lib/roles'
 import type { MemberRole } from '@/db/schema'
 import { switchBusiness } from './switch-actions'
 
 /** The business name in the sidebar, which opens a menu to switch between businesses (D-057). */
-export function BusinessSwitcher({ current, slug, workspaces }: { current: { id: string; name: string }; slug: string; workspaces: { businessId: string; name: string; role: MemberRole }[] }) {
+export function BusinessSwitcher({ current, slug, workspaces }: { current: { id: string; name: string; logoUrl: string | null }; slug: string; workspaces: { businessId: string; name: string; role: MemberRole }[] }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="hover:bg-sidebar-accent flex w-full items-center gap-2.5 rounded-md px-1 py-1 text-left outline-none">
-        <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-bold">{current.name[0]?.toUpperCase()}</div>
+        <BusinessMark name={current.name} logoUrl={current.logoUrl} className="size-8 text-sm" />
         <div className="grid min-w-0 flex-1 leading-tight">
           <span className="truncate text-sm font-semibold">{current.name}</span>
           <span className="text-muted-foreground truncate text-xs">schedulefa.st/b/{slug}</span>

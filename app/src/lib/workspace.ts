@@ -12,7 +12,7 @@ export const BUSINESS_COOKIE = 'sf_business'
 export interface Workspace {
   user: { id: string; email: string; fullName: string; avatarPath: string | null }
   membership: { id: string; role: MemberRole; coaches: boolean; financial: boolean; title: string | null }
-  business: { id: string; name: string; slug: string; timezone: string; allow_advance_reservations: boolean }
+  business: { id: string; name: string; slug: string; timezone: string; allow_advance_reservations: boolean; logo_path: string | null }
   /** Every business this person is an active member of, for the switcher. */
   workspaces: { businessId: string; name: string; role: MemberRole }[]
 }
@@ -41,7 +41,7 @@ export const requireWorkspace = cache(async (): Promise<Workspace> => {
   const supabase = await createClient()
   const [{ data, error }, { data: profile }] = await Promise.all([
     supabase.from('memberships')
-      .select('id, role, coaches, financial, title, business:businesses(id, name, slug, timezone, allow_advance_reservations)')
+      .select('id, role, coaches, financial, title, business:businesses(id, name, slug, timezone, allow_advance_reservations, logo_path)')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .order('created_at', { ascending: true })

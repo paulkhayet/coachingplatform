@@ -190,6 +190,20 @@
       "when": 1794436633634,
       "tag": "0026_settings_profiles_and_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794440281320,
+      "tag": "0027_client_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794440636239,
+      "tag": "0028_business_profile",
+      "breakpoints": true
     }
   ]
 }

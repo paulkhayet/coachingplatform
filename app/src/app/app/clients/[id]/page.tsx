@@ -15,6 +15,7 @@ import { canManageClients, canManagePayments } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 import { requireWorkspace } from '@/lib/workspace'
 import { saveClient, saveClientPackage, saveGuardian } from '../actions'
+import { ClientFiles, type ClientFileRow } from '../client-files'
 import { CreditPeriod } from '../credit-period'
 import type { AssignmentRow, ClientRow, CreditBalanceRow, CreditEventRow, CreditPaymentRow, GuardianRow, PackageOption } from '../data'
 import { AssignPackageForm, ClientForm, GuardianForm } from '../forms'
@@ -29,7 +30,7 @@ const empty = { data: [], error: null }
 type SessionSummary = { id: string; title: string; starts_at: string; status: string; attended_at: string | null; credit_covered_at: string | null; unpaid_cancelled: boolean }
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ status?: string }> }) {
-  const { business, membership } = await requireWorkspace()
+  const { business, membership, user } = await requireWorkspace()
   const [{ id }, { status }] = await Promise.all([params, searchParams])
   if (!z.uuid().safeParse(id).success) notFound()
 
@@ -42,7 +43,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const manager = canManageClients(membership.role)
   const finance = canManagePayments(membership)
   const today = businessDate(business.timezone)
-  const [coaches, guardians, balances, events, assignments, payments, packages, sessions] = await Promise.all([
+  const [coaches, guardians, balances, events, assignments, payments, packages, sessions, files] = await Promise.all([
     coachOptions(business.id),
     manager ? supabase.from('client_guardians').select('id, name, relationship, email, phone')
       .eq('business_id', business.id).eq('client_id', id).order('created_at').returns<GuardianRow[]>() : empty,
@@ -57,7 +58,15 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       .eq('business_id', business.id).is('archived_at', null).order('name').returns<PackageOption[]>() : empty,
     supabase.from('bookings').select('id, title, starts_at, status, attended_at, credit_covered_at, unpaid_cancelled')
       .eq('business_id', business.id).eq('coaching_client_id', id).order('starts_at', { ascending: false }).limit(30).returns<SessionSummary[]>(),
+    supabase.from('client_files').select('id, file_name, size_bytes, created_at, uploaded_by, uploader:profiles(full_name)')
+      .eq('business_id', business.id).eq('client_id', id).eq('status', 'ready').order('created_at', { ascending: false }).limit(200)
+      .returns<(Omit<ClientFileRow, 'uploader' | 'canDelete'> & { uploader: { full_name: string | null } | null })[]>(),
   ])
+  const fileRows: ClientFileRow[] = (files.data ?? []).map((file) => ({
+    ...file,
+    uploader: file.uploaded_by === user.id ? 'You' : file.uploader?.full_name || 'A former team member',
+    canDelete: manager || file.uploaded_by === user.id,
+  }))
 
   const coach = client.coach_membership_id ? coaches.find((item) => item.id === client.coach_membership_id)?.name ?? 'Unavailable coach' : 'Unassigned'
   const message = status && Object.hasOwn(messages, status) ? messages[status] : null
@@ -139,6 +148,17 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           )}
         </CardContent>
       </Card>}
+
+      <Card className="gap-4">
+        <CardHeader>
+          <h2 className="font-semibold">Files</h2>
+          <CardDescription>Private to staff who can see this client. Families can’t see these yet.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {files.error ? <Alert variant="destructive"><AlertDescription>Couldn’t load files. Refresh the page to try again.</AlertDescription></Alert>
+            : <ClientFiles businessId={business.id} clientId={id} files={fileRows} timezone={business.timezone} />}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-4" aria-labelledby="client-credits">
         <div>

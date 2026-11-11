@@ -1,7 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Clock, CreditCard, MapPin, Phone, Video } from 'lucide-react'
+import Link from 'next/link'
+import { BusinessMark } from '@/components/business-mark'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { businessLogoUrl } from '@/lib/business-logo'
 import { availableStarts, bookingWindow, findPublicPage, paymentAccount, releaseHold } from '@/lib/booking/server'
 import { parseQuestions } from '@/lib/booking/questions'
 import { formatCents } from '@/lib/booking/policy'
@@ -40,8 +43,8 @@ export default async function PublicBookingPage({ params, searchParams }: { para
   const info = (
     <>
       <div className="flex items-center gap-2.5">
-        <div className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-bold">{pub.business.name[0]?.toUpperCase()}</div>
-        <p className="text-muted-foreground text-sm font-medium">{pub.business.name}</p>
+        <BusinessMark name={pub.business.name} logoUrl={businessLogoUrl(pub.business.logoPath)} className="size-9 text-sm" />
+        <Link href={`/b/${pub.business.slug}`} className="text-muted-foreground text-sm font-medium hover:underline">{pub.business.name}</Link>
       </div>
       <h1 className="text-2xl font-semibold tracking-tight">{pub.page.title}</h1>
       <div className="text-muted-foreground grid gap-2 text-sm">

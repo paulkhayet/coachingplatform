@@ -52,6 +52,24 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     await as(sql, eleni, (tx) => tx`UPDATE profiles SET avatar_path = null WHERE id = ${eleni}`)
   })
 
+  it('lets only the owner manage the business logo and public profile (D-071)', async () => {
+    const admin = await createUser(sql, 'logo-admin@example.com', 'Logo Admin')
+    await sql`INSERT INTO public.memberships (business_id, user_id, role) VALUES (${willow}, ${admin}, 'admin')`
+    const path = `${willow}/logo.png`
+    await expect(as(sql, admin, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('business-logos', ${path})`)).rejects.toThrow(/row-level security/)
+    await expect(as(sql, outsider, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('business-logos', ${path})`)).rejects.toThrow(/row-level security/)
+    await expect(as(sql, eleni, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('business-logos', 'not-a-business/logo.png')`)).rejects.toThrow(/row-level security/)
+    await as(sql, eleni, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('business-logos', ${path})`)
+    expect(await as(sql, eleni, (tx) => tx`UPDATE public.businesses SET logo_path = ${path}, about = 'We coach.', website_url = 'https://willow.example' WHERE id = ${willow} RETURNING logo_path`)).toEqual([{ logo_path: path }])
+    expect(await as(sql, admin, (tx) => tx`UPDATE public.businesses SET about = 'Changed' WHERE id = ${willow} RETURNING id`)).toEqual([])
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.businesses SET logo_path = ${`${randomUUID()}/x.png`} WHERE id = ${willow}`)).rejects.toThrow(/businesses_logo_path_owner/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.businesses SET website_url = 'javascript:alert(1)' WHERE id = ${willow}`)).rejects.toThrow(/businesses_website_url/)
+    expect(await as(sql, admin, (tx) => tx`DELETE FROM storage.objects WHERE name = ${path} RETURNING name`)).toEqual([])
+    expect(await as(sql, eleni, (tx) => tx`DELETE FROM storage.objects WHERE name = ${path} RETURNING name`)).toEqual([{ name: path }])
+    await as(sql, eleni, (tx) => tx`UPDATE public.businesses SET logo_path = null, about = null, website_url = null WHERE id = ${willow}`)
+    await sql`DELETE FROM public.memberships WHERE user_id = ${admin}` // later tests count Willow's team
+  })
+
   it('keeps platform billing customer links off the data API', async () => {
     await sql`INSERT INTO workspace_billing_customers (business_id, livemode, stripe_customer_id)
       VALUES (${willow}, false, 'cus_testWorkspace'), (${willow}, true, 'cus_liveWorkspace')`
@@ -182,6 +200,49 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_clients SET coach_membership_id = ${other.id} WHERE id = ${client.id}`)).rejects.toThrow(/Choose an active coach/)
     await as(sql, eleni, (tx) => tx`UPDATE public.coaching_clients SET coach_membership_id = null WHERE id = ${client.id}`)
     expect(await as(sql, assigned, (tx) => tx`SELECT id FROM public.coaching_clients WHERE id = ${client.id}`)).toEqual([])
+  })
+
+  it('keeps client files to staff who can see the client, and only lets the server record them (D-070)', async () => {
+    const coachUser = await createUser(sql, 'files-coach@example.com', 'Files Coach')
+    const otherCoach = await createUser(sql, 'files-other@example.com', 'Other Files Coach')
+    const [coach] = await sql<{ id: string }[]>`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${coachUser}, 'coach', true) RETURNING id`
+    await sql`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${otherCoach}, 'coach', true)`
+    const [client] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.coaching_clients (business_id, name, coach_membership_id) VALUES (${willow}, 'Files Client', ${coach.id}) RETURNING id`)
+    const fileId = randomUUID()
+    const path = `${willow}/${client.id}/${fileId}`
+
+    await expect(as(sql, coachUser, (tx) => tx`INSERT INTO public.client_files (id, business_id, client_id, uploaded_by, file_name, path, mime_type)
+      VALUES (${fileId}, ${willow}, ${client.id}, ${coachUser}, 'essay.pdf', ${path}, 'application/pdf')`)).rejects.toThrow(/permission denied/)
+    await expect(sql`INSERT INTO public.client_files (business_id, client_id, file_name, path, mime_type)
+      VALUES (${willow}, ${client.id}, 'bad.pdf', ${`${willow}/${client.id}/elsewhere`}, 'application/pdf')`).rejects.toThrow(/client_files_path/)
+    await sql`INSERT INTO public.client_files (id, business_id, client_id, uploaded_by, file_name, path, mime_type)
+      VALUES (${fileId}, ${willow}, ${client.id}, ${coachUser}, 'essay.pdf', ${path}, 'application/pdf')`
+
+    // Only the person who started the upload can put the object there, and only while it is pending.
+    await expect(as(sql, otherCoach, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('client-files', ${path})`)).rejects.toThrow(/row-level security/)
+    await expect(as(sql, coachUser, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('client-files', ${`${willow}/${client.id}/${randomUUID()}`})`)).rejects.toThrow(/row-level security/)
+    await as(sql, coachUser, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('client-files', ${path})`)
+    await sql`UPDATE public.client_files SET status = 'ready', size_bytes = 1200 WHERE id = ${fileId}`
+
+    for (const reader of [coachUser, eleni]) {
+      expect(await as(sql, reader, (tx) => tx`SELECT id FROM public.client_files WHERE id = ${fileId}`)).toEqual([{ id: fileId }])
+      expect(await as(sql, reader, (tx) => tx`SELECT name FROM storage.objects WHERE bucket_id = 'client-files'`)).toEqual([{ name: path }])
+    }
+    for (const reader of [otherCoach, outsider]) {
+      expect(await as(sql, reader, (tx) => tx`SELECT id FROM public.client_files WHERE id = ${fileId}`)).toEqual([])
+      expect(await as(sql, reader, (tx) => tx`SELECT name FROM storage.objects WHERE bucket_id = 'client-files'`)).toEqual([])
+    }
+    await expect(as(sql, null, (tx) => tx`SELECT id FROM public.client_files`)).rejects.toThrow(/permission denied/)
+    expect(await as(sql, null, (tx) => tx`SELECT name FROM storage.objects WHERE bucket_id = 'client-files'`)).toEqual([])
+    await expect(as(sql, coachUser, (tx) => tx`UPDATE public.client_files SET file_name = 'renamed.pdf' WHERE id = ${fileId}`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, eleni, (tx) => tx`DELETE FROM public.client_files WHERE id = ${fileId}`)).rejects.toThrow(/permission denied/)
+    expect(await as(sql, otherCoach, (tx) => tx`DELETE FROM storage.objects WHERE name = ${path} RETURNING name`)).toEqual([])
+    expect(await as(sql, eleni, (tx) => tx`DELETE FROM storage.objects WHERE name = ${path} RETURNING name`)).toEqual([{ name: path }])
+
+    // Unassigning the coach removes their access to the client's files.
+    await sql`UPDATE public.coaching_clients SET coach_membership_id = null WHERE id = ${client.id}`
+    expect(await as(sql, coachUser, (tx) => tx`SELECT id FROM public.client_files WHERE id = ${fileId}`)).toEqual([])
   })
 
   it('snapshots package terms and funds credits once per verified offline payment', async () => {

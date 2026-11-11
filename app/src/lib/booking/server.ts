@@ -62,7 +62,7 @@ export function bookingIdFromToken(token: string) {
 
 export interface PublicPage {
   page: BookingPage
-  business: { id: string; name: string; slug: string; timezone: string }
+  business: { id: string; name: string; slug: string; timezone: string; logoPath: string | null; websiteUrl: string | null }
   /** The host's name, or for a shared page (D-061) a description of who takes the call. */
   hostName: string
   hostEmail: string | null
@@ -72,7 +72,7 @@ export interface PublicPage {
 
 export async function findPublicPage(businessSlug: string, pageSlug: string): Promise<PublicPage | null> {
   const rows = await adminDb()
-    .select({ page: bookingPages, business: { id: businesses.id, name: businesses.name, slug: businesses.slug, timezone: businesses.timezone }, hostName: profiles.fullName, hostEmail: profiles.email, hostActive: memberships.id })
+    .select({ page: bookingPages, business: { id: businesses.id, name: businesses.name, slug: businesses.slug, timezone: businesses.timezone, logoPath: businesses.logoPath, websiteUrl: businesses.websiteUrl }, hostName: profiles.fullName, hostEmail: profiles.email, hostActive: memberships.id })
     .from(bookingPages)
     .innerJoin(businesses, eq(businesses.id, bookingPages.businessId))
     .leftJoin(memberships, and(eq(memberships.id, bookingPages.hostMembershipId), eq(memberships.status, 'active')))
@@ -89,7 +89,7 @@ export async function findPublicPage(businessSlug: string, pageSlug: string): Pr
 
 export async function listPublicPages(businessSlug: string) {
   const rows = await adminDb()
-    .select({ business: { id: businesses.id, name: businesses.name, slug: businesses.slug }, page: { slug: bookingPages.slug, title: bookingPages.title, description: bookingPages.description, durationMinutes: bookingPages.durationMinutes, priceCents: bookingPages.priceCents } })
+    .select({ business: { id: businesses.id, name: businesses.name, slug: businesses.slug, logoPath: businesses.logoPath, about: businesses.about, websiteUrl: businesses.websiteUrl, contactEmail: businesses.contactEmail }, page: { slug: bookingPages.slug, title: bookingPages.title, description: bookingPages.description, durationMinutes: bookingPages.durationMinutes, priceCents: bookingPages.priceCents } })
     .from(businesses)
     .leftJoin(bookingPages, and(eq(bookingPages.businessId, businesses.id), eq(bookingPages.active, true)))
     .where(eq(businesses.slug, businessSlug))
