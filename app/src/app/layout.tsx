@@ -5,7 +5,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: { default: 'schedulefa.st', template: '%s · schedulefa.st' },
   description: 'Run your coaching business: booking, enrollment, payments, sessions and follow-ups in one place.',
-  icons: { icon: '/favicon.svg' },
+  icons: { icon: '/favicon.svg', apple: '/apple-touch-icon.png' },
 }
 
 const themeScript = `try{var t=localStorage.getItem('sf-theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}`
