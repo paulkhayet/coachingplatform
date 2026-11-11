@@ -134,6 +134,13 @@
       "when": 1794365770684,
       "tag": "0018_zoom_meetings",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794369186059,
+      "tag": "0019_drop_student_columns",
+      "breakpoints": true
     }
   ]
 }
