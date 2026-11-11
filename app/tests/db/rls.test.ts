@@ -195,6 +195,20 @@ describe.skipIf(!DB_URL)('row-level security', () => {
         expect(await sql`SELECT 1 FROM public.google_calendar_tokens WHERE user_id = ${coach}`).toHaveLength(0)
       })
 
+      it('shows a person only their own Zoom connection, never the tokens, and lets nobody write it (D-038)', async () => {
+        await sql`INSERT INTO public.zoom_connections (user_id, zoom_user_id, zoom_email) VALUES (${coach}, 'zu1', 'cole@zoom.example')`
+        await sql`INSERT INTO public.zoom_tokens (user_id, refresh_token_ciphertext) VALUES (${coach}, 'v1.x.y.z')`
+        expect(await as(sql, coach, (tx) => tx`SELECT zoom_email FROM public.zoom_connections`)).toEqual([{ zoom_email: 'cole@zoom.example' }])
+        expect(await as(sql, eleni, (tx) => tx`SELECT 1 FROM public.zoom_connections`)).toHaveLength(0)
+        await expect(as(sql, null, (tx) => tx`SELECT 1 FROM public.zoom_connections`)).rejects.toThrow(/permission denied/)
+        await expect(as(sql, coach, (tx) => tx`SELECT refresh_token_ciphertext FROM public.zoom_tokens`)).rejects.toThrow(/permission denied/)
+        await expect(as(sql, coach, (tx) => tx`UPDATE public.zoom_connections SET zoom_email = 'x'`)).rejects.toThrow(/permission denied/)
+        await expect(as(sql, coach, (tx) => tx`INSERT INTO public.zoom_connections (user_id, zoom_user_id, zoom_email) VALUES (${eleni}, 'zu2', 'e@x')`)).rejects.toThrow(/permission denied/)
+        await expect(sql`UPDATE public.zoom_connections SET status = 'broken' WHERE user_id = ${coach}`).rejects.toThrow(/zoom_connections_status/)
+        await sql`DELETE FROM public.zoom_connections WHERE user_id = ${coach}`
+        expect(await sql`SELECT 1 FROM public.zoom_tokens WHERE user_id = ${coach}`).toHaveLength(0)
+      })
+
       it('lets a coach run their own booking pages, and owners any, but not other coaches', async () => {
         const coachs = await membershipOf(coach)
         const owners = await membershipOf(eleni)

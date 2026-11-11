@@ -16,14 +16,15 @@ import { bookings } from '@/db/schema'
 import { and, eq, gt, inArray, lt } from 'drizzle-orm'
 import { removeTimeOff } from './actions'
 import { CalendarCard } from './calendar-card'
+import { ZoomCard } from './zoom-card'
 
 export const metadata: Metadata = { title: 'Availability' }
 
 const PREVIEW_DAYS = 7
 
-export default async function AvailabilityPage({ searchParams }: { searchParams: Promise<{ calendar?: string }> }) {
+export default async function AvailabilityPage({ searchParams }: { searchParams: Promise<{ calendar?: string; zoom?: string }> }) {
   const { membership, business, user, workspaces } = await requireWorkspace()
-  const { calendar: calendarOutcome } = await searchParams
+  const { calendar: calendarOutcome, zoom: zoomOutcome } = await searchParams
   const supabase = await createClient()
   const now = new Date()
   // Hours, time off and calendar belong to the person, across all their businesses (D-057).
@@ -121,6 +122,7 @@ export default async function AvailabilityPage({ searchParams }: { searchParams:
       </Card>
 
       <CalendarCard userId={user.id} email={user.email} outcome={calendarOutcome} />
+      <ZoomCard userId={user.id} outcome={zoomOutcome} />
 
       {multiBusiness && (
         <Card>

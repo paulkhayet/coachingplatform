@@ -156,7 +156,8 @@ export const membershipAvailability = pgTable('membership_availability', {
   check('membership_availability_offered_array', sql`${t.offeredHours} is null or jsonb_typeof(${t.offeredHours}) = 'array'`),
 ])
 
-export const locationType = pgEnum('location_type', ['video_link', 'phone', 'in_person'])
+// zoom: a Zoom meeting is created on the host's own Zoom account for each booking (D-038).
+export const locationType = pgEnum('location_type', ['video_link', 'phone', 'in_person', 'zoom'])
 /** pending_payment holds the time while a guest pays; expired is a hold that ran out. */
 export const BOOKING_STATUSES = ['pending_payment', 'confirmed', 'cancelled', 'expired'] as const
 export const PAYMENT_STATUSES = ['not_required', 'pending', 'paid', 'refunded', 'refund_failed'] as const
@@ -255,6 +256,7 @@ export const bookings = pgTable(
     stripeCheckoutSessionId: text('stripe_checkout_session_id'),
     stripePaymentIntentId: text('stripe_payment_intent_id'),
     refundCutoffHours: integer('refund_cutoff_hours').notNull().default(24),
+    // Empty since 0017 (moved into answers, D-063); drop in a later deploy with ask_student.
     studentName: text('student_name'),
     studentGrade: text('student_grade'),
     answers: jsonb('answers').$type<BookingAnswer[]>().notNull().default([]),
@@ -269,6 +271,9 @@ export const bookings = pgTable(
     googleCalendarId: text('google_calendar_id'),
     googleEventId: text('google_event_id'),
     calendarSyncError: text('calendar_sync_error'),
+    // Zoom pages (D-038): the meeting on the host's Zoom account; its join link is in location_detail.
+    zoomMeetingId: text('zoom_meeting_id'),
+    meetingError: text('meeting_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   },
@@ -320,6 +325,37 @@ export const googleCalendarTokens = pgTable('google_calendar_tokens', {
     .primaryKey()
     .references(() => googleCalendarConnections.userId, { onDelete: 'cascade' }),
   refreshTokenCiphertext: text('refresh_token_ciphertext').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** A person's own Zoom account, used to create a meeting for each booking on Zoom pages (D-038). Like
+ *  the Google connection it belongs to the person and serves every business they work with. Written only
+ *  by the server; people can read their own. */
+export const zoomConnections = pgTable(
+  'zoom_connections',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    zoomUserId: text('zoom_user_id').notNull(),
+    zoomEmail: text('zoom_email').notNull(),
+    status: text('status').notNull().default('active'),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('zoom_connections_status', sql`${t.status} in ('active', 'needs_reconnect')`), index('zoom_connections_zoom_user_idx').on(t.zoomUserId)],
+)
+
+/** Zoom tokens, encrypted. Zoom replaces the refresh token every time it's used, so both are stored and
+ *  refreshed under a row lock. No API access at all. */
+export const zoomTokens = pgTable('zoom_tokens', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => zoomConnections.userId, { onDelete: 'cascade' }),
+  refreshTokenCiphertext: text('refresh_token_ciphertext').notNull(),
+  accessTokenCiphertext: text('access_token_ciphertext'),
+  accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

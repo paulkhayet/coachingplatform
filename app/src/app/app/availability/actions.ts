@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { disconnectZoom } from '@/lib/zoom/server'
 import { redirect } from 'next/navigation'
 import { listCalendars } from '@/lib/google/calendar'
 import { disconnect, getConnection, updateCalendarChoices } from '@/lib/google/server'
@@ -106,6 +107,14 @@ export async function disconnectCalendar() {
   await disconnect(user.id)
   revalidatePath(PATH)
   redirect(`${PATH}?calendar=disconnected`)
+}
+
+/** Disconnects the person's Zoom account. Existing bookings keep the links already sent. */
+export async function disconnectZoomAction() {
+  const { user } = await requireWorkspace()
+  await disconnectZoom(user.id)
+  revalidatePath(PATH)
+  redirect(`${PATH}?zoom=disconnected`)
 }
 
 export async function removeTimeOff(formData: FormData) {

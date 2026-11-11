@@ -114,7 +114,7 @@ function HostPicker({ choice, values, error }: { choice: HostChoice; values?: Re
   )
 }
 
-export function BookingPageForm({ action, defaults, businessSlug, submitLabel, paymentsReady, hostChoice }: { action: (prev: BookingPageState, fd: FormData) => Promise<BookingPageState>; defaults: PageDefaults; businessSlug: string; submitLabel: string; paymentsReady: boolean; hostChoice?: HostChoice }) {
+export function BookingPageForm({ action, defaults, businessSlug, submitLabel, paymentsReady, hostChoice, zoomAvailable }: { action: (prev: BookingPageState, fd: FormData) => Promise<BookingPageState>; defaults: PageDefaults; businessSlug: string; submitLabel: string; paymentsReady: boolean; hostChoice?: HostChoice; zoomAvailable: boolean }) {
   const [state, formAction, pending] = useActionState<BookingPageState, FormData>(action, {})
   const v = (k: Exclude<keyof PageDefaults, 'questions'>) => state.values?.[k] ?? String(defaults[k])
   const [price, setPrice] = useState(v('price'))
@@ -155,11 +155,15 @@ export function BookingPageForm({ action, defaults, businessSlug, submitLabel, p
         <div className="grid gap-1.5">
           <Label htmlFor="locationType">Where</Label>
           <select id="locationType" name="locationType" value={locationType} onChange={(ev) => setLocationType(ev.target.value)} className={selectClass}>
-            {LOCATION_TYPES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+            {LOCATION_TYPES.filter((l) => l.value !== 'zoom' || zoomAvailable || defaults.locationType === 'zoom').map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         </div>
       </div>
-      <Field id="locationDetail" label="Location details" defaultValue={v('locationDetail')} hint={locationHint[locationType]} error={e.locationDetail} />
+      {locationType === 'zoom' ? (
+        <p className="text-muted-foreground -mt-2 text-xs">Each booking gets its own meeting on the host’s Zoom account, sent with the confirmation. Hosts connect Zoom on their Availability page.</p>
+      ) : (
+        <Field id="locationDetail" label="Location details" defaultValue={v('locationDetail')} hint={locationHint[locationType]} error={e.locationDetail} />
+      )}
       <fieldset className="grid gap-4 rounded-lg border p-4">
         <legend className="px-1 text-sm font-medium">Scheduling rules</legend>
         <div className="grid gap-4 sm:grid-cols-2">

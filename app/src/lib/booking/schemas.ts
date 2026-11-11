@@ -8,6 +8,7 @@ export const LOCATION_TYPES = [
   { value: 'video_link', label: 'Video call link' },
   { value: 'phone', label: 'Phone call' },
   { value: 'in_person', label: 'In person' },
+  { value: 'zoom', label: 'Zoom (a new meeting link for each booking)' },
 ] as const
 
 const minutes = (min: number, max: number, label: string) => z.coerce.number().int(`${label} must be whole minutes`).min(min, `${label} must be at least ${min}`).max(max, `${label} can be at most ${max}`)
@@ -17,7 +18,7 @@ export const bookingPageSchema = z.object({
   slug: z.string().trim().toLowerCase().regex(PAGE_SLUG_PATTERN, 'Use lowercase letters, numbers and dashes, starting and ending with a letter or number'),
   description: z.string().trim().max(1000, 'Keep the description under 1,000 characters'),
   durationMinutes: minutes(5, 480, 'Length'),
-  locationType: z.enum(['video_link', 'phone', 'in_person'], 'Choose where the call happens'),
+  locationType: z.enum(['video_link', 'phone', 'in_person', 'zoom'], 'Choose where the call happens'),
   locationDetail: z.string().trim().max(500, 'Keep the location under 500 characters'),
   minNoticeMinutes: minutes(0, 43200, 'Minimum notice'),
   windowDays: minutes(1, 365, 'Booking window'),

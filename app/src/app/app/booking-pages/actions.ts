@@ -12,9 +12,10 @@ import { parseDollars } from '@/lib/booking/policy'
 import { canAssignHosts, canManageBookings } from '@/lib/roles'
 import { cancelBooking } from '@/lib/booking/server'
 import { coachOptions } from './hosts'
+import { isZoomConfigured } from '@/lib/zoom/server'
 import { adminDb } from '@/db/server'
-import { bookings } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { bookings, memberships } from '@/db/schema'
+import { and, eq } from 'drizzle-orm'
 
 // Booking pages are written with the signed-in user's Supabase client, so row-level security decides
 // who may create or change them (a coach for their own pages; owners and administrators for any).
@@ -47,7 +48,8 @@ function read(formData: FormData) {
   const extra = extraSchema.safeParse({ priceCents: Number.isNaN(price) ? -1 : price, refundCutoffHours: raw.refundCutoffHours, questions })
   const errors: FieldErrors = { ...(base.success ? {} : fieldErrors(base.error)), ...(extra.success ? {} : fieldErrors(extra.error)) }
   if (Number.isNaN(price)) errors.priceCents = 'Enter a price like 45 or 45.50'
-  if (!base.success || !extra.success) return { values, errors, data: null }
+  if (raw.locationType === 'zoom' && !isZoomConfigured) errors.locationType = 'Zoom isn’t available yet. Choose another option.'
+  if (!base.success || !extra.success || errors.locationType) return { values, errors, data: null }
   return { values, errors: {} as FieldErrors, data: { ...base.data, ...extra.data, askNotes } }
 }
 
@@ -62,7 +64,8 @@ function columns(d: z.infer<typeof bookingPageSchema> & z.infer<typeof extraSche
     description: d.description || null,
     duration_minutes: d.durationMinutes,
     location_type: d.locationType,
-    location_detail: d.locationDetail || null,
+    // Zoom pages get a link per booking, not a fixed one.
+    location_detail: d.locationType === 'zoom' ? null : d.locationDetail || null,
     min_notice_minutes: d.minNoticeMinutes,
     window_days: d.windowDays,
     buffer_before_minutes: d.bufferBeforeMinutes,
@@ -152,13 +155,24 @@ export async function updateBookingPage(id: string, _prev: BookingPageState, for
   redirect(`/app/booking-pages/${id}?saved=1`)
 }
 
-/** Staff cancel a booking: the host, an owner or an administrator. The guest is refunded in full if they paid (D-056). */
+/**
+ * Staff cancel a booking: its host (from any of their businesses, e.g. All my calls), or an owner or
+ * administrator of its business. The guest is refunded in full if they paid (D-056).
+ */
 export async function cancelBookingAction(formData: FormData) {
-  const { membership, business } = await requireWorkspace()
+  const { membership, business, user } = await requireWorkspace()
   const id = z.uuid().safeParse(formData.get('id'))
   if (!id.success) return
-  const [row] = await adminDb().select({ businessId: bookings.businessId, host: bookings.hostMembershipId }).from(bookings).where(eq(bookings.id, id.data)).limit(1)
-  if (!row || row.businessId !== business.id || !canManageBookings(membership, row.host)) return
+  const [row] = await adminDb().select({ businessId: bookings.businessId, host: bookings.hostMembershipId, hostUser: bookings.hostUserId }).from(bookings).where(eq(bookings.id, id.data)).limit(1)
+  if (!row) return
+  const ownCall = row.hostUser === user.id && (await isActiveMember(row.host, user.id))
+  if (!ownCall && (row.businessId !== business.id || !canManageBookings(membership, row.host))) return
   await cancelBooking(id.data, 'business')
   revalidatePath('/app/bookings')
+}
+
+/** The host still works for that business (someone who left can't cancel its calls). */
+async function isActiveMember(membershipId: string, userId: string) {
+  const [m] = await adminDb().select({ id: memberships.id }).from(memberships).where(and(eq(memberships.id, membershipId), eq(memberships.userId, userId), eq(memberships.status, 'active'))).limit(1)
+  return Boolean(m)
 }

@@ -5,6 +5,7 @@ import { requireWorkspace } from '@/lib/workspace'
 import { BookingPageForm, NEW_PAGE } from '../form'
 import { createBookingPage } from '../actions'
 import { paymentAccount } from '@/lib/booking/server'
+import { isZoomConfigured } from '@/lib/zoom/server'
 import { canAssignHosts } from '@/lib/roles'
 import { coachOptions } from '../hosts'
 
@@ -26,7 +27,7 @@ export default async function NewBookingPage() {
       </div>
       <Card>
         <CardContent>
-          <BookingPageForm action={createBookingPage} defaults={NEW_PAGE} businessSlug={business.slug} submitLabel="Create page" paymentsReady={paymentsReady} hostChoice={hostChoice} />
+          <BookingPageForm action={createBookingPage} defaults={NEW_PAGE} businessSlug={business.slug} submitLabel="Create page" paymentsReady={paymentsReady} hostChoice={hostChoice} zoomAvailable={isZoomConfigured} />
         </CardContent>
       </Card>
     </div>

@@ -22,6 +22,7 @@ import { busyTimes, createBookingEvent, deleteBookingEvent, updateBookingEvent }
 import { getConnection } from '@/lib/google/server'
 import { stripe } from '@/lib/stripe/server'
 import { sendEmail } from '@/lib/email/server'
+import { createZoomMeeting, deleteZoomMeeting, updateZoomMeeting } from '@/lib/zoom/server'
 import { formatAnswer } from './questions'
 import { deriveKey, fairestFirst, formatCents, guestCanChange, manageToken, refundOnCancel, verifyManageToken } from './policy'
 import { guestCancelled, guestConfirmation, guestReminder, guestRescheduled, hostGuestChange, hostNewBooking, type CallDetails } from './emails'
@@ -463,8 +464,6 @@ function details(c: Ctx, forGuest: boolean): CallDetails {
 function eventDescription(c: Ctx) {
   const b = c.booking
   const lines = [`Booked through schedulefa.st (${c.business.name}).`, `Guest: ${b.guestName} <${b.guestEmail}>`]
-  // Bookings made before D-063 may carry the old student fields.
-  if (b.studentName) lines.push(`Student: ${b.studentName}${b.studentGrade ? ` (${b.studentGrade})` : ''}`)
   if (b.locationDetail) lines.push(`Where: ${b.locationDetail}`)
   for (const a of b.answers) lines.push(`${a.label}: ${formatAnswer(a.value)}`)
   if (b.guestNotes) lines.push('', `Note from ${b.guestName}:`, b.guestNotes)
@@ -472,10 +471,31 @@ function eventDescription(c: Ctx) {
   return lines.join('\n')
 }
 
+const meetingFor = (b: Booking, timeZone: string) => ({ topic: `${b.title} with ${b.guestName}`, start: b.startsAt, durationMinutes: Math.round((b.endsAt.getTime() - b.startsAt.getTime()) / 60_000), timeZone })
+
+/**
+ * Zoom pages (D-038): a meeting on the host's own Zoom account, whose link becomes the booking's location.
+ * If Zoom can't be reached the booking still stands; the host sees that the link is missing.
+ */
+async function addZoomMeeting(c: Ctx) {
+  const b = c.booking
+  if (b.locationType !== 'zoom' || b.zoomMeetingId) return
+  try {
+    const meeting = await createZoomMeeting(b.hostUserId, { ...meetingFor(b, c.business.timezone), agenda: `Booked through schedulefa.st (${c.business.name}).` })
+    await adminDb().update(bookings).set({ zoomMeetingId: meeting.id, locationDetail: meeting.joinUrl, meetingError: null }).where(eq(bookings.id, b.id))
+  } catch (error) {
+    console.error('Creating the Zoom meeting failed', error)
+    await adminDb().update(bookings).set({ meetingError: 'Couldn’t create a Zoom meeting. Send the guest a link yourself, or check your Zoom connection.' }).where(eq(bookings.id, b.id))
+  }
+}
+
 /** Puts a newly confirmed booking on the host's calendar and emails the guest and host. Never throws. */
 export async function afterConfirmed(bookingId: string) {
-  const c = await context(bookingId)
-  if (!c) return
+  const first = await context(bookingId)
+  if (!first) return
+  // The Zoom link comes first, so the calendar invitation and emails include it.
+  await addZoomMeeting(first)
+  const c = first.booking.locationType === 'zoom' ? ((await context(bookingId)) ?? first) : first
   const b = c.booking
   try {
     const connection = await getConnection(b.hostUserId)
@@ -501,7 +521,6 @@ export async function afterConfirmed(bookingId: string) {
   await sendEmail(b.guestEmail, guestConfirmation(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `confirm:${b.id}` })
   if (c.hostEmail) {
     const extras: [string, string][] = []
-    if (b.studentName) extras.push(['Student', `${b.studentName}${b.studentGrade ? ` (${b.studentGrade})` : ''}`])
     for (const a of b.answers) extras.push([a.label, formatAnswer(a.value)])
     if (b.guestNotes) extras.push(['Note', b.guestNotes])
     await sendEmail(c.hostEmail, hostNewBooking({ ...details(c, false), guestEmail: b.guestEmail, extras }), { replyTo: b.guestEmail, idempotencyKey: `host-new:${b.id}` })
@@ -544,6 +563,13 @@ export async function cancelBooking(bookingId: string, by: 'guest' | 'business',
       console.error('Removing the cancelled booking from Google Calendar failed', error)
     }
   }
+  if (b.zoomMeetingId) {
+    try {
+      await deleteZoomMeeting(b.hostUserId, b.zoomMeetingId)
+    } catch (error) {
+      console.error('Deleting the Zoom meeting failed', error)
+    }
+  }
   const c = await context(b.id)
   if (c) {
     await sendEmail(b.guestEmail, guestCancelled(details(c, true), by, decision), { replyTo: c.hostEmail, idempotencyKey: `cancel:${b.id}` })
@@ -582,6 +608,14 @@ export async function rescheduleBooking(bookingId: string, newStart: Date, now =
 
   const c = await context(b.id)
   if (!c) return { ok: true }
+  if (b.zoomMeetingId) {
+    try {
+      await updateZoomMeeting(b.hostUserId, b.zoomMeetingId, meetingFor({ ...b, startsAt: newStart, endsAt: newEnd }, c.business.timezone))
+    } catch (error) {
+      // The link stays the same either way; only Zoom's own schedule is out of date.
+      console.error('Moving the Zoom meeting failed', error)
+    }
+  }
   if (b.googleEventId && b.googleCalendarId) {
     try {
       await updateBookingEvent(b.hostUserId, b.googleCalendarId, b.googleEventId, {

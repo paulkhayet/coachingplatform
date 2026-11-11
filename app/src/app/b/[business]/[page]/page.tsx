@@ -22,6 +22,7 @@ const where = {
   video_link: { icon: Video, label: 'Video call (link sent when you book)' },
   phone: { icon: Phone, label: 'Phone call' },
   in_person: { icon: MapPin, label: 'In person (address sent when you book)' },
+  zoom: { icon: Video, label: 'Zoom call (link sent when you book)' },
 }
 
 export default async function PublicBookingPage({ params, searchParams }: { params: Promise<{ business: string; page: string }>; searchParams: Promise<{ payment?: string; hold?: string }> }) {

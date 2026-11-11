@@ -10,7 +10,8 @@ import { requireWorkspace } from '@/lib/workspace'
 import { siteUrl } from '@/lib/env'
 import { BookingPageForm, type PageDefaults } from '../form'
 import { updateBookingPage } from '../actions'
-import { paymentAccount } from '@/lib/booking/server'
+import { pageHosts, paymentAccount } from '@/lib/booking/server'
+import { isZoomConfigured, withoutZoom } from '@/lib/zoom/server'
 import { parseQuestions } from '@/lib/booking/questions'
 import { canAssignHosts } from '@/lib/roles'
 import { coachOptions, sharedHosts } from '../hosts'
@@ -67,6 +68,8 @@ export default async function EditBookingPage({ params, searchParams }: { params
   const hostChoice = manager
     ? { options: await coachOptions(business.id), mode: p.host_membership_id ? ('one' as const) : ('shared' as const), hostId: p.host_membership_id ?? '', pool: (await sharedHosts(business.id)).get(p.id) ?? [], businessName: business.name }
     : undefined
+  // Zoom pages need every host to have Zoom connected, or their bookings get no link.
+  const missingZoom = p.location_type === 'zoom' ? await withoutZoom(await pageHosts({ id: p.id, hostMembershipId: p.host_membership_id })) : []
   const publicUrl = `${siteUrl}/b/${business.slug}/${p.slug}`
 
   return (
@@ -76,6 +79,7 @@ export default async function EditBookingPage({ params, searchParams }: { params
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">{p.title}</h1>
       </div>
       {saved && <Alert variant="success"><AlertDescription>Saved.</AlertDescription></Alert>}
+      {missingZoom.length > 0 && <Alert variant="warning"><AlertDescription>{missingZoom.join(', ')} {missingZoom.length === 1 ? 'hasn’t' : 'haven’t'} connected Zoom, so their bookings on this page won’t get a meeting link. They can connect it on their Availability page.</AlertDescription></Alert>}
       {hosts === 'failed' && <Alert variant="destructive"><AlertDescription>The page was created but its group of coaches couldn’t be saved, so it’s turned off. Choose the coaches again and save.</AlertDescription></Alert>}
       <Card className="py-4">
         <CardContent className="flex flex-wrap items-center gap-3">
@@ -85,7 +89,7 @@ export default async function EditBookingPage({ params, searchParams }: { params
       </Card>
       <Card>
         <CardContent>
-          <BookingPageForm key={p.slug} action={updateBookingPage.bind(null, p.id)} defaults={defaults} businessSlug={business.slug} submitLabel="Save changes" paymentsReady={paymentsReady} hostChoice={hostChoice} />
+          <BookingPageForm key={p.slug} action={updateBookingPage.bind(null, p.id)} defaults={defaults} businessSlug={business.slug} submitLabel="Save changes" paymentsReady={paymentsReady} hostChoice={hostChoice} zoomAvailable={isZoomConfigured} />
         </CardContent>
       </Card>
     </div>

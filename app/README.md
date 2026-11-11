@@ -11,6 +11,8 @@ Next.js 16 + React 19 + TypeScript, Tailwind CSS 4 + shadcn/ui, Supabase (Postgr
 - Create a business and become its owner, with a booking link and time zone
 - A signed-in workspace (Today, Team) for that business
 - Owners invite coaches and administrators by email (Team → Invite someone). The link at `/join/<token>` works once, for 14 days, and only for an account with the invited email; one account can work for several businesses
+- Bookings has an "All my calls" tab for people who work for several businesses
+- Zoom booking pages: each booking gets its own meeting on the host's Zoom account (coaches connect Zoom on Availability; needs `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET`)
 - Booking pages are hosted by one coach, or shared by a group (owners and administrators choose): guests see every time someone in the group is free, and each call goes to the free coach with the fewest recent calls from that page
 - Row-level security on every table: people only see businesses they're active members of; only owners manage the team; nobody can grant themselves ownership
 - Payments (phase 2, in progress): an owner, or an administrator trusted with finances, connects the business's own Stripe account (Connect, full Stripe Dashboard, direct charges; D-055). Stripe events arrive at `/api/stripe/webhook`, are signature-checked, and are recorded once each in `stripe_events`
