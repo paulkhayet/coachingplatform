@@ -702,8 +702,6 @@ html:has(.lp) {scroll-behavior: auto;}
   .lp .workflow-visual { min-height: 0; }
 }
 
-/* Pricing without the monthly/yearly switch (D-067): keep the space it used to give the cards. */
-.lp .pricing-heading + .pricing-grid { margin-top: 43px; }
 
 /* Two plans for now (D-068): centred side by side, one column on phones as before. */
 @media (min-width: 601px) {

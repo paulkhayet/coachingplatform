@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { MARK_VIEWBOX, MarkPaths } from '@/components/brand'
-import { SiteNav, WorkflowTabs, type FlowTab } from './interactive'
+import { PricingPlans, SiteNav, WorkflowTabs, type FlowTab, type Plan } from './interactive'
 import { BookingPagePreview, BookingsPreview, ConfirmationPreview, PaymentsPreview, TeamPreview } from './product-previews'
 import '@/app/landing.css'
 
@@ -72,51 +72,12 @@ const flows: FlowTab[] = [
   },
 ]
 
-interface Plan {
-  id: string
-  name: string
-  icon: string
-  description: string
-  /** Monthly price in USD. */
-  price: number
-  unit?: string
-  featured?: string
-  seats: string
-  includes: string[]
-  cta: { label: string; href: string }
-}
-
-// Planned prices (D-067, D-068: Solo and Team only for now). Nothing is charged yet; billing isn't built.
+// Planned prices (D-069): per month, paid yearly or monthly; yearly is shown first. Nothing is charged yet
+// because billing isn't built.
 const plans: Plan[] = [
-  { id: 'solo', name: 'Solo', icon: 'home', description: 'Everything a solo coaching business needs.', price: 10, unit: '/ month', seats: 'Just you', includes: ['Booking pages & custom questions', 'Google Calendar & Zoom', 'Card payments & refunds', 'Email confirmations & reminders'], cta: { label: 'Start free', href: '/sign-up' } },
-  { id: 'team', name: 'Team', icon: 'people', description: 'For coaching and tutoring teams of any size.', price: 15, unit: '/ person / month', featured: 'FOR GROWING TEAMS', seats: 'Priced per person on your team', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Business hours & team free times'], cta: { label: 'Start free', href: '/sign-up' } },
+  { id: 'solo', name: 'Solo', icon: 'home', description: 'Everything a solo coaching business needs.', yearly: 10, monthly: 12, perPerson: false, seats: 'Just you', includes: ['Booking pages & custom questions', 'Google Calendar & Zoom', 'Card payments & refunds', 'Email confirmations & reminders'] },
+  { id: 'team', name: 'Team', icon: 'people', description: 'For coaching and tutoring teams of any size.', yearly: 15, monthly: 17, perPerson: true, featured: 'FOR GROWING TEAMS', seats: 'Priced per person on your team', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Business hours & team free times'] },
 ]
-
-function PricingPlans() {
-  return (
-    <div className="pricing-grid">
-      {plans.map((p) => (
-        <article key={p.id} className={`price-card${p.featured ? ' featured' : ''}`}>
-          {p.featured && <div className="plan-ribbon">{p.featured}</div>}
-          <div className="plan-heading">
-            <Icon id={p.icon} className="icon plan-icon" />
-            <h3>{p.name}</h3>
-          </div>
-          <p className="plan-description">{p.description}</p>
-          <div className="price"><span>$</span><strong>{p.price}</strong><span>{p.unit}</span></div>
-          <p className="billing-note">Planned price · not charged today</p>
-          <Link className={`button price-button${p.featured ? '' : ' button-outline'}`} href={p.cta.href}>
-            {p.cta.label} <Icon id="arrow-up-right" className="icon" />
-          </Link>
-          <div className="plan-includes">
-            <b>{p.seats}</b>
-            <ul>{p.includes.map((item) => <li key={item}>{item}</li>)}</ul>
-          </div>
-        </article>
-      ))}
-    </div>
-  )
-}
 
 const faqs: [string, string][] = [
   ['Can I use schedulefa.st today?', 'Yes. Create your business for free, set your hours and share a booking page in a few minutes. Families can book free or paid calls right away.'],
@@ -213,7 +174,7 @@ export function LandingPage() {
               <h2>Start free.<br />Grow with your team.</h2>
               <p>Create your business and take bookings for free today.<br />Paid plans are on the way: one price for solo coaches, per person for teams.</p>
             </div>
-            <PricingPlans />
+            <PricingPlans plans={plans} />
             <p className="pricing-footnote">Paid plans aren’t live yet. These are planned prices in USD and may change; nothing is charged today.<br />schedulefa.st takes no fee on your coaching payments. Stripe’s standard processing fees apply.</p>
           </div>
         </section>

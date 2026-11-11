@@ -105,3 +105,60 @@ export function WorkflowTabs({ tabs }: { tabs: FlowTab[] }) {
     </div>
   )
 }
+
+export interface Plan {
+  id: string
+  name: string
+  icon: string
+  description: string
+  /** Price per month in USD when paid yearly, and when paid monthly. */
+  yearly: number
+  monthly: number
+  perPerson: boolean
+  featured?: string
+  seats: string
+  includes: string[]
+}
+
+/** The plans with a yearly/monthly switch; yearly is selected first (D-069). Every button starts a free business. */
+export function PricingPlans({ plans }: { plans: Plan[] }) {
+  const [billing, setBilling] = useState<'yearly' | 'monthly'>('yearly')
+  const yearly = billing === 'yearly'
+  return (
+    <>
+      <div className="billing-control" role="group" aria-label="Billing frequency">
+        <button type="button" className={yearly ? 'selected' : undefined} aria-pressed={yearly} onClick={() => setBilling('yearly')}>
+          Yearly <span>Save with yearly</span>
+        </button>
+        <button type="button" className={yearly ? undefined : 'selected'} aria-pressed={!yearly} onClick={() => setBilling('monthly')}>Monthly</button>
+      </div>
+      <div className="pricing-grid">
+        {plans.map((p) => {
+          const price = yearly ? p.yearly : p.monthly
+          const per = p.perPerson ? ' per person' : ''
+          return (
+            <article key={p.id} className={`price-card${p.featured ? ' featured' : ''}`}>
+              {p.featured && <div className="plan-ribbon">{p.featured}</div>}
+              <div className="plan-heading">
+                <svg className="icon plan-icon" aria-hidden="true"><use href={`#${p.icon}`} /></svg>
+                <h3>{p.name}</h3>
+              </div>
+              <p className="plan-description">{p.description}</p>
+              <div className="price"><span>$</span><strong>{price}</strong><span>{p.perPerson ? '/ person / month' : '/ month'}</span></div>
+              <p className="billing-note">
+                {yearly ? `$${(p.yearly * 12).toLocaleString('en-US')}${per} billed yearly` : 'Billed monthly'} · planned, not charged today
+              </p>
+              <Link className={`button price-button${p.featured ? '' : ' button-outline'}`} href="/sign-up">
+                Start free <svg className="icon"><use href="#arrow-up-right" /></svg>
+              </Link>
+              <div className="plan-includes">
+                <b>{p.seats}</b>
+                <ul>{p.includes.map((item) => <li key={item}>{item}</li>)}</ul>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </>
+  )
+}
