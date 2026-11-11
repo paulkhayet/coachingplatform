@@ -113,6 +113,13 @@
       "when": 1794249197207,
       "tag": "0015_optional_guest_note",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794253283425,
+      "tag": "0016_reminder_schedule",
+      "breakpoints": true
     }
   ]
 }

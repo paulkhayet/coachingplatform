@@ -73,3 +73,5 @@ The database tests wipe the target database and load a small stand-in for Supaba
 ## Deploy on Vercel
 
 Import the GitHub repository, set **Root Directory** to `app`, and add the environment variables from `.env.example` (with `NEXT_PUBLIC_SITE_URL` set to the deployed URL). For payments, also add `DATABASE_URL` (transaction pooler), `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and create a Stripe webhook endpoint for `https://<your domain>/api/stripe/webhook` listening to **events on connected accounts** (at least `account.updated` and `account.application.deauthorized`). Migrations run automatically on each production deploy (see Database changes).
+
+**Reminder emails** go out about 24 hours before each call. Supabase pg_cron runs every 15 minutes (migration `0016`) and calls `/api/cron/reminders`, but only once that project's Vault has two secrets: `reminders_url` (e.g. `https://www.schedulefa.st/api/cron/reminders`) and `cron_secret` (the same value as Vercel's `CRON_SECRET`). Without them the job does nothing, so development projects stay quiet.

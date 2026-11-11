@@ -90,6 +90,11 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     expect(await as(sql, marcus, (tx) => tx`SELECT id FROM public.businesses WHERE id = ${willow}`)).toHaveLength(0)
   })
 
+  it('keeps the reminder trigger away from the API', async () => {
+    await expect(as(sql, eleni, (tx) => tx`SELECT private.request_reminders()`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, null, (tx) => tx`SELECT private.request_reminders()`)).rejects.toThrow(/permission denied/)
+  })
+
   it('validates new businesses', async () => {
     await expect(as(sql, eleni, (tx) => tx`SELECT public.create_business('Dup', 'willow-coaching')`)).rejects.toThrow(/businesses_slug_key/)
     await expect(as(sql, eleni, (tx) => tx`SELECT public.create_business('Bad slug', 'Not OK!')`)).rejects.toThrow(/businesses_slug_format/)
