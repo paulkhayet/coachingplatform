@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { imageFormData } from '@/lib/shrink-image'
 import type { WeeklyWindow } from '@/db/schema'
 import { DayRows, useDays } from '../../availability/forms'
 import { saveOpeningHours, type OpeningHoursState } from './actions'
@@ -86,19 +87,33 @@ export function BusinessLogoForm({ name, logoUrl, save }: {
   save: (state: OpeningHoursState, form: FormData) => Promise<OpeningHoursState>
 }) {
   const [state, action, pending] = useActionState(save, {})
+  const [problem, setProblem] = useState<string | null>(null)
+  const [preparing, setPreparing] = useState(false)
+  // The logo is shrunk in the browser first: server actions refuse bodies over 1 MB.
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const submitter = (event.nativeEvent as SubmitEvent).submitter
+    setProblem(null)
+    setPreparing(true)
+    const data = await imageFormData(event.currentTarget, submitter, 'logo', true)
+    setPreparing(false)
+    if (typeof data === 'string') setProblem(data)
+    else startTransition(() => action(data))
+  }
+  const busy = pending || preparing
   return (
-    <form action={action} className="flex flex-wrap items-start gap-4">
+    <form onSubmit={submit} className="flex flex-wrap items-start gap-4">
       <BusinessMark name={name} logoUrl={logoUrl} className="size-16 rounded-lg text-2xl" />
       <div className="grid min-w-0 flex-1 gap-3">
         <div className="grid gap-1.5">
           <Label htmlFor="business-logo">Logo</Label>
           <Input id="business-logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="business-logo-help" required />
-          <p id="business-logo-help" className="text-muted-foreground text-xs">A square JPG, PNG, or WebP works best, up to 750 KB. Shown on your booking pages.</p>
+          <p id="business-logo-help" className="text-muted-foreground text-xs">A square JPG, PNG, or WebP works best. Shown on your booking pages.</p>
         </div>
-        <Feedback state={state} />
+        {problem ? <Alert variant="destructive"><AlertDescription>{problem}</AlertDescription></Alert> : <Feedback state={state} />}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="outline" disabled={pending}>{pending ? 'Saving…' : 'Upload logo'}</Button>
-          {logoUrl && <Button type="submit" name="intent" value="remove" variant="ghost" formNoValidate disabled={pending}>Remove logo</Button>}
+          <Button type="submit" variant="outline" disabled={busy}>{busy ? 'Saving…' : 'Upload logo'}</Button>
+          {logoUrl && <Button type="submit" name="intent" value="remove" variant="ghost" formNoValidate disabled={busy}>Remove logo</Button>}
         </div>
       </div>
     </form>
