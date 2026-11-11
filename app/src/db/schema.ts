@@ -204,8 +204,6 @@ export const bookingPages = pgTable(
     priceCents: integer('price_cents'),
     // Guests who cancel at least this long before the call get a full refund.
     refundCutoffHours: integer('refund_cutoff_hours').notNull().default(24),
-    // Unused since D-063 (moved into custom questions); drop in a later deploy.
-    askStudent: boolean('ask_student').notNull().default(false),
     questions: jsonb('questions').$type<BookingQuestion[]>().notNull().default([]),
     // Whether guests get the optional "anything else?" note (D-064).
     askNotes: boolean('ask_notes').notNull().default(true),
@@ -256,9 +254,6 @@ export const bookings = pgTable(
     stripeCheckoutSessionId: text('stripe_checkout_session_id'),
     stripePaymentIntentId: text('stripe_payment_intent_id'),
     refundCutoffHours: integer('refund_cutoff_hours').notNull().default(24),
-    // Empty since 0017 (moved into answers, D-063); drop in a later deploy with ask_student.
-    studentName: text('student_name'),
-    studentGrade: text('student_grade'),
     answers: jsonb('answers').$type<BookingAnswer[]>().notNull().default([]),
     reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
     cancelledBy: text('cancelled_by', { enum: ['guest', 'business'] }),

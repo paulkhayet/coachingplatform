@@ -8,6 +8,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // api/stripe: webhooks carry no session, so skip the session refresh.
-  matcher: ['/((?!_next/static|_next/image|favicon.svg|fonts/|api/stripe/|api/cron/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2)$).*)'],
+  // api/stripe, api/zoom/webhook: webhooks carry no session, so skip the session refresh.
+  matcher: ['/((?!_next/static|_next/image|favicon.svg|fonts/|api/stripe/|api/cron/|api/zoom/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2)$).*)'],
 }
