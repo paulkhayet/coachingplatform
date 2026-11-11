@@ -257,11 +257,13 @@ export const clientCreditEvents = pgTable('client_credit_events', {
   kind: text('kind').$type<(typeof CREDIT_EVENT_KINDS)[number]>().notNull(),
   creditUnits: integer('credit_units').notNull(),
   paymentId: uuid('payment_id').references(() => clientCreditPayments.id, { onDelete: 'cascade' }),
+  bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'restrict' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   foreignKey({ columns: [t.businessId, t.clientId, t.periodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'client_credit_events_period_fk' }).onDelete('cascade'),
   index('client_credit_events_period_idx').on(t.businessId, t.clientId, t.periodId, t.createdAt),
   uniqueIndex('client_credit_events_payment_key').on(t.paymentId),
+  uniqueIndex('client_credit_events_booking_kind_key').on(t.bookingId, t.kind),
   check('client_credit_events_kind', sql`${t.kind} in ('funded', 'reserved', 'released', 'used', 'forfeited', 'expired')`),
   check('client_credit_events_units', sql`${t.creditUnits} between 1 and 100000`),
   check('client_credit_events_payment', sql`(${t.kind} = 'funded') = (${t.paymentId} is not null)`),
@@ -431,7 +433,7 @@ export const bookings = pgTable(
     reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
     cancelledBy: text('cancelled_by', { enum: ['guest', 'business'] }),
     guestName: text('guest_name').notNull(),
-    guestEmail: text('guest_email').notNull(),
+    guestEmail: text('guest_email'),
     guestNotes: text('guest_notes'),
     guestTimezone: text('guest_timezone'),
     locationType: locationType('location_type').notNull(),
@@ -444,8 +446,16 @@ export const bookings = pgTable(
     meetingError: text('meeting_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    coachingClientId: uuid('coaching_client_id'),
+    creditPeriodId: uuid('credit_period_id'),
+    creditUnits: integer('credit_units'),
+    creditNoticeHours: integer('credit_notice_hours'),
+    creditLateCancellation: text('credit_late_cancellation').$type<'preserve' | 'forfeit'>(),
+    creditCancellationOutcome: text('credit_cancellation_outcome').$type<'released' | 'forfeited'>(),
+    attendedAt: timestamp('attended_at', { withTimezone: true }),
   },
   (t) => [
+    foreignKey({ columns: [t.businessId, t.coachingClientId, t.creditPeriodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'bookings_credit_period_fk' }).onDelete('restrict'),
     uniqueIndex('bookings_checkout_session_key').on(t.stripeCheckoutSessionId),
     check('bookings_status', sql`${t.status} in ('pending_payment', 'confirmed', 'cancelled', 'expired')`),
     check('bookings_payment_status', sql`${t.paymentStatus} in ('not_required', 'pending', 'paid', 'refunded', 'refund_failed')`),
@@ -455,10 +465,23 @@ export const bookings = pgTable(
     index('bookings_host_starts_idx').on(t.hostMembershipId, t.startsAt),
     index('bookings_host_user_starts_idx').on(t.hostUserId, t.startsAt),
     index('bookings_page_idx').on(t.bookingPageId),
+    index('bookings_coaching_client_idx').on(t.businessId, t.coachingClientId, t.creditPeriodId, t.startsAt).where(sql`${t.coachingClientId} is not null`),
     check('bookings_order', sql`${t.endsAt} > ${t.startsAt}`),
     check('bookings_guest_name_length', sql`char_length(${t.guestName}) between 1 and 120`),
-    check('bookings_guest_email_length', sql`char_length(${t.guestEmail}) between 3 and 254`),
+    check('bookings_guest_email_length', sql`(${t.guestEmail} is null and ${t.coachingClientId} is not null) or (${t.guestEmail} is not null and char_length(${t.guestEmail}) between 3 and 254)`),
     check('bookings_guest_notes_length', sql`char_length(${t.guestNotes}) <= 2000`),
+    check('bookings_coaching_terms', sql`
+      (${t.coachingClientId} is null and ${t.creditPeriodId} is null and ${t.creditUnits} is null
+       and ${t.creditNoticeHours} is null and ${t.creditLateCancellation} is null
+       and ${t.creditCancellationOutcome} is null and ${t.attendedAt} is null)
+      or (${t.coachingClientId} is not null and ${t.creditPeriodId} is not null and ${t.bookingPageId} is null
+       and ${t.paymentStatus} = 'not_required' and ${t.priceCents} is null
+       and ${t.creditUnits} is not null and ${t.creditUnits} between 1 and 100000
+       and ${t.creditNoticeHours} is not null and ${t.creditNoticeHours} between 0 and 720
+       and ${t.creditLateCancellation} is not null and ${t.creditLateCancellation} in ('preserve', 'forfeit')
+       and ((${t.status} = 'confirmed' and ${t.creditCancellationOutcome} is null)
+         or (${t.status} = 'cancelled' and ${t.attendedAt} is null and ${t.creditCancellationOutcome} is not null
+           and ${t.creditCancellationOutcome} in ('released', 'forfeited'))))`),
   ],
 )
 

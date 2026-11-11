@@ -81,17 +81,17 @@ export function guestCancelled(d: CallDetails, by: 'guest' | 'business', refund:
   return { subject, ...render('Your call is cancelled', lines, detailRows({ ...d, paymentLine: undefined, location: undefined })) }
 }
 
-export function hostNewBooking(d: CallDetails & { guestEmail: string; extras: [string, string][] }): EmailMessage {
+export function hostNewBooking(d: CallDetails & { guestEmail: string | null; staffBooked?: boolean; extras: [string, string][] }): EmailMessage {
   const subject = `New booking: ${d.title} with ${d.guestName}`
-  return { subject, ...render(`${d.guestName} booked ${d.title}`, ['A new call was booked through your booking page.'], [...detailRows({ ...d, hostName: d.hostName }), ['Guest', `${d.guestName} <${d.guestEmail}>`], ...d.extras], undefined, 'See all bookings in schedulefa.st → Bookings.') }
+  return { subject, ...render(d.staffBooked ? `${d.title} with ${d.guestName}` : `${d.guestName} booked ${d.title}`, [d.staffBooked ? 'A coaching session was scheduled for you.' : 'A new call was booked through your booking page.'], [...detailRows(d), ['Guest', d.guestEmail ? `${d.guestName} <${d.guestEmail}>` : d.guestName], ...d.extras], undefined, 'See all bookings in schedulefa.st → Bookings.') }
 }
 
-export function hostGuestChange(d: CallDetails & { guestEmail: string }, change: 'cancelled' | 'rescheduled', refund?: 'full' | 'none' | 'not_paid'): EmailMessage {
+export function hostGuestChange(d: CallDetails & { guestEmail: string | null }, change: 'cancelled' | 'rescheduled', refund?: 'full' | 'none' | 'not_paid'): EmailMessage {
   const subject = `${change === 'cancelled' ? 'Cancelled' : 'Rescheduled'}: ${d.title} with ${d.guestName}`
   const lines = [change === 'cancelled' ? `${d.guestName} cancelled their ${d.title}.` : `${d.guestName} moved their ${d.title} to a new time.`]
   if (refund === 'full') lines.push('They were refunded in full automatically.')
   if (refund === 'none') lines.push('It was after the refund cutoff, so no refund was made.')
-  return { subject, ...render(subject, lines, [...detailRows(d), ['Guest', `${d.guestName} <${d.guestEmail}>`]]) }
+  return { subject, ...render(subject, lines, [...detailRows(d), ['Guest', d.guestEmail ? `${d.guestName} <${d.guestEmail}>` : d.guestName]]) }
 }
 
 /** D-060: an owner invites someone to join their business. */

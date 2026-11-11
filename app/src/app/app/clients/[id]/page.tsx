@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { z } from 'zod'
 import { coachOptions } from '@/app/app/booking-pages/hosts'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { formatCents } from '@/lib/booking/policy'
@@ -24,6 +25,7 @@ const messages: Record<string, string> = {
   client: 'Client saved.', guardian: 'Guardian contact saved.', package: 'Package assigned.', payment: 'Payment recorded.',
 }
 const empty = { data: [], error: null }
+type SessionSummary = { id: string; title: string; starts_at: string; status: string; attended_at: string | null }
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ status?: string }> }) {
   const { business, membership } = await requireWorkspace()
@@ -39,7 +41,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const manager = canManageClients(membership.role)
   const finance = canManagePayments(membership)
   const today = businessDate(business.timezone)
-  const [coaches, guardians, balances, events, assignments, payments, packages] = await Promise.all([
+  const [coaches, guardians, balances, events, assignments, payments, packages, sessions] = await Promise.all([
     coachOptions(business.id),
     manager ? supabase.from('client_guardians').select('id, name, relationship, email, phone')
       .eq('business_id', business.id).eq('client_id', id).order('created_at').returns<GuardianRow[]>() : empty,
@@ -52,6 +54,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       .eq('business_id', business.id).eq('client_id', id).order('recorded_at', { ascending: false }).limit(100).returns<CreditPaymentRow[]>() : empty,
     finance ? supabase.from('coaching_packages').select('id, name, kind, price_cents, credit_units, updated_at')
       .eq('business_id', business.id).is('archived_at', null).order('name').returns<PackageOption[]>() : empty,
+    supabase.from('bookings').select('id, title, starts_at, status, attended_at')
+      .eq('business_id', business.id).eq('coaching_client_id', id).order('starts_at', { ascending: false }).limit(30).returns<SessionSummary[]>(),
   ])
 
   const coach = client.coach_membership_id ? coaches.find((item) => item.id === client.coach_membership_id)?.name ?? 'Unavailable coach' : 'Unassigned'
@@ -62,6 +66,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const termsByAssignment = new Map((assignments.data ?? []).map((row) => [row.id, row.terms]))
   const periods = Array.isArray(balances.data) ? balances.data : []
   const creditError = balances.error || !Array.isArray(balances.data) || events.error || assignments.error || payments.error
+  const sessionTime = new Intl.DateTimeFormat('en-US', { timeZone: business.timezone, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
 
   return (
     <div className="grid max-w-3xl gap-6">
@@ -110,6 +115,28 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </CardContent>
       </Card>}
 
+      {(sessions.error || Boolean(sessions.data?.length)) && <Card className="gap-4">
+        <CardHeader><h2 className="font-semibold">Coaching sessions</h2></CardHeader>
+        <CardContent>
+          {sessions.error ? <Alert variant="destructive"><AlertDescription>Couldn’t load coaching sessions.</AlertDescription></Alert> : (
+            <ul className="divide-y">
+              {(sessions.data ?? []).map((session) => (
+                <li key={session.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium break-words">{session.title}</p>
+                    <p className="text-muted-foreground text-xs">{sessionTime.format(new Date(session.starts_at))}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge tone={session.status === 'cancelled' ? 'neutral' : 'success'}>{session.status === 'cancelled' ? 'Cancelled' : session.attended_at ? 'Attended' : 'Scheduled'}</StatusBadge>
+                    <Button asChild variant="ghost" size="sm"><Link href={`/app/bookings/coaching/${session.id}`}>View session</Link></Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>}
+
       <section className="grid gap-4" aria-labelledby="client-credits">
         <div>
           <h2 id="client-credits" className="text-lg font-semibold tracking-tight">Packages and credits</h2>
@@ -120,7 +147,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             <CreditPeriod key={period.id} period={period} terms={termsByAssignment.get(period.client_package_id)}
               events={(events.data ?? []).filter((event) => event.period_id === period.id)}
               payments={(payments.data ?? []).filter((payment) => payment.period_id === period.id)}
-              canRecord={finance} businessId={business.id} clientId={id} today={today} timezone={business.timezone} />
+              canBook={manager} canRecord={finance} businessId={business.id} clientId={id} today={today} timezone={business.timezone} />
           ))}
           {!periods.length && <p className="text-muted-foreground text-sm">No coaching package has been assigned.</p>}
           {finance && <Card className="gap-4">

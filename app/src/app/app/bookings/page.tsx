@@ -21,7 +21,7 @@ type Row = {
   starts_at: string
   ends_at: string
   guest_name: string
-  guest_email: string
+  guest_email: string | null
   guest_notes: string | null
   host_membership_id: string
   calendar_sync_error: string | null
@@ -32,10 +32,11 @@ type Row = {
   business_id: string
   zoom_meeting_id: string | null
   meeting_error: string | null
+  coaching_client_id: string | null
   business?: { name: string } | null
 }
 
-const COLUMNS = 'id, title, starts_at, ends_at, guest_name, guest_email, guest_notes, host_membership_id, calendar_sync_error, google_event_id, price_cents, payment_status, answers, business_id, zoom_meeting_id, meeting_error'
+const COLUMNS = 'id, title, starts_at, ends_at, guest_name, guest_email, guest_notes, host_membership_id, calendar_sync_error, google_event_id, price_cents, payment_status, answers, business_id, zoom_meeting_id, meeting_error, coaching_client_id'
 
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const { business, membership, user, workspaces } = await requireWorkspace()
@@ -45,10 +46,14 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const mine = multiBusiness && (await searchParams).view === 'mine'
   const supabase = await createClient()
   const now = new Date().toISOString()
-  const query = mine
+  const query = () => mine
     ? supabase.from('bookings').select(`${COLUMNS}, business:businesses(name)`).eq('host_user_id', user.id)
     : supabase.from('bookings').select(COLUMNS).eq('business_id', business.id)
-  const { data: rows } = await query.eq('status', 'confirmed').gt('ends_at', now).order('starts_at').limit(200).returns<Row[]>()
+  const [{ data: rows }, { data: past }] = await Promise.all([
+    query().eq('status', 'confirmed').gt('ends_at', now).order('starts_at').limit(200).returns<Row[]>(),
+    query().eq('status', 'confirmed').not('coaching_client_id', 'is', null).is('attended_at', null).lte('ends_at', now)
+      .order('starts_at', { ascending: false }).limit(50).returns<Row[]>(),
+  ])
 
   // Your own calls are shown in your own time zone; one business's calls in its time zone.
   const { data: schedule } = mine ? await supabase.from('availability_schedules').select('timezone').eq('user_id', user.id).maybeSingle<{ timezone: string }>() : { data: null }
@@ -58,13 +63,14 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const zone = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'long' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? timeZone
   // Hosts can always cancel their own calls; owners and administrators can cancel any in their business.
   const canCancel = (b: Row) => mine || canManageBookings(membership, b.host_membership_id)
+  const needsAttendance = (past ?? []).filter(canCancel)
 
   return (
     <div className="grid gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Bookings</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          {mine ? `Every upcoming call you host, across all your businesses. Times are in your time zone (${zone}).` : `Upcoming calls booked through ${business.name}’s booking pages. Times are in the business time zone (${zone}).`}
+          {mine ? `Upcoming bookings you host across your businesses. Times are in your time zone (${zone}).` : `Upcoming calls and coaching sessions for ${business.name}. Times are in the business time zone (${zone}).`}
         </p>
       </div>
       {multiBusiness && (
@@ -73,6 +79,22 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
           <Link href="/app/bookings?view=mine" className={cn('rounded-md px-3 py-1.5', mine ? 'bg-background font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground')} aria-current={mine ? 'page' : undefined}>All my calls</Link>
         </nav>
       )}
+      {needsAttendance.length > 0 && <Card>
+        <CardHeader><h2 className="font-semibold">Needs attendance</h2></CardHeader>
+        <CardContent>
+          <ul className="divide-y">
+            {needsAttendance.map((b) => (
+              <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
+                <div>
+                  <p className="text-sm font-medium">{b.title} with {b.guest_name}</p>
+                  <p className="text-muted-foreground text-xs">{day.format(new Date(b.starts_at))} · {time.format(new Date(b.starts_at))}{mine && b.business ? ` · ${b.business.name}` : ''}</p>
+                </div>
+                <Button asChild variant="outline" size="sm"><Link href={`/app/bookings/coaching/${b.id}`}>Record outcome</Link></Button>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>}
       {!rows?.length ? (
         <Card>
           <CardHeader>
@@ -99,11 +121,14 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                     {b.payment_status === 'paid' && b.price_cents && <Badge variant="accent">Paid {formatCents(b.price_cents)}</Badge>}
                     {b.google_event_id && <Badge variant="outline">On Google Calendar</Badge>}
                     {b.calendar_sync_error && <Badge variant="outline" className="text-warning"><TriangleAlert /> Not on Google Calendar</Badge>}
-                    {b.zoom_meeting_id && <Badge variant="outline">Zoom link sent</Badge>}
+                    {b.coaching_client_id && <Badge variant="outline">Coaching session</Badge>}
+                    {b.zoom_meeting_id && <Badge variant="outline">{b.guest_email ? 'Zoom link sent' : 'Zoom link ready'}</Badge>}
                     {b.meeting_error && <Badge variant="outline" className="text-warning" title={b.meeting_error}><TriangleAlert /> No Zoom link</Badge>}
                   </div>
                 </div>
-                {canCancel(b) && (
+                {b.coaching_client_id ? (
+                  <Button asChild variant="outline" size="sm"><Link href={`/app/bookings/coaching/${b.id}`}>View session</Link></Button>
+                ) : canCancel(b) && (
                   <form action={cancelBookingAction}>
                     <input type="hidden" name="id" value={b.id} />
                     <Button type="submit" variant="ghost" size="sm">{b.payment_status === 'paid' ? 'Cancel and refund' : 'Cancel'}</Button>
