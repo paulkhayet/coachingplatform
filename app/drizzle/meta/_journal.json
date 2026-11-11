@@ -141,6 +141,13 @@
       "when": 1794369186059,
       "tag": "0019_drop_student_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794417477674,
+      "tag": "0020_contact_requests",
+      "breakpoints": true
     }
   ]
 }

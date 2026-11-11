@@ -111,3 +111,17 @@ export function teamInviteEmail(d: { businessName: string; inviterName: string; 
     ),
   }
 }
+
+/** D-067: a sales enquiry from the public contact form, sent to the schedulefa.st team. */
+export function contactRequestEmail(d: { name: string; email: string; organization: string; teamSize: string; message: string | null; plan: string | null }): EmailMessage {
+  return {
+    subject: `New ${d.plan === 'corporate' ? 'Corporate plan ' : ''}enquiry from ${d.organization}`,
+    ...render(
+      `${d.name} from ${d.organization} got in touch`,
+      [d.message ? d.message : 'No message added.'],
+      [['Name', d.name], ['Email', d.email], ['Organization', d.organization], ['Team size', d.teamSize], ['Plan', d.plan ?? 'Not specified']],
+      undefined,
+      'Reply to this email to answer them directly.',
+    ),
+  }
+}

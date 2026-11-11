@@ -95,6 +95,13 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     await expect(as(sql, null, (tx) => tx`SELECT private.request_reminders()`)).rejects.toThrow(/permission denied/)
   })
 
+  it('keeps contact requests away from the API (D-067)', async () => {
+    await sql`INSERT INTO public.contact_requests (name, email, organization, team_size) VALUES ('Sam', 'sam@corp.example', 'Corp', '26–50')`
+    await expect(as(sql, eleni, (tx) => tx`SELECT 1 FROM public.contact_requests`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, null, (tx) => tx`INSERT INTO public.contact_requests (name, email, organization, team_size) VALUES ('x', 'x@x', 'x', 'x')`)).rejects.toThrow(/permission denied/)
+    await expect(sql`INSERT INTO public.contact_requests (name, email, organization, team_size) VALUES (${'n'.repeat(200)}, 'a@b', 'c', 'd')`).rejects.toThrow(/contact_requests_lengths/)
+  })
+
   it('validates new businesses', async () => {
     await expect(as(sql, eleni, (tx) => tx`SELECT public.create_business('Dup', 'willow-coaching')`)).rejects.toThrow(/businesses_slug_key/)
     await expect(as(sql, eleni, (tx) => tx`SELECT public.create_business('Bad slug', 'Not OK!')`)).rejects.toThrow(/businesses_slug_format/)

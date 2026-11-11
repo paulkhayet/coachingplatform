@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { MARK_VIEWBOX, MarkPaths } from '@/components/brand'
-import { PricingPlans, SiteNav, WorkflowTabs, type FlowTab, type Plan } from './interactive'
+import { SiteNav, WorkflowTabs, type FlowTab } from './interactive'
 import { BookingPagePreview, BookingsPreview, ConfirmationPreview, PaymentsPreview, TeamPreview } from './product-previews'
 import '@/app/landing.css'
 
@@ -72,11 +72,56 @@ const flows: FlowTab[] = [
   },
 ]
 
+interface Plan {
+  id: string
+  name: string
+  icon: string
+  description: string
+  /** Monthly price in USD, or null for "contact us". */
+  price: number | null
+  unit?: string
+  featured?: string
+  seats: string
+  includes: string[]
+  cta: { label: string; href: string }
+}
+
+// Planned prices (D-067). Nothing is charged yet; billing isn't built.
 const plans: Plan[] = [
-  { id: 'solo', name: 'Solo', icon: 'home', description: 'Everything a solo coaching business needs.', monthly: 39, yearly: 31, seats: 'One owner-coach', includes: ['Booking pages & custom questions', 'Google Calendar & Zoom', 'Card payments & refunds', 'Email confirmations & reminders'] },
-  { id: 'studio', name: 'Studio', icon: 'people', description: 'A connected workspace for a small team.', monthly: 99, yearly: 79, featured: 'FOR GROWING TEAMS', seats: 'Up to 5 staff members', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages', 'Business hours & team free times'] },
-  { id: 'practice', name: 'Practice', icon: 'layers', description: 'More room for an established practice.', monthly: 199, yearly: 159, seats: 'Up to 15 staff members', includes: ['Everything in Studio', 'Room for coaches & administrators', 'Coaches across several businesses', 'Fair assignment across your team'] },
+  { id: 'solo', name: 'Solo', icon: 'home', description: 'Everything a solo coaching business needs.', price: 10, unit: '/ month', seats: 'Just you', includes: ['Booking pages & custom questions', 'Google Calendar & Zoom', 'Card payments & refunds', 'Email confirmations & reminders'], cta: { label: 'Start free', href: '/sign-up' } },
+  { id: 'team', name: 'Team', icon: 'people', description: 'For coaching and tutoring teams of any size.', price: 15, unit: '/ person / month', featured: 'FOR GROWING TEAMS', seats: 'Priced per person on your team', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Business hours & team free times'], cta: { label: 'Start free', href: '/sign-up' } },
+  { id: 'corporate', name: 'Corporate', icon: 'layers', description: 'For larger organizations with many coaches.', price: null, seats: 'Pricing for your organization', includes: ['Everything in Team', 'Pricing for larger teams', 'Several businesses, one account', 'Help getting your team set up'], cta: { label: 'Contact us', href: '/contact?plan=corporate' } },
 ]
+
+function PricingPlans() {
+  return (
+    <div className="pricing-grid">
+      {plans.map((p) => (
+        <article key={p.id} className={`price-card${p.featured ? ' featured' : ''}`}>
+          {p.featured && <div className="plan-ribbon">{p.featured}</div>}
+          <div className="plan-heading">
+            <Icon id={p.icon} className="icon plan-icon" />
+            <h3>{p.name}</h3>
+          </div>
+          <p className="plan-description">{p.description}</p>
+          {p.price != null ? (
+            <div className="price"><span>$</span><strong>{p.price}</strong><span>{p.unit}</span></div>
+          ) : (
+            <div className="price price-custom"><strong>Let’s talk</strong></div>
+          )}
+          <p className="billing-note">{p.price != null ? 'Planned price · not charged today' : 'Tell us about your organization'}</p>
+          <Link className={`button price-button${p.featured ? '' : ' button-outline'}`} href={p.cta.href}>
+            {p.cta.label} <Icon id="arrow-up-right" className="icon" />
+          </Link>
+          <div className="plan-includes">
+            <b>{p.seats}</b>
+            <ul>{p.includes.map((item) => <li key={item}>{item}</li>)}</ul>
+          </div>
+        </article>
+      ))}
+    </div>
+  )
+}
 
 const faqs: [string, string][] = [
   ['Can I use schedulefa.st today?', 'Yes. Create your business for free, set your hours and share a booking page in a few minutes. Families can book free or paid calls right away.'],
@@ -171,10 +216,10 @@ export function LandingPage() {
             <div className="pricing-heading">
               <div className="section-kicker">SIMPLE PRICING</div>
               <h2>Start free.<br />Grow with your team.</h2>
-              <p>Create your business and take bookings for free today.<br />Paid plans for growing teams are on the way, priced by staff seats.</p>
+              <p>Create your business and take bookings for free today.<br />Paid plans are on the way: one price for solo coaches, per person for teams.</p>
             </div>
-            <PricingPlans plans={plans} />
-            <p className="pricing-footnote">Paid plans aren’t live yet. These are planned launch prices in USD and may change; nothing is charged today.<br />schedulefa.st takes no fee on your coaching payments. Stripe’s standard processing fees apply.</p>
+            <PricingPlans />
+            <p className="pricing-footnote">Paid plans aren’t live yet. These are planned prices in USD and may change; nothing is charged today.<br />schedulefa.st takes no fee on your coaching payments. Stripe’s standard processing fees apply.</p>
           </div>
         </section>
 
@@ -203,6 +248,7 @@ export function LandingPage() {
           <a href="#how-it-works">How it works</a>
           <a href="#pricing">Pricing</a>
           <a href="#questions">Questions</a>
+          <Link href="/contact?plan=other">Contact</Link>
           <Link href="/sign-in">Sign in</Link>
         </div>
         <div className="footer-bottom">

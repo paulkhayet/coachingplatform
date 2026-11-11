@@ -701,3 +701,7 @@ html:has(.lp) {scroll-behavior: auto;}
 @media (max-width: 600px) {
   .lp .workflow-visual { min-height: 0; }
 }
+
+/* Pricing without the monthly/yearly switch (D-067): keep the space it used to give the cards. */
+.lp .pricing-heading + .pricing-grid { margin-top: 43px; }
+.lp .price-custom strong { font-size: 44px; letter-spacing: -1.5px; }

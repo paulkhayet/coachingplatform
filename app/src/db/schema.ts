@@ -406,6 +406,26 @@ export const bookingPageHosts = pgTable(
   (t) => [primaryKey({ columns: [t.bookingPageId, t.membershipId] }), index('booking_page_hosts_membership_idx').on(t.membershipId), index('booking_page_hosts_business_idx').on(t.businessId)],
 )
 
+/** Sales enquiries from the public contact form (D-067), e.g. the Corporate plan. Server-only: no API access. */
+export const contactRequests = pgTable(
+  'contact_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    email: text('email').notNull(),
+    organization: text('organization').notNull(),
+    teamSize: text('team_size').notNull(),
+    message: text('message'),
+    plan: text('plan'),
+    emailed: boolean('emailed').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('contact_requests_email_created_idx').on(t.email, t.createdAt),
+    check('contact_requests_lengths', sql`char_length(${t.name}) <= 120 and char_length(${t.email}) <= 254 and char_length(${t.organization}) <= 160 and char_length(coalesce(${t.message}, '')) <= 4000`),
+  ],
+)
+
 export type Business = typeof businesses.$inferSelect
 export type Membership = typeof memberships.$inferSelect
 export type Invitation = typeof invitations.$inferSelect
