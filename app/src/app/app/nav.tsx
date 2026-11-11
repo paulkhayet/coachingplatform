@@ -13,21 +13,29 @@ const items = [
   { href: '/app/coaching-packages', label: 'Coaching packages', icon: Package, pricing: true },
   { href: '/app/availability', label: 'Availability', icon: CalendarClock },
   { href: '/app/team', label: 'Team', icon: UsersRound },
-  { href: '/app/settings', label: 'Settings', icon: Settings },
 ]
+const settings = { href: '/app/settings', label: 'Settings', icon: Settings }
 
-export function Nav({ showPricing = false }: { showPricing?: boolean }) {
+function NavLink({ item }: { item: { href: string; label: string; icon: typeof Home } }) {
   const path = usePathname()
+  const active = item.href === '/app' ? path === '/app' : path.startsWith(item.href)
+  return (
+    <Link href={item.href} aria-current={active ? 'page' : undefined} className={cn('text-sidebar-foreground hover:bg-sidebar-accent flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors', active && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium')}>
+      <item.icon className="size-4" /> {item.label}
+    </Link>
+  )
+}
+
+/** The main sections. On desktop Settings sits apart at the bottom of the sidebar; the mobile menu lists it last. */
+export function Nav({ showPricing = false, withSettings = false }: { showPricing?: boolean; withSettings?: boolean }) {
   return (
     <nav className="grid gap-0.5">
-      {items.filter((it) => showPricing || !it.pricing).map((it) => {
-        const active = it.href === '/app' ? path === '/app' : path.startsWith(it.href)
-        return (
-          <Link key={it.href} href={it.href} className={cn('text-sidebar-foreground hover:bg-sidebar-accent flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors', active && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium')}>
-            <it.icon className="size-4" /> {it.label}
-          </Link>
-        )
-      })}
+      {items.filter((it) => showPricing || !it.pricing).map((it) => <NavLink key={it.href} item={it} />)}
+      {withSettings && <NavLink item={settings} />}
     </nav>
   )
+}
+
+export function SettingsLink() {
+  return <nav aria-label="Settings" className="grid"><NavLink item={settings} /></nav>
 }

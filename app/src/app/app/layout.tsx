@@ -7,7 +7,7 @@ import { requireWorkspace } from '@/lib/workspace'
 import { profilePhotoUrl } from '@/lib/profile-photo'
 import { canSeePricing, roleLabel } from '@/lib/roles'
 import { signOut } from '../(auth)/actions'
-import { Nav } from './nav'
+import { Nav, SettingsLink } from './nav'
 import { BusinessSwitcher } from './business-switcher'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -20,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mb-4 px-1 pt-1"><Logo /></div>
         <BusinessSwitcher current={{ id: business.id, name: business.name }} slug={business.slug} workspaces={workspaces} />
         <div className="mt-5 flex-1"><Nav showPricing={showPricing} /></div>
+        <div className="mb-2"><SettingsLink /></div>
         <div className="flex items-center gap-2 border-t pt-3">
           <Avatar name={user.fullName} src={photo} className="size-7" />
           <div className="grid min-w-0 flex-1 leading-tight">
@@ -43,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </form>
           </div>
         </header>
-        <div className="border-b px-4 py-2 md:hidden"><Nav showPricing={showPricing} /></div>
+        <div className="border-b px-4 py-2 md:hidden"><Nav showPricing={showPricing} withSettings /></div>
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
       </div>
     </div>
