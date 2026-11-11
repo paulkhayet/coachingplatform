@@ -1,6 +1,8 @@
 import postgres from 'postgres'
+import { randomUUID } from 'node:crypto'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import * as schema from '@/db/schema'
+import { assignClientPackage, recordClientPayment } from '@/lib/clients/finance'
 import { acceptInvitation, findInvitation, hashToken, sendInvitation } from '@/lib/team/invitations'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DB_URL, as, createUser, resetDatabase } from './helpers'
@@ -8,6 +10,7 @@ import { DB_URL, as, createUser, resetDatabase } from './helpers'
 // Runs only when TEST_DATABASE_URL points at a disposable Postgres database (CI provides one).
 describe.skipIf(!DB_URL)('row-level security', () => {
   let sql: postgres.Sql
+  let financeSql: postgres.Sql
   let eleni: string
   let marcus: string
   let outsider: string
@@ -25,6 +28,7 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     })
   })
   afterAll(async () => {
+    await financeSql?.end()
     await sql?.end()
   })
 
@@ -135,6 +139,68 @@ describe.skipIf(!DB_URL)('row-level security', () => {
   it('keeps the reminder trigger away from the API', async () => {
     await expect(as(sql, eleni, (tx) => tx`SELECT private.request_reminders()`)).rejects.toThrow(/permission denied/)
     await expect(as(sql, null, (tx) => tx`SELECT private.request_reminders()`)).rejects.toThrow(/permission denied/)
+  })
+
+  it('scopes client contacts and coach assignments to authorized staff', async () => {
+    const assigned = await createUser(sql, 'client-assigned@example.com', 'Assigned Coach')
+    const unassigned = await createUser(sql, 'client-unassigned@example.com', 'Unassigned Coach')
+    const [coach] = await sql<{ id: string }[]>`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${assigned}, 'coach', true) RETURNING id`
+    await sql`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${unassigned}, 'coach', true)`
+    const [other] = await sql<{ id: string }[]>`SELECT id FROM public.memberships WHERE user_id = ${outsider} AND business_id <> ${willow} LIMIT 1`
+    const [client] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.coaching_clients (business_id, name, coach_membership_id) VALUES (${willow}, 'Test Client', ${coach.id}) RETURNING id`)
+    const [guardian] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.client_guardians (business_id, client_id, name, email) VALUES (${willow}, ${client.id}, 'Guardian Contact', 'guardian@example.com') RETURNING id`)
+    expect(await as(sql, assigned, (tx) => tx`SELECT id FROM public.coaching_clients WHERE id = ${client.id}`)).toEqual([{ id: client.id }])
+    expect(await as(sql, assigned, (tx) => tx`SELECT id FROM public.client_guardians WHERE id = ${guardian.id}`)).toEqual([])
+    expect(await as(sql, unassigned, (tx) => tx`SELECT id FROM public.coaching_clients WHERE id = ${client.id}`)).toEqual([])
+    expect(await as(sql, outsider, (tx) => tx`SELECT id FROM public.coaching_clients WHERE id = ${client.id}`)).toEqual([])
+    expect(await as(sql, assigned, (tx) => tx`UPDATE public.coaching_clients SET name = 'Changed' WHERE id = ${client.id} RETURNING id`)).toEqual([])
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_clients SET coach_membership_id = ${other.id} WHERE id = ${client.id}`)).rejects.toThrow(/Choose an active coach/)
+    await as(sql, eleni, (tx) => tx`UPDATE public.coaching_clients SET coach_membership_id = null WHERE id = ${client.id}`)
+    expect(await as(sql, assigned, (tx) => tx`SELECT id FROM public.coaching_clients WHERE id = ${client.id}`)).toEqual([])
+  })
+
+  it('snapshots package terms and funds credits once per verified offline payment', async () => {
+    // Drizzle configures JSON encoding on its connection. Keep the raw SQL test client separate.
+    financeSql = postgres(DB_URL!, { max: 1, prepare: false, onnotice: () => {} })
+    const db = drizzle(financeSql, { schema })
+    const coachUser = await createUser(sql, 'credit-coach@example.com', 'Credit Coach')
+    const [coach] = await sql<{ id: string }[]>`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${coachUser}, 'coach', true) RETURNING id`
+    const [client] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.coaching_clients (business_id, name, coach_membership_id) VALUES (${willow}, 'Credit Client', ${coach.id}) RETURNING id`)
+    const formats = [{ name: 'Standard', durationMinutes: 60, creditUnits: 100 }]
+    const [source] = await sql<{ id: string }[]>`
+      INSERT INTO public.coaching_packages (business_id, name, kind, term_weeks, credit_units, price_cents, session_formats, updated_at)
+      VALUES (${willow}, 'Test package', 'fixed', 12, 1200, 120000, ${sql.json(formats)}, '2026-11-11T12:00:00.123456Z') RETURNING id`
+    const actor = { businessId: willow, clientId: client.id, userId: eleni }
+    const input = { id: randomUUID(), packageId: source.id, packageVersion: '2026-11-11T12:00:00.123456Z', startsOn: '2026-11-11' }
+    const periodId = await assignClientPackage(db, actor, input)
+    expect(await assignClientPackage(db, actor, input)).toBe(periodId)
+    expect(await as(sql, coachUser, (tx) => tx`SELECT funded_units, paid_cents FROM public.client_credit_balances(${willow}, ${client.id})`)).toEqual([{ funded_units: 0, paid_cents: null }])
+    await sql`UPDATE public.coaching_packages SET price_cents = 180000, updated_at = now() WHERE id = ${source.id}`
+    await expect(assignClientPackage(db, actor, { ...input, id: randomUUID() })).rejects.toThrow(/changed or is unavailable/)
+    const payment = { id: randomUUID(), periodId, amountCents: 40000, method: 'check' as const, receivedOn: '2026-11-11', reference: 'Test receipt' }
+    await expect(recordClientPayment(db, { ...actor, userId: coachUser }, payment)).rejects.toThrow(/financial permission/)
+    await recordClientPayment(db, actor, payment)
+    await recordClientPayment(db, actor, payment)
+    await expect(recordClientPayment(db, actor, { ...payment, id: randomUUID(), amountCents: 90000 })).rejects.toThrow(/remaining balance/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.client_credit_payments SET amount_cents = 1 WHERE id = ${payment.id}`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, eleni, (tx) => tx`INSERT INTO public.client_credit_events (business_id, client_id, period_id, kind, credit_units) VALUES (${willow}, ${client.id}, ${periodId}, 'used', 100)`)).rejects.toThrow(/permission denied/)
+    await sql`INSERT INTO public.client_credit_events (business_id, client_id, period_id, kind, credit_units) VALUES
+      (${willow}, ${client.id}, ${periodId}, 'reserved', 100), (${willow}, ${client.id}, ${periodId}, 'used', 50)`
+    expect(await as(sql, eleni, (tx) => tx`SELECT paid_cents, funded_units FROM public.client_credit_balances(${willow}, ${client.id})`)).toEqual([{ paid_cents: 40000, funded_units: 400 }])
+    expect(await as(sql, coachUser, (tx) => tx`SELECT paid_cents, funded_units, reserved_units, used_units FROM public.client_credit_balances(${willow}, ${client.id})`)).toEqual([{ paid_cents: null, funded_units: 400, reserved_units: 100, used_units: 50 }])
+    expect(await as(sql, coachUser, (tx) => tx`SELECT terms FROM public.client_packages WHERE id = ${input.id}`)).toEqual([])
+    expect(await as(sql, outsider, (tx) => tx`SELECT * FROM public.client_credit_balances(${willow}, ${client.id})`)).toEqual([])
+
+    const [monthly] = await sql<{ id: string }[]>`
+      INSERT INTO public.coaching_packages (business_id, name, kind, credit_units, price_cents, session_formats, updated_at)
+      VALUES (${willow}, 'Monthly test package', 'monthly', 400, 40000, ${sql.json(formats)}, '2026-11-11T12:00:00.123456Z') RETURNING id`
+    const monthlyPeriod = await assignClientPackage(db, actor, { ...input, id: randomUUID(), packageId: monthly.id, startsOn: '2026-01-31' })
+    await expect(recordClientPayment(db, actor, { ...payment, id: randomUUID(), periodId: monthlyPeriod, amountCents: 20000 })).rejects.toThrow(/full payment/)
+    await recordClientPayment(db, actor, { ...payment, id: randomUUID(), periodId: monthlyPeriod })
+    expect(await as(sql, eleni, (tx) => tx`SELECT funded_units, ends_on::text AS ends_on FROM public.client_credit_balances(${willow}, ${client.id}) WHERE id = ${monthlyPeriod}`)).toEqual([{ funded_units: 400, ends_on: '2026-02-28' }])
   })
 
   it('keeps contact requests away from the API (D-067)', async () => {

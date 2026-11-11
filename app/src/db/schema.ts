@@ -1,4 +1,4 @@
-import { boolean, check, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { authUsers } from 'drizzle-orm/supabase'
 
@@ -146,6 +146,125 @@ export const coachingPackages = pgTable('coaching_packages', {
   check('coaching_packages_late_cancellation', sql`${t.lateCancellation} in ('inherit', 'preserve', 'forfeit')`),
   check('coaching_packages_expiration', sql`${t.expiration} in ('inherit', 'end_of_term')`),
   check('coaching_packages_makeups', sql`${t.makeupExtensionDays} between 0 and 365`),
+])
+
+export const coachingClients = pgTable('coaching_clients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  email: text('email'),
+  coachMembershipId: uuid('coach_membership_id').references(() => memberships.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('coaching_clients_business_id_key').on(t.businessId, t.id),
+  index('coaching_clients_coach_idx').on(t.coachMembershipId),
+  index('coaching_clients_business_name_idx').on(t.businessId, t.name),
+  check('coaching_clients_name', sql`char_length(btrim(${t.name})) between 2 and 100`),
+  check('coaching_clients_email', sql`char_length(${t.email}) <= 254`),
+])
+
+/** Contact records only. A guardian contact does not confer login or student access. */
+export const clientGuardians = pgTable('client_guardians', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  name: text('name').notNull(),
+  relationship: text('relationship'),
+  email: text('email'),
+  phone: text('phone'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId], foreignColumns: [coachingClients.businessId, coachingClients.id], name: 'client_guardians_client_fk' }).onDelete('cascade'),
+  index('client_guardians_client_idx').on(t.businessId, t.clientId),
+  check('client_guardians_name', sql`char_length(btrim(${t.name})) between 2 and 100`),
+  check('client_guardians_contact', sql`(${t.email} is not null or ${t.phone} is not null) and char_length(coalesce(${t.email}, '')) <= 254 and char_length(coalesce(${t.phone}, '')) <= 40`),
+  check('client_guardians_relationship', sql`char_length(${t.relationship}) <= 80`),
+])
+
+/** Copy of the terms in force when staff assign a package to a client. */
+export type AssignedPackageTerms = Pick<typeof coachingPackages.$inferSelect,
+  'name' | 'description' | 'kind' | 'termWeeks' | 'creditUnits' | 'sessionFormats' | 'priceCents' |
+  'installmentCount' | 'installmentCadence' | 'eligibleCoachIds' | 'cancellationNoticeHours' |
+  'lateCancellation' | 'expiration' | 'makeupExtensionDays'>
+
+export const clientPackages = pgTable('client_packages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  packageId: uuid('package_id').references(() => coachingPackages.id, { onDelete: 'set null' }),
+  terms: jsonb('terms').$type<AssignedPackageTerms>().notNull(),
+  assignedBy: uuid('assigned_by').references(() => authUsers.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId], foreignColumns: [coachingClients.businessId, coachingClients.id], name: 'client_packages_client_fk' }).onDelete('cascade'),
+  uniqueIndex('client_packages_business_client_id_key').on(t.businessId, t.clientId, t.id),
+  index('client_packages_catalog_idx').on(t.packageId),
+  index('client_packages_assigned_by_idx').on(t.assignedBy),
+  check('client_packages_terms_object', sql`jsonb_typeof(${t.terms}) = 'object'`),
+])
+
+/** A price-free allowance for a fixed term or a single monthly service period. Dates are inclusive/exclusive. */
+export const clientCreditPeriods = pgTable('client_credit_periods', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  clientPackageId: uuid('client_package_id').notNull(),
+  name: text('name').notNull(),
+  kind: text('kind').$type<'fixed' | 'monthly'>().notNull(),
+  startsOn: date('starts_on').notNull(),
+  endsOn: date('ends_on').notNull(),
+  creditUnits: integer('credit_units').notNull(),
+  expiration: text('expiration').$type<'inherit' | 'end_of_term'>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId, t.clientPackageId], foreignColumns: [clientPackages.businessId, clientPackages.clientId, clientPackages.id], name: 'client_credit_periods_package_fk' }).onDelete('cascade'),
+  uniqueIndex('client_credit_periods_business_client_id_key').on(t.businessId, t.clientId, t.id),
+  uniqueIndex('client_credit_periods_package_start_key').on(t.businessId, t.clientId, t.clientPackageId, t.startsOn),
+  check('client_credit_periods_dates', sql`${t.startsOn} < ${t.endsOn}`),
+  check('client_credit_periods_kind', sql`${t.kind} in ('fixed', 'monthly')`),
+  check('client_credit_periods_units', sql`${t.creditUnits} between 1 and 100000`),
+  check('client_credit_periods_expiration', sql`${t.expiration} in ('inherit', 'end_of_term')`),
+])
+
+export const OFFLINE_PAYMENT_METHODS = ['cash', 'check', 'bank_transfer', 'other'] as const
+export const clientCreditPayments = pgTable('client_credit_payments', {
+  id: uuid('id').primaryKey(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  periodId: uuid('period_id').notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  method: text('method').$type<(typeof OFFLINE_PAYMENT_METHODS)[number]>().notNull(),
+  receivedOn: date('received_on').notNull(),
+  reference: text('reference'),
+  recordedBy: uuid('recorded_by').references(() => authUsers.id, { onDelete: 'set null' }),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId, t.periodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'client_credit_payments_period_fk' }).onDelete('cascade'),
+  index('client_credit_payments_period_idx').on(t.businessId, t.clientId, t.periodId),
+  index('client_credit_payments_actor_idx').on(t.recordedBy),
+  check('client_credit_payments_amount', sql`${t.amountCents} between 1 and 100000000`),
+  check('client_credit_payments_method', sql`${t.method} in ('cash', 'check', 'bank_transfer', 'other')`),
+  check('client_credit_payments_reference', sql`char_length(${t.reference}) <= 200`),
+])
+
+export const CREDIT_EVENT_KINDS = ['funded', 'reserved', 'released', 'used', 'forfeited', 'expired'] as const
+export const clientCreditEvents = pgTable('client_credit_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  periodId: uuid('period_id').notNull(),
+  kind: text('kind').$type<(typeof CREDIT_EVENT_KINDS)[number]>().notNull(),
+  creditUnits: integer('credit_units').notNull(),
+  paymentId: uuid('payment_id').references(() => clientCreditPayments.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId, t.periodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'client_credit_events_period_fk' }).onDelete('cascade'),
+  index('client_credit_events_period_idx').on(t.businessId, t.clientId, t.periodId, t.createdAt),
+  uniqueIndex('client_credit_events_payment_key').on(t.paymentId),
+  check('client_credit_events_kind', sql`${t.kind} in ('funded', 'reserved', 'released', 'used', 'forfeited', 'expired')`),
+  check('client_credit_events_units', sql`${t.creditUnits} between 1 and 100000`),
+  check('client_credit_events_payment', sql`(${t.kind} = 'funded') = (${t.paymentId} is not null)`),
 ])
 
 /** A weekly working window in the coach's own time zone, in minutes after local midnight (0 = Sunday). */

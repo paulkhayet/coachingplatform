@@ -13,5 +13,7 @@ export const canSeePayments = (role: MemberRole) => role === 'owner' || role ===
 export const canManagePayments = (m: { role: MemberRole; financial: boolean }) => m.role === 'owner' || (m.role === 'admin' && m.financial)
 /** Saving prices and payment terms requires financial delegation. */
 export const canManageCoachingPackages = canManagePayments
+/** Operational client and guardian records are managed by owners and administrators. */
+export const canManageClients = (role: MemberRole) => role === 'owner' || role === 'admin'
 /** Owners and administrators choose who hosts a booking page, including shared pages (D-061; mirrors can_manage_booking_page). */
 export const canAssignHosts = (role: MemberRole) => role === 'owner' || role === 'admin'

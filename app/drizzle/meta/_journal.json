@@ -155,6 +155,13 @@
       "when": 1794423263662,
       "tag": "0021_coaching_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794426669198,
+      "tag": "0022_clients_and_credits",
+      "breakpoints": true
     }
   ]
 }

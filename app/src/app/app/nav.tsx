@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarCheck, CalendarClock, Clock, CreditCard, Home, Link2, Package, UsersRound } from 'lucide-react'
+import { CalendarCheck, CalendarClock, Clock, ContactRound, CreditCard, Home, Link2, Package, UsersRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const items = [
   { href: '/app', label: 'Today', icon: Home },
   { href: '/app/bookings', label: 'Bookings', icon: CalendarCheck },
   { href: '/app/booking-pages', label: 'Booking pages', icon: Link2 },
+  { href: '/app/clients', label: 'Clients', icon: ContactRound },
   { href: '/app/coaching-packages', label: 'Coaching packages', icon: Package, pricing: true },
   { href: '/app/availability', label: 'Availability', icon: CalendarClock },
   { href: '/app/team', label: 'Team', icon: UsersRound },
