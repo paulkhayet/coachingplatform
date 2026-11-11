@@ -1,0 +1,642 @@
+/* The marketing home page (landing/ design, moved into the app 2026-11-11). Every rule is scoped to .lp so it
+   cannot affect the app; the page keeps its own light design. */
+.lp {--ink: #17181c;
+  --body: #5e626b;
+  --line: #e5e7eb;
+  --surface: #f7f8fa;
+  --accent: #385be8;
+  --accent-soft: #eef1ff;
+  --sans: 'DM Sans', Arial, sans-serif;}
+.lp * {box-sizing: border-box;}
+html:has(.lp) {scroll-behavior: smooth; scroll-padding-top: 105px;}
+.lp {margin: 0; background: #fff; color: var(--ink); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased;}
+.lp button, .lp input, .lp select {font: inherit;}
+.lp button, .lp a {-webkit-tap-highlight-color: transparent;}
+.lp button {cursor: pointer;}
+.lp a {color: inherit; text-decoration: none;}
+.lp button:disabled {cursor: wait; opacity: .65;}
+.lp button:focus-visible, .lp a:focus-visible, .lp input:focus-visible, .lp select:focus-visible, .lp summary:focus-visible {outline: 3px solid #8390ff; outline-offset: 5px;}
+.lp h1, .lp h2, .lp h3, .lp p {margin: 0;}
+.lp h1, .lp h2, .lp h3 {text-wrap: balance;}
+.lp em {font-style: normal;}
+.lp svg {display: block;}
+.lp [hidden] {display: none !important;}
+.lp .svg-library {position: absolute; width: 0; height: 0; overflow: hidden;}
+.lp .icon {width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;}
+.lp .lp-container {width: min(1160px, calc(100% - 80px)); margin-inline: auto;}
+.lp .skip-link {position: fixed; left: 16px; top: -100px; padding: 12px 20px; background: var(--ink); color: #fff; z-index: 100;}
+.lp .skip-link:focus {top: 12px;}
+.lp .site-header {position: sticky; top: 0; z-index: 20; background: #fffffff5; backdrop-filter: blur(14px); border-bottom: 1px solid #eceef1;}
+.lp .nav-wrap {height: 80px; display: flex; align-items: center; justify-content: space-between;}
+.lp .brand {display: inline-flex; align-items: center; gap: 10px; font-size: 27px; font-weight: 750; letter-spacing: -1.3px; line-height: 1;}
+.lp .brand-mark {width: 30px; height: 30px; fill: var(--ink);}
+.lp .brand-wordmark {white-space: nowrap;}
+.lp .brand-accent {color: var(--accent);}
+.lp .mark-accent {fill: var(--accent);}
+.lp .main-nav {display: flex; align-items: center; gap: 34px; font-size: 14px; font-weight: 550;}
+.lp .main-nav > a {color: #454952;}
+.lp .main-nav > a:hover {color: var(--accent);}
+.lp .button {border: 1px solid var(--ink); border-radius: 7px; background: var(--ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 23px; min-height: 52px; padding: 14px 22px; font-size: 15px; font-weight: 600; line-height: 1.3; transition: background .18s, transform .18s;}
+.lp .button:hover {background: #35363c; transform: translateY(-1px);}
+.lp .button-small {min-height: 43px; padding: 11px 16px; font-size: 13px; gap: 18px;}
+.lp .button-outline {background: #fff; color: var(--ink); border-color: #cfd2d9;}
+.lp .button-outline:hover {background: #f4f5f8;}
+.lp .button-lime {color: var(--ink); background: #fff; border-color: #fff;}
+.lp .button-lime:hover {background: #e9edff;}
+.lp .menu-toggle {display: none;}
+.lp .hero {text-align: center; padding-top: 72px;}
+.lp .eyebrow {display: inline-flex; align-items: center; gap: 9px; color: #5261b6; background: #f5f6ff; border: 1px solid #e7eaff; border-radius: 50px; padding: 6px 12px; font-size: 11px; letter-spacing: 1.15px; font-weight: 650; margin-bottom: 25px;}
+.lp .status-dot {width: 6px; height: 6px; background: var(--accent); border-radius: 50%;}
+.lp .hero h1 {font-size: clamp(48px, 5.2vw, 72px); font-weight: 650; line-height: 1.08; letter-spacing: -3.6px; max-width: 1000px; margin: auto;}
+.lp .hero h1 > span {color: var(--ink);}
+.lp .hero-copy {max-width: 670px; margin: 25px auto 0; color: var(--body); font-size: 18px; line-height: 1.75;}
+.lp .hero-actions {display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 29px;}
+.lp .text-link {border: 1px solid #d9dce3; border-radius: 7px; min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 23px; padding: 12px 21px; font-size: 15px; font-weight: 550;}
+.lp .text-link:hover {background: #f7f8fb;}
+.lp .text-link span {font-size: 20px; line-height: 1;}
+.lp .hero-note {margin-top: 18px; font-size: 13px; color: #5e626c;}
+.lp .hero-note > span {display: block; margin-top: 4px; color: #7c818b; font-size: 12px;}
+.lp .product-scene {position: relative; margin-top: 49px; padding: 18px 18px 25px; text-align: left; border-radius: 14px; background: #f5f6f9;}
+.lp .scene-glow {display: none;}
+.lp .app-window {display: flex; overflow: hidden; background: #fbfcfd; border: 1px solid #e0e3ea; border-radius: 9px; box-shadow: 0 15px 35px #161c2a0b; min-height: 453px;}
+.lp .app-sidebar {width: 183px; flex-shrink: 0; background: #fff; border-right: 1px solid #e7e9ee; padding: 22px 12px; display: flex; flex-direction: column;}
+.lp .app-brand {display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 750; letter-spacing: -.7px; margin-left: 5px; white-space: nowrap;}
+.lp .app-brand svg {width: 23px; height: 23px; fill: #24262d;}
+.lp .app-brand > svg {flex-shrink: 0;}
+.lp .workspace-label {display: flex; align-items: center; gap: 8px; margin: 25px 0 15px; padding: 9px 7px; border: 1px solid #e5e7ed; border-radius: 5px; font-size: 10px; font-weight: 600; line-height: 1.4;}
+.lp .workspace-label small, .lp .sidebar-bottom small {display: block; margin-top: 2px; font-size: 9px; font-weight: 400; color: #858a95;}
+.lp .workspace-monogram {width: 27px; height: 27px; background: #f1f2f5; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 13px; font-weight: 600;}
+.lp .workspace-chevron {margin-left: auto; color: #9298a4;}
+.lp .app-menu {display: grid; gap: 4px;}
+.lp .app-menu > span {display: flex; align-items: center; gap: 10px; border-radius: 5px; padding: 10px 12px; font-size: 11px; font-weight: 500; color: #747a87;}
+.lp .app-menu > span.active {background: #eef1ff; color: #4b5cce;}
+.lp .app-menu svg {width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5;}
+.lp .app-menu b {margin-left: auto; background: #f0f1f5; border-radius: 4px; padding: 1px 5px; font-size: 8px; color: #7a8293;}
+.lp .sidebar-bottom {margin-top: auto; padding: 22px 5px 0; display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 550;}
+.lp .sidebar-bottom > span:last-child {margin-left: auto;}
+.lp .avatar {width: 33px; height: 33px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0;}
+.lp .avatar-sage {background: #e8f1ec; color: #597467;}
+.lp .avatar-peach {background: #f8ede5; color: #a47d63;}
+.lp .avatar-lilac {background: #eeecfb; color: #7a6ca6;}
+.lp .app-main {flex: 1; min-width: 0;}
+.lp .app-topbar {height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid #eaecf1; color: #858a95; font-size: 10px;}
+.lp .breadcrumb {padding: 0 9px; color: #bcc0c9;}
+.lp .today-label {display: flex; align-items: center; gap: 12px;}
+.lp .today-label i {width: 6px; height: 6px; border-radius: 50%; background: #9ca6c3;}
+.lp .app-content {padding: 25px 24px 26px;}
+.lp .app-heading {display: flex; justify-content: space-between; align-items: center; gap: 8px;}
+.lp .app-heading p {margin-bottom: 6px; font-size: 8px; font-weight: 600; letter-spacing: .9px; color: #878e9f;}
+.lp .app-heading h2 {font-family: var(--sans); font-size: 25px; font-weight: 650; line-height: 1.3; letter-spacing: -.9px;}
+.lp .app-heading > div > span {font-size: 10px; color: #8b919f;}
+.lp .small-date {padding: 7px 10px; border: 1px solid #e3e6ed; border-radius: 6px; color: #7d8495; font-size: 8px; line-height: 1.15; text-align: center;}
+.lp .small-date strong {display: block; font-size: 20px; font-weight: 600; line-height: 1.2;}
+.lp .app-stats {display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 21px;}
+.lp .app-stats > div {padding: 13px 15px; background: #fff; border: 1px solid #e4e7ee; border-radius: 6px;}
+.lp .app-stats > div > span {display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 10px; color: #727a8b;}
+.lp .app-stats svg {width: 13px; height: 13px; fill: none; stroke: #8c96b3; stroke-width: 1.5;}
+.lp .app-stats strong {display: block; font-size: 28px; font-weight: 600; letter-spacing: -1px; line-height: 1.3; margin-top: 6px;}
+.lp .app-stats small {font-size: 9px; font-weight: 400; letter-spacing: 0; margin-left: 6px; color: #9299a9;}
+.lp .app-panels {display: grid; grid-template-columns: 1.8fr 1fr; gap: 13px; margin-top: 15px;}
+.lp .pipeline-panel, .lp .next-panel {min-width: 0; overflow: hidden; background: #fff; border: 1px solid #e4e7ee; border-radius: 6px;}
+.lp .panel-heading {display: flex; align-items: center; justify-content: space-between; gap: 7px; border-bottom: 1px solid #eff0f4; padding: 13px 14px;}
+.lp .panel-heading h3 {font-size: 11px; font-weight: 600;}
+.lp .panel-heading > span {white-space: nowrap; font-size: 9px; color: #9299a9;}
+.lp .panel-heading > span > span {margin-left: 5px;}
+.lp .client-table {width: 100%; border-collapse: collapse; font-size: 10px;}
+.lp .client-table th {padding: 10px 12px 7px; text-align: left; color: #9299a9; font-size: 8px; font-weight: 500;}
+.lp .client-table td {padding: 10px 12px; border-bottom: 1px solid #f0f1f5; color: #858d9d; font-size: 9px;}
+.lp .client-table td:first-child {display: flex; gap: 8px; align-items: center;}
+.lp .client-table .avatar {width: 27px; height: 27px; font-size: 8px;}
+.lp .client-table b {color: #424754; font-size: 10px; display: block; font-weight: 550; white-space: nowrap;}
+.lp .client-table small {color: #989ead; font-size: 8px; display: block; white-space: nowrap; margin-top: 2px;}
+.lp .pipeline-status {display: inline-block; border-radius: 4px; background: #f1f2f6; color: #8b93a4; font-size: 8px; padding: 4px 6px; white-space: nowrap;}
+.lp .status-blue {background: #eff1ff; color: #7482c6;}
+.lp .status-green {background: #edf5ef; color: #729b80;}
+.lp .pipeline-footer {display: flex; align-items: center; gap: 7px; padding: 11px 13px; color: #9299aa; font-size: 9px;}
+.lp .pipeline-footer > svg {width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6;}
+.lp .pipeline-footer > span:last-child {margin-left: auto;}
+.lp .next-panel {padding-bottom: 12px;}
+.lp .next-label {margin: 14px 14px 10px; font-size: 8px; font-weight: 500; letter-spacing: .7px; color: #939aaa;}
+.lp .next-client {display: flex; gap: 8px; align-items: center; padding: 0 14px; margin-bottom: 13px;}
+.lp .next-client b {display: block; font-size: 11px; font-weight: 550;}
+.lp .next-client small {display: block; font-size: 9px; color: #929aab;}
+.lp .next-client .avatar {width: 30px; height: 30px; font-size: 9px;}
+.lp .next-detail {display: flex; align-items: center; gap: 7px; padding: 0 14px; margin: 9px 0; color: #9199a9; font-size: 9px;}
+.lp .next-detail svg {width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5;}
+.lp .paid-status {display: flex; align-items: center; gap: 5px; margin: 11px 14px; font-size: 8px; color: #7c9d85;}
+.lp .paid-status svg {width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2;}
+.lp .next-divider {height: 1px; background: #eff0f4; margin: 14px;}
+.lp .reminder-ready {display: flex; align-items: center; gap: 7px; padding: 0 14px;}
+.lp .mail-circle {width: 23px; height: 23px; border-radius: 6px; background: #f1f3fc; display: grid; place-items: center; flex-shrink: 0;}
+.lp .mail-circle svg {width: 12px; height: 12px; fill: none; stroke: #95a0c5; stroke-width: 1.5;}
+.lp .reminder-ready b {display: block; font-size: 8px; font-weight: 550;}
+.lp .reminder-ready small {display: block; font-size: 7px; color: #9aa1b0;}
+.lp .check-small {width: 10px; height: 10px; fill: none; stroke: #91a99a; stroke-width: 2; margin-left: auto;}
+.lp .floating-note {position: absolute; right: 2px; bottom: 5px; display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #fff; border: 1px solid #e1e5ef; border-radius: 7px; box-shadow: 0 9px 25px #2531650c;}
+.lp .floating-icon {width: 32px; height: 32px; background: #eff1ff; border-radius: 7px; display: grid; place-items: center;}
+.lp .floating-icon svg {width: 17px; height: 17px; fill: none; stroke: #7d8ad2; stroke-width: 1.5;}
+.lp .floating-note b {display: block; font-size: 11px; font-weight: 600;}
+.lp .floating-note div > span {font-size: 9px; color: #8e96a6;}
+.lp .floating-check {margin-left: 10px; color: #8d9cc3; font-size: 13px;}
+.lp .preview-caption {margin-top: 12px; color: #858b98; font-size: 11px;}
+.lp .coverage-strip {display: flex; justify-content: center; flex-wrap: wrap; gap: 12px 30px; margin-top: 35px; padding: 28px 0 31px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 550; color: #747a86;}
+.lp .coverage-strip > span {display: inline-flex; align-items: center; gap: 9px;}
+.lp .coverage-strip > span::before {content: '✓'; color: #7784b7; font-size: 12px;}
+.lp .section-kicker {color: var(--accent); font-size: 11px; font-weight: 650; letter-spacing: 1.3px; line-height: 1.5;}
+.lp h2 {font-size: 44px; line-height: 1.15; font-weight: 620; letter-spacing: -1.8px;}
+.lp h2 em {color: inherit; font-weight: inherit;}
+.lp .intro-section {padding-top: 92px; padding-bottom: 88px;}
+.lp .intro-grid {display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px; align-items: center; margin-top: 20px;}
+.lp .intro-grid p {font-size: 16px; line-height: 1.8; color: var(--body);}
+.lp .intro-grid p + p {margin-top: 14px;}
+.lp .benefit-row {display: grid; grid-template-columns: repeat(3, 1fr); gap: 45px; border-top: 1px solid var(--line); padding-top: 30px; margin-top: 45px;}
+.lp .benefit-number {display: inline-flex; width: 33px; height: 33px; border-radius: 6px; background: #f0f2fc; align-items: center; justify-content: center; color: var(--accent); font-size: 11px; font-weight: 600;}
+.lp .benefit-row h3 {font-size: 17px; font-weight: 600; letter-spacing: -.3px; margin: 16px 0 9px;}
+.lp .benefit-row p {color: var(--body); font-size: 15px; line-height: 1.8;}
+.lp .workflow-section {background: var(--surface); border-block: 1px solid #eff0f4; padding: 83px 0; scroll-margin-top: 80px;}
+.lp .workflow-heading {display: flex; justify-content: space-between; align-items: flex-end; gap: 60px;}
+.lp .workflow-heading h2 {margin-top: 19px;}
+.lp .workflow-heading > p {max-width: 360px; font-size: 16px; color: var(--body); line-height: 1.8;}
+.lp .workflow-layout {display: grid; grid-template-columns: 1fr 1.1fr; align-items: center; gap: 68px; margin-top: 46px;}
+.lp .workflow-tabs {display: grid;}
+.lp .workflow-tab {display: flex; align-items: flex-start; gap: 14px; background: none; border: 0; border-top: 1px solid #e0e3eb; color: var(--ink); padding: 25px 0; text-align: left; width: 100%; position: relative;}
+.lp .workflow-tab:last-child {border-bottom: 1px solid #e0e3eb;}
+.lp .workflow-tab.active::before {content: ''; position: absolute; left: 0; top: -1px; width: 70px; height: 2px; background: var(--accent);}
+.lp .tab-number {font-size: 11px; color: #8b92a1; margin-top: 5px;}
+.lp .workflow-tab > span:nth-child(2) {flex: 1;}
+.lp .workflow-tab b {display: block; font-size: 18px; font-weight: 600; letter-spacing: -.3px; line-height: 1.5;}
+.lp .workflow-tab.active b {color: #3447be;}
+.lp .workflow-tab small {display: block; margin-top: 10px; color: var(--body); font-size: 15px; line-height: 1.8;}
+.lp .workflow-tab:not(.active) small {display: none;}
+.lp .workflow-tab > .icon {width: 17px; height: 17px; margin-top: 5px; opacity: .4;}
+.lp .workflow-tab.active > .icon {opacity: 1; color: var(--accent);}
+.lp .workflow-tab:hover b {color: var(--accent);}
+.lp .workflow-visual {min-height: 387px; display: flex; align-items: center; padding: 28px; background: #f0f2f9; border: 1px solid #e1e5f0; border-radius: 10px;}
+.lp .flow-panel {width: 100%; animation: lp-panel-in .22s ease;}
+.lp .mini-label {display: flex; align-items: center; gap: 7px; font-size: 9px; font-weight: 550; letter-spacing: .7px; color: #6b769a; margin-bottom: 22px;}
+.lp .mini-label > svg {width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5;}
+.lp .mini-label > span {margin-left: auto; font-size: 8px; letter-spacing: 0; color: #929ab0; font-weight: 400;}
+.lp .inquiry-card {padding: 20px; background: #fff; border: 1px solid #e1e5ef; border-radius: 7px;}
+.lp .inquiry-top {display: flex; gap: 10px; align-items: center;}
+.lp .inquiry-top b {display: block; font-size: 13px; font-weight: 600;}
+.lp .inquiry-top small {display: block; font-size: 10px; color: #8b94a7;}
+.lp .new-tag {white-space: nowrap; margin-left: auto; font-size: 9px; border-radius: 4px; padding: 4px 7px; background: #eef1ff; color: #7f8ac7;}
+.lp .intake-answer {margin-top: 18px; padding: 13px; background: #f7f8fb; border-radius: 5px;}
+.lp .intake-answer > small {font-size: 8px; font-weight: 550; letter-spacing: .5px; color: #929bb0;}
+.lp .intake-answer p {font-size: 12px; line-height: 1.8; color: #778297; margin-top: 6px;}
+.lp .inquiry-source {display: flex; justify-content: space-between; font-size: 9px; color: #9ba3b2; margin-top: 13px;}
+.lp .flow-connector {height: 25px; margin-left: 34px; border-left: 1px dashed #bdc7e4;}
+.lp .matching-card {display: flex; align-items: center; gap: 10px; padding: 14px; background: #fff; border: 1px solid #dce3f3; border-radius: 6px;}
+.lp .match-icon {width: 29px; height: 29px; display: grid; place-items: center; border-radius: 6px; background: #eef1ff; flex-shrink: 0;}
+.lp .match-icon svg {width: 15px; height: 15px; fill: none; stroke: #8492cf; stroke-width: 1.6;}
+.lp .matching-card b {font-size: 12px; font-weight: 550; display: block;}
+.lp .matching-card small {font-size: 10px; color: #929cb0; display: block; margin-top: 3px;}
+.lp .matching-card > .avatar {margin-left: auto; width: 29px; height: 29px; font-size: 9px;}
+.lp .mini-progress {display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 23px; font-size: 10px; color: #929bb0;}
+.lp .mini-progress i {width: 18px; height: 1px; background: #d0d7e7;}
+.lp .mini-progress .complete {color: #8592c2;}
+.lp .mini-progress .current {border-radius: 5px; background: #e1e6fb; padding: 4px 9px; color: #7483bd;}
+.lp .visual-footnote {font-size: 10px; color: #959eb1; text-align: center; margin-top: 17px;}
+.lp .session-demo {display: flex; gap: 24px; align-items: center; padding: 25px; border: 1px solid #dfe4f0; background: #fff; border-radius: 7px;}
+.lp .session-demo-date {padding: 12px 10px; border: 1px solid #e2e6f0; border-radius: 6px; font-size: 8px; font-weight: 500; line-height: 1.4; text-align: center; color: #939db3;}
+.lp .session-demo-date strong {display: block; font-size: 41px; font-weight: 600; letter-spacing: -2px; color: #7e8ab4;}
+.lp .soft-tag {display: inline-block; padding: 4px 7px; font-size: 9px; color: #8a96c3; background: #f0f3ff; border-radius: 4px;}
+.lp .session-demo h3 {font-size: 24px; font-weight: 600; letter-spacing: -.8px; line-height: 1.25; margin: 12px 0;}
+.lp .session-demo p {font-size: 10px; color: #929cb0;}
+.lp .handled-row {display: flex; align-items: center; justify-content: center; gap: 7px; margin: 20px 0; font-size: 10px; color: #8996bc;}
+.lp .handled-row svg {width: 12px; height: 12px; fill: none; stroke: #8a98c6; stroke-width: 2;}
+.lp .handled-row svg:nth-of-type(2) {margin-left: 13px;}
+.lp .draft-strip, .lp .pool-note {display: flex; align-items: center; gap: 9px; margin-top: 20px; font-size: 11px; color: #8995b6;}
+.lp .draft-strip svg, .lp .pool-note svg {height: 16px; width: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; flex-shrink: 0;}
+.lp .team-demo-heading {margin-bottom: 22px;}
+.lp .team-demo-heading h3 {font-size: 25px; font-weight: 600; letter-spacing: -.8px; line-height: 1.3;}
+.lp .team-demo-heading p {font-size: 12px; color: #929cb0; margin-top: 7px;}
+.lp .team-person {display: flex; align-items: center; gap: 11px; background: #fff; border: 1px solid #e0e5ef; border-radius: 6px; padding: 14px; margin-top: 8px;}
+.lp .team-person b {display: block; font-size: 12px; font-weight: 550;}
+.lp .team-person small {display: block; font-size: 10px; color: #909bb0; margin-top: 2px;}
+.lp .role-tag {margin-left: auto; font-size: 9px; color: #919db7;}
+.lp .details-section {display: grid; grid-template-columns: 1fr 1fr; gap: 72px; padding-block: 92px;}
+.lp .detail-block h2 {margin-top: 17px; font-size: 40px;}
+.lp .detail-block > p {font-size: 16px; color: var(--body); line-height: 1.8; margin-top: 20px;}
+.lp .followup-demo, .lp .settings-demo {border: 1px solid #e3e6ef; border-radius: 8px; background: #fafbfe; margin-top: 31px;}
+.lp .followup-demo {padding: 25px;}
+.lp .followup-demo > div:first-child {display: flex; justify-content: space-between; align-items: center; gap: 5px;}
+.lp .ai-label {display: flex; align-items: center; gap: 6px; color: #8a97bd; font-size: 9px; font-weight: 500; letter-spacing: .6px;}
+.lp .ai-label svg {width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5;}
+.lp .draft-label {font-size: 9px; padding: 4px 8px; border-radius: 4px; color: #919dbe; background: #f0f3fb;}
+.lp .followup-demo h3 {font-size: 19px; font-weight: 600; letter-spacing: -.4px; line-height: 1.4; margin-top: 22px;}
+.lp .followup-demo > p {font-size: 12px; line-height: 1.9; color: #939eb1; margin-top: 11px;}
+.lp .draft-bottom {display: flex; justify-content: space-between; align-items: center; gap: 5px; margin-top: 22px; padding-top: 15px; border-top: 1px solid #e6eaf2; color: #98a1b5; font-size: 10px;}
+.lp .draft-action {font-weight: 500; color: #8c9bca;}
+.lp .draft-action > span {margin-left: 10px;}
+.lp .settings-demo {padding: 5px 24px;}
+.lp .settings-demo > div {display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; border-bottom: 1px solid #e6e9f1; color: #929eb3; font-size: 12px;}
+.lp .settings-demo > div:last-child {border: 0;}
+.lp .settings-demo b {font-size: 11px; font-weight: 500; color: #8593b5;}
+.lp .settings-demo b > span {margin-left: 12px; color: #a0abc2;}
+.lp .settings-title > svg {height: 17px; width: 17px; fill: none; stroke: #8d9bc1; stroke-width: 1.5;}
+.lp .settings-title > b {margin-right: auto;}
+.lp .settings-title > span {font-size: 9px; color: #a0aac0;}
+.lp .demo-toggle {width: 31px; height: 18px; border-radius: 20px; background: #9aa9df; display: block; position: relative; flex-shrink: 0;}
+.lp .demo-toggle::after {content: ''; position: absolute; width: 12px; height: 12px; top: 3px; right: 3px; background: #fff; border-radius: 50%;}
+.lp .settings-demo > .settings-note {justify-content: flex-start; color: #9ba6bf; font-size: 10px;}
+.lp .settings-note svg {width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8;}
+.lp .pricing-section {padding: 85px 0 75px; background: var(--surface); border-block: 1px solid #eff0f4; scroll-margin-top: 80px;}
+.lp .pricing-heading {text-align: center;}
+.lp .pricing-heading h2 {margin-top: 18px;}
+.lp .pricing-heading > p {font-size: 16px; line-height: 1.8; color: var(--body); margin-top: 20px;}
+.lp .billing-control {display: flex; gap: 3px; width: max-content; max-width: 100%; border: 1px solid #e0e3eb; border-radius: 7px; background: #eceef3; padding: 4px; margin: 27px auto 43px;}
+.lp .billing-control button {border: 0; border-radius: 5px; padding: 9px 16px; min-height: 39px; background: none; color: #737b8e; font-size: 13px; font-weight: 500;}
+.lp .billing-control button.selected {background: #fff; color: #272e3e; box-shadow: 0 1px 4px #2638680b;}
+.lp .billing-control span {font-size: 10px; color: #818fb9; margin-left: 8px;}
+.lp .pricing-grid {display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;}
+.lp .price-card {position: relative; padding: 30px 27px; border: 1px solid #e0e3eb; border-radius: 9px; background: #fff;}
+.lp .price-card.featured {border-color: #8795e9; box-shadow: 0 0 0 1px #c7cff9;}
+.lp .plan-ribbon {position: absolute; top: -13px; left: 50%; transform: translateX(-50%); border: 1px solid #d4dcff; padding: 5px 13px; border-radius: 5px; background: #f0f3ff; color: #7f8ac1; font-size: 9px; font-weight: 550; letter-spacing: .6px; white-space: nowrap;}
+.lp .plan-heading {display: flex; align-items: center; gap: 11px;}
+.lp .plan-heading h3 {font-size: 24px; letter-spacing: -.7px; font-weight: 600;}
+.lp .plan-icon {width: 22px; height: 22px; color: #7d8dc0;}
+.lp .plan-description {margin-top: 10px; font-size: 13px; color: #8791a4; min-height: 43px; line-height: 1.7;}
+.lp .price {display: flex; align-items: baseline; gap: 2px; margin-top: 22px;}
+.lp .price > span:first-child {align-self: flex-start; font-size: 23px; margin-top: 8px;}
+.lp .price strong {font-size: 57px; line-height: 1; font-weight: 600; letter-spacing: -2.5px;}
+.lp .price > span:last-child {margin-left: 7px; font-size: 13px; color: #8c96aa;}
+.lp .billing-note {min-height: 18px; color: #929caf; font-size: 11px; margin-top: 13px;}
+.lp .price-button {margin-top: 24px; width: 100%; justify-content: space-between; min-height: 46px; font-size: 13px; padding: 12px 14px; gap: 10px;}
+.lp .price-button svg {width: 16px; height: 16px;}
+.lp .plan-includes {border-top: 1px solid #e6e9f0; padding-top: 22px; margin-top: 25px;}
+.lp .plan-includes > b {font-size: 14px; font-weight: 600;}
+.lp .plan-includes ul {display: grid; gap: 13px; list-style: none; margin: 20px 0 0; padding: 0;}
+.lp .plan-includes li {position: relative; padding-left: 23px; font-size: 13px; line-height: 1.7; color: #8894aa;}
+.lp .plan-includes li::before {content: '✓'; position: absolute; left: 0; color: #8a9bc5; font-size: 13px;}
+.lp .pricing-footnote {margin-top: 26px; text-align: center; color: #929cb0; font-size: 11px; line-height: 1.9;}
+.lp .faq-section {display: grid; grid-template-columns: 1fr 1.2fr; gap: 80px; padding-block: 92px;}
+.lp .faq-section h2 {margin-top: 18px;}
+.lp .faq-section > div:first-child > p {color: var(--body); font-size: 16px; line-height: 1.8; margin-top: 20px;}
+.lp .faq-list details {border-bottom: 1px solid var(--line);}
+.lp .faq-list details:first-child {border-top: 1px solid var(--line);}
+.lp .faq-list summary {display: flex; align-items: center; justify-content: space-between; gap: 20px; list-style: none; font-size: 16px; font-weight: 550; padding: 23px 0; cursor: pointer;}
+.lp .faq-list summary::-webkit-details-marker {display: none;}
+.lp .faq-list summary svg {width: 18px; height: 18px; fill: none; stroke: #939caf; stroke-width: 1.6; transition: transform .18s; flex-shrink: 0;}
+.lp .faq-list details[open] summary svg {transform: rotate(180deg);}
+.lp .faq-list details > p {padding: 0 20px 23px 0; color: var(--body); font-size: 15px; line-height: 1.9;}
+.lp .final-cta {position: relative; border-radius: 12px; background: #16171c; padding: 64px 45px 58px; text-align: center;}
+.lp .cta-mark {width: 37px; height: 37px; fill: #c1caff; margin: 0 auto 24px;}
+.lp .final-cta .section-kicker {color: #a1accf; font-size: 10px;}
+.lp .final-cta h2 {color: #fff; font-size: 46px; letter-spacing: -1.9px; margin-top: 20px; line-height: 1.2;}
+.lp .final-cta > p {max-width: 550px; margin: 22px auto 0; color: #a4a9ba; font-size: 16px; line-height: 1.8;}
+.lp .final-cta .button {margin-top: 29px;}
+.lp .cta-note {display: block; margin-top: 15px; color: #9098b0; font-size: 12px;}
+.lp .site-footer {display: grid; grid-template-columns: 1fr auto; gap: 37px; padding-top: 58px; padding-bottom: 25px;}
+.lp .site-footer .brand {font-size: 25px;}
+.lp .site-footer .brand svg {width: 27px; height: 27px;}
+.lp .site-footer > div:first-child > p {margin-top: 16px; color: #8993a6; font-size: 13px;}
+.lp .footer-links {display: flex; align-items: flex-start; gap: 28px; padding-top: 5px; font-size: 13px;}
+.lp .footer-links a:hover, .lp .footer-bottom a:hover {color: var(--accent);}
+.lp .footer-bottom {grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 15px; margin-top: 7px; padding-top: 25px; border-top: 1px solid var(--line); color: #979fb0; font-size: 11px;}
+.lp .waitlist-dialog {width: min(475px, calc(100% - 36px)); max-height: 90dvh; overflow: auto; padding: 0; color: var(--ink); border: 1px solid #e0e3eb; border-radius: 12px; background: #fff; box-shadow: 0 25px 100px #131a2f2b;}
+.lp .waitlist-dialog::backdrop {background: #10182f66; backdrop-filter: blur(4px);}
+.lp .dialog-close {position: absolute; right: 15px; top: 12px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: none; color: #9099ac; font-size: 27px; line-height: 1;}
+.lp .dialog-close:hover {background: #f1f3f8;}
+.lp .dialog-content {padding: 35px;}
+.lp .dialog-mark {width: 31px; height: 31px; fill: #7889ce; margin-bottom: 24px;}
+.lp .dialog-content > .section-kicker {font-size: 10px;}
+.lp .dialog-content h2 {font-size: 34px; letter-spacing: -1.2px; margin-top: 15px;}
+.lp .dialog-content > p {font-size: 14px; color: #808b9f; line-height: 1.8; margin-top: 18px;}
+.lp .dialog-content form {margin-top: 26px;}
+.lp .dialog-content label {display: block; font-size: 13px; font-weight: 550; margin-bottom: 8px;}
+.lp .dialog-content input, .lp .dialog-content select {width: 100%; min-height: 48px; border: 1px solid #d6dce7; border-radius: 6px; background: #fff; color: var(--ink); padding: 11px 12px; font-size: 15px; margin-bottom: 20px;}
+.lp .dialog-content input::placeholder {color: #a0a9ba;}
+.lp .dialog-content .form-privacy {font-size: 11px; line-height: 1.8; color: #969fb2; margin: 0 0 20px;}
+.lp .dialog-content form > .button {width: 100%; justify-content: space-between;}
+.lp .form-message {color: #a66459; font-size: 12px; line-height: 1.7; margin-top: 13px;}
+.lp .honeypot {position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden;}
+.lp .form-success {margin-top: 25px; text-align: center;}
+.lp .success-mark {width: 45px; height: 45px; margin: auto; border-radius: 50%; background: #eef1ff; display: grid; place-items: center; color: #8a98ca; font-size: 24px;}
+.lp .form-success h3 {font-size: 24px; font-weight: 600; letter-spacing: -.7px; margin-top: 18px;}
+.lp .form-success p {font-size: 14px; line-height: 1.8; color: #919cb1; margin-top: 13px;}
+.lp .form-success .button {margin-top: 23px; font-size: 13px;}
+@keyframes lp-panel-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (max-width: 1050px) {
+.lp .lp-container {width: calc(100% - 60px);}
+.lp .hero {padding-top: 60px;}
+.lp .hero h1 {font-size: 64px; letter-spacing: -3px;}
+.lp .app-sidebar {width: 160px;}
+.lp .app-content {padding: 22px 18px;}
+.lp .app-topbar {padding-inline: 18px;}
+.lp .app-stats small {display: block; margin-left: 0;}
+.lp .app-heading h2 {font-size: 23px;}
+.lp .client-table td {padding: 10px 8px;}
+.lp .client-table th {padding-inline: 8px;}
+.lp .client-table small {font-size: 7px;}
+.lp .client-table td:first-child {gap: 6px;}
+.lp .client-table b {font-size: 9px;}
+.lp .client-table .avatar {width: 24px; height: 24px; font-size: 7px;}
+.lp .pipeline-status {font-size: 7px; padding-inline: 4px;}
+.lp .intro-grid, .lp .workflow-layout, .lp .details-section, .lp .faq-section {gap: 45px;}
+.lp .workflow-visual {padding: 21px;}
+.lp h2 {font-size: 39px;}
+.lp .workflow-tab b {font-size: 17px;}
+.lp .workflow-tab small {font-size: 14px;}
+.lp .mini-label {font-size: 8px;}
+.lp .mini-label > span {font-size: 7px;}
+.lp .inquiry-card {padding: 16px;}
+.lp .inquiry-top b {font-size: 12px;}
+.lp .inquiry-top small {font-size: 9px;}
+.lp .new-tag {font-size: 8px; padding-inline: 5px;}
+.lp .matching-card small {font-size: 9px;}
+.lp .team-person small {font-size: 9px;}
+.lp .detail-block h2 {font-size: 37px;}
+.lp .price-card {padding: 28px 21px;}
+.lp .plan-description {min-height: 45px; font-size: 12px;}
+.lp .price-button {font-size: 12px;}
+.lp .plan-includes li {font-size: 12px;}
+}
+@media (max-width: 800px) {
+.lp .lp-container {width: calc(100% - 44px);}
+.lp .main-nav {gap: 23px; font-size: 13px;}
+.lp .nav-wrap {height: 74px;}
+.lp .hero {padding-top: 48px;}
+.lp .hero h1 {font-size: 58px; letter-spacing: -2.7px;}
+.lp .hero-copy {font-size: 17px; max-width: 610px;}
+.lp .product-scene {padding: 11px 11px 20px;}
+.lp .app-sidebar {display: none;}
+.lp .app-stats small {display: inline; margin-left: 6px;}
+.lp .app-heading h2 {font-size: 24px;}
+.lp .client-table b {font-size: 10px;}
+.lp .client-table small {font-size: 8px;}
+.lp .client-table td {padding: 10px;}
+.lp .pipeline-status {font-size: 8px;}
+.lp .next-client b {font-size: 10px;}
+.lp .intro-grid {grid-template-columns: 1fr; gap: 25px;}
+.lp .intro-grid > div {max-width: 650px;}
+.lp .benefit-row {gap: 28px;}
+.lp .benefit-row h3 {font-size: 16px;}
+.lp .benefit-row p {font-size: 14px;}
+.lp .workflow-heading {gap: 30px;}
+.lp .workflow-heading > p {max-width: 280px; font-size: 14px;}
+.lp .workflow-layout {gap: 28px;}
+.lp .workflow-tab {gap: 10px;}
+.lp .workflow-tab b {font-size: 16px;}
+.lp .workflow-tab small {font-size: 13px;}
+.lp .workflow-visual {padding: 16px; min-height: 365px;}
+.lp .mini-label > span {display: none;}
+.lp .inquiry-top .avatar {width: 25px; height: 25px; font-size: 8px;}
+.lp .inquiry-top small {font-size: 8px;}
+.lp .new-tag {font-size: 7px;}
+.lp .intake-answer {padding: 10px;}
+.lp .intake-answer p {font-size: 11px;}
+.lp .matching-card {padding: 11px; gap: 7px;}
+.lp .matching-card b {font-size: 10px;}
+.lp .matching-card small {font-size: 8px;}
+.lp .mini-progress {font-size: 8px; gap: 6px;}
+.lp .mini-progress i {width: 12px;}
+.lp .visual-footnote {font-size: 9px;}
+.lp .team-demo-heading h3 {font-size: 22px;}
+.lp .team-person {padding: 10px; gap: 8px;}
+.lp .team-person small {font-size: 8px;}
+.lp .role-tag {font-size: 8px;}
+.lp .pool-note {font-size: 10px;}
+.lp .session-demo {gap: 16px; padding: 17px;}
+.lp .session-demo h3 {font-size: 21px;}
+.lp .session-demo-date {font-size: 7px; padding: 9px;}
+.lp .handled-row {font-size: 9px;}
+.lp .draft-strip {font-size: 10px;}
+.lp .details-section {gap: 32px;}
+.lp .detail-block h2 {font-size: 33px;}
+.lp .detail-block > p {font-size: 15px;}
+.lp .followup-demo {padding: 18px;}
+.lp .followup-demo h3 {font-size: 18px;}
+.lp .followup-demo > p {font-size: 11px;}
+.lp .settings-demo {padding-inline: 17px;}
+.lp .settings-demo > div {font-size: 11px;}
+.lp .settings-demo b {font-size: 10px;}
+.lp .settings-title > span {font-size: 8px;}
+.lp .settings-title > svg {display: none;}
+.lp .settings-demo b > span {margin-left: 6px;}
+.lp .pricing-grid {gap: 12px;}
+.lp .price-card {padding: 27px 15px;}
+.lp .plan-heading h3 {font-size: 22px;}
+.lp .plan-heading {gap: 8px;}
+.lp .plan-icon {width: 20px; height: 20px;}
+.lp .plan-description {font-size: 11px; min-height: 42px;}
+.lp .price strong {font-size: 48px;}
+.lp .price > span:last-child {font-size: 11px; margin-left: 3px;}
+.lp .price-button {font-size: 11px; padding-inline: 10px; gap: 5px;}
+.lp .price-button svg {width: 13px; height: 13px;}
+.lp .plan-includes > b {font-size: 12px;}
+.lp .plan-includes li {font-size: 12px; padding-left: 18px;}
+.lp .plan-ribbon {font-size: 8px; padding-inline: 8px;}
+.lp .faq-section {gap: 35px;}
+.lp .faq-list summary {font-size: 15px;}
+.lp .faq-list details > p {font-size: 14px;}
+.lp .final-cta h2 {font-size: 40px;}
+}
+@media (max-width: 600px) {
+html:has(.lp) {scroll-padding-top: 85px;}
+.lp .lp-container {width: calc(100% - 36px);}
+.lp .nav-wrap {height: 70px;}
+.lp .brand {font-size: 25px; letter-spacing: -1px; gap: 8px;}
+.lp .brand-mark {width: 27px; height: 27px;}
+.lp .menu-toggle {display: flex; flex-direction: column; justify-content: center; gap: 6px; width: 42px; height: 40px; padding: 10px; border: 1px solid #e0e3eb; border-radius: 6px; background: #fff;}
+.lp .menu-toggle span {display: block; width: 20px; height: 1.5px; background: var(--ink); transition: transform .18s;}
+.lp .menu-toggle[aria-expanded='true'] span:first-child {transform: translateY(3.75px) rotate(45deg);}
+.lp .menu-toggle[aria-expanded='true'] span:last-child {transform: translateY(-3.75px) rotate(-45deg);}
+.lp .main-nav {display: none; position: absolute; top: 69px; left: 0; right: 0; padding: 20px; background: #fff; border-bottom: 1px solid var(--line); box-shadow: 0 12px 20px #10192c08; align-items: stretch; gap: 14px; font-size: 15px;}
+.lp .main-nav.open {display: flex; flex-direction: column;}
+.lp .main-nav > a {padding: 8px 0;}
+.lp .nav-cta {justify-content: space-between; font-size: 14px; margin-top: 3px;}
+.lp .hero {padding-top: 39px;}
+.lp .eyebrow {font-size: 8px; letter-spacing: .8px; padding: 6px 9px; gap: 7px; margin-bottom: 23px;}
+.lp .status-dot {height: 5px; width: 5px;}
+.lp .hero h1 {font-size: clamp(37px, 10vw, 49px); line-height: 1.12; letter-spacing: -1.8px; font-weight: 650;}
+.lp .hero h1 br {display: none;}
+.lp .hero-copy {margin-top: 22px; font-size: 16px; line-height: 1.8; max-width: 390px;}
+.lp .hero-actions {gap: 10px; margin-top: 25px;}
+.lp .hero-actions .button, .lp .hero-actions .text-link {min-height: 48px; padding: 12px 13px; font-size: 12px; gap: 13px;}
+.lp .hero-actions .icon {width: 15px; height: 15px;}
+.lp .text-link span {font-size: 17px;}
+.lp .hero-note {font-size: 11px; margin-top: 19px;}
+.lp .hero-note > span {font-size: 10px; line-height: 1.7; margin-top: 5px;}
+.lp .product-scene {margin-top: 31px; padding: 8px 8px 18px; border-radius: 8px;}
+.lp .app-window {border-radius: 5px; min-height: 0;}
+.lp .app-topbar {height: 31px; padding: 0 11px; font-size: 6px;}
+.lp .today-label {gap: 7px;}
+.lp .today-label i {width: 4px; height: 4px;}
+.lp .app-content {padding: 15px 11px 18px;}
+.lp .app-heading {gap: 5px;}
+.lp .app-heading h2 {font-size: 17px; letter-spacing: -.5px;}
+.lp .app-heading p {font-size: 6px; margin-bottom: 4px; letter-spacing: .6px;}
+.lp .app-heading > div > span {font-size: 7px;}
+.lp .small-date {display: none;}
+.lp .app-stats {margin-top: 14px; gap: 5px;}
+.lp .app-stats > div {padding: 8px; border-radius: 4px;}
+.lp .app-stats > div > span {font-size: 6px; line-height: 1.5;}
+.lp .app-stats svg {width: 8px; height: 8px;}
+.lp .app-stats strong {font-size: 21px; margin-top: 5px;}
+.lp .app-stats small {display: none;}
+.lp .app-panels {grid-template-columns: 1fr; margin-top: 11px;}
+.lp .next-panel {display: none;}
+.lp .panel-heading {padding: 10px;}
+.lp .panel-heading h3 {font-size: 9px;}
+.lp .panel-heading > span {font-size: 7px;}
+.lp .client-table th {padding: 9px 7px 6px; font-size: 6px;}
+.lp .client-table td {padding: 9px 7px; font-size: 7px;}
+.lp .client-table td:first-child {gap: 6px;}
+.lp .client-table .avatar {width: 22px; height: 22px; font-size: 6px;}
+.lp .client-table b {font-size: 8px;}
+.lp .client-table small {font-size: 6px;}
+.lp .pipeline-status {font-size: 6px; padding: 3px 4px;}
+.lp .pipeline-footer {padding: 9px; font-size: 7px; gap: 5px;}
+.lp .pipeline-footer > svg {width: 9px; height: 9px;}
+.lp .floating-note {right: 0; bottom: 0; padding: 9px 11px; gap: 7px; border-radius: 5px;}
+.lp .floating-icon {width: 25px; height: 25px; border-radius: 5px;}
+.lp .floating-icon svg {width: 13px; height: 13px;}
+.lp .floating-note b {font-size: 8px;}
+.lp .floating-note div > span {font-size: 7px;}
+.lp .floating-check {font-size: 9px; margin-left: 6px;}
+.lp .preview-caption {font-size: 8px; margin-top: 12px; line-height: 1.7;}
+.lp .coverage-strip {gap: 12px 19px; font-size: 10px; padding-block: 23px; margin-top: 17px;}
+.lp .coverage-strip > span {gap: 5px;}
+.lp .coverage-strip > span::before {font-size: 10px;}
+.lp .section-kicker {font-size: 9px; letter-spacing: 1.1px;}
+.lp h2 {font-size: 34px; letter-spacing: -1.1px; line-height: 1.18;}
+.lp .intro-section {padding-block: 60px;}
+.lp .intro-grid {margin-top: 18px; gap: 23px;}
+.lp .intro-grid p {font-size: 16px;}
+.lp .intro-grid p + p {margin-top: 12px;}
+.lp .benefit-row {grid-template-columns: 1fr; gap: 27px; padding-top: 29px; margin-top: 32px;}
+.lp .benefit-row > div {display: grid; grid-template-columns: 34px 1fr; gap: 0 13px;}
+.lp .benefit-number {grid-row: 1 / 3; width: 31px; height: 31px; font-size: 10px;}
+.lp .benefit-row h3 {margin: 0 0 8px; font-size: 16px;}
+.lp .benefit-row p {font-size: 15px;}
+.lp .workflow-section {padding-block: 60px; scroll-margin-top: 70px;}
+.lp .workflow-heading {display: block;}
+.lp .workflow-heading h2 {margin-top: 17px;}
+.lp .workflow-heading > p {font-size: 16px; max-width: 390px; margin-top: 22px;}
+.lp .workflow-layout {grid-template-columns: 1fr; gap: 26px; margin-top: 29px;}
+.lp .workflow-tab {padding: 22px 0; gap: 11px;}
+.lp .workflow-tab b {font-size: 17px;}
+.lp .workflow-tab small {font-size: 15px; margin-top: 10px;}
+.lp .tab-number {font-size: 10px;}
+.lp .workflow-tab > .icon {width: 15px; height: 15px;}
+.lp .workflow-visual {padding: 19px; min-height: 360px; border-radius: 7px;}
+.lp .mini-label {font-size: 8px; margin-bottom: 20px;}
+.lp .mini-label > span {display: inline; font-size: 7px;}
+.lp .inquiry-card {padding: 15px;}
+.lp .inquiry-top b {font-size: 12px;}
+.lp .inquiry-top small {font-size: 9px;}
+.lp .new-tag {font-size: 8px;}
+.lp .intake-answer p {font-size: 12px;}
+.lp .matching-card {padding: 12px; gap: 9px;}
+.lp .matching-card b {font-size: 11px;}
+.lp .matching-card small {font-size: 9px;}
+.lp .mini-progress {font-size: 9px; gap: 7px;}
+.lp .mini-progress i {width: 15px;}
+.lp .visual-footnote {font-size: 10px;}
+.lp .session-demo {padding: 17px; gap: 17px;}
+.lp .session-demo h3 {font-size: 23px;}
+.lp .session-demo-date {padding: 10px; font-size: 7px;}
+.lp .handled-row {font-size: 10px;}
+.lp .draft-strip, .lp .pool-note {font-size: 11px;}
+.lp .team-demo-heading h3 {font-size: 24px;}
+.lp .team-person {padding: 12px; gap: 9px;}
+.lp .team-person small {font-size: 9px;}
+.lp .role-tag {font-size: 8px;}
+.lp .details-section {grid-template-columns: 1fr; gap: 53px; padding-block: 60px;}
+.lp .detail-block h2 {font-size: 33px;}
+.lp .detail-block > p {font-size: 16px;}
+.lp .followup-demo {padding: 23px; margin-top: 26px;}
+.lp .followup-demo h3 {font-size: 20px;}
+.lp .followup-demo > p {font-size: 12px;}
+.lp .settings-demo {padding-inline: 21px; margin-top: 26px;}
+.lp .settings-demo > div {font-size: 12px;}
+.lp .settings-demo b {font-size: 11px;}
+.lp .settings-title > svg {display: block;}
+.lp .settings-title > span {font-size: 8px;}
+.lp .pricing-section {padding-block: 60px; scroll-margin-top: 70px;}
+.lp .pricing-heading h2 {font-size: 34px;}
+.lp .pricing-heading > p {font-size: 15px;}
+.lp .billing-control {margin: 26px auto 34px;}
+.lp .billing-control button {font-size: 12px; min-height: 39px; padding-inline: 13px;}
+.lp .billing-control span {font-size: 9px; margin-left: 6px;}
+.lp .pricing-grid {grid-template-columns: 1fr; max-width: 440px; margin: auto; gap: 29px;}
+.lp .price-card {padding: 29px;}
+.lp .plan-heading h3 {font-size: 26px;}
+.lp .plan-icon {width: 23px; height: 23px;}
+.lp .plan-description {font-size: 14px; min-height: 0; margin-top: 12px;}
+.lp .price {margin-top: 25px;}
+.lp .price strong {font-size: 59px;}
+.lp .price > span:first-child {font-size: 24px;}
+.lp .price > span:last-child {font-size: 14px; margin-left: 7px;}
+.lp .billing-note {font-size: 12px;}
+.lp .price-button {font-size: 14px; padding-inline: 15px; min-height: 48px;}
+.lp .price-button svg {height: 17px; width: 17px;}
+.lp .plan-includes > b {font-size: 15px;}
+.lp .plan-includes li {font-size: 14px; padding-left: 24px;}
+.lp .plan-includes li::before {font-size: 14px;}
+.lp .plan-ribbon {font-size: 9px; padding-inline: 13px;}
+.lp .pricing-footnote {font-size: 11px;}
+.lp .faq-section {grid-template-columns: 1fr; gap: 28px; padding-block: 60px;}
+.lp .faq-section > div:first-child > p {font-size: 16px;}
+.lp .faq-list summary {font-size: 16px; padding-block: 22px;}
+.lp .faq-list details > p {font-size: 15px;}
+.lp .final-cta {padding: 46px 23px 43px;}
+.lp .cta-mark {width: 32px; height: 32px; margin-bottom: 23px;}
+.lp .final-cta .section-kicker {font-size: 8px; letter-spacing: .8px;}
+.lp .final-cta h2 {font-size: 32px; letter-spacing: -1.2px; margin-top: 21px;}
+.lp .final-cta > p {font-size: 15px; margin-top: 21px;}
+.lp .final-cta .button {min-height: 49px; font-size: 14px;}
+.lp .cta-note {font-size: 11px;}
+.lp .site-footer {grid-template-columns: 1fr; gap: 27px; padding-top: 42px;}
+.lp .site-footer > div:first-child > p {font-size: 13px; line-height: 1.8; margin-top: 15px;}
+.lp .footer-links {gap: 28px; padding-top: 0; font-size: 14px;}
+.lp .footer-bottom {font-size: 10px; flex-wrap: wrap; padding-top: 22px; margin-top: 0; gap: 14px;}
+.lp .footer-bottom > span:nth-child(2) {display: none;}
+.lp .dialog-content {padding: 32px 25px;}
+.lp .dialog-content h2 {font-size: 30px;}
+.lp .dialog-content > p {font-size: 14px;}
+.lp .dialog-content input, .lp .dialog-content select {font-size: 16px;}
+.lp .dialog-content label {font-size: 14px;}
+.lp .dialog-content .form-privacy {font-size: 11px;}
+.lp .dialog-content form > .button {font-size: 14px;}
+}
+@media (max-width: 360px) {
+.lp .hero h1 {font-size: 35px; letter-spacing: -1.6px;}
+.lp .hero-actions {gap: 8px;}
+.lp .hero-actions .button, .lp .hero-actions .text-link {font-size: 11px; gap: 8px; padding-inline: 10px;}
+.lp .workflow-visual {padding: 13px;}
+.lp .inquiry-top {gap: 7px;}
+.lp .inquiry-top small {font-size: 8px;}
+.lp .new-tag {font-size: 7px; padding-inline: 4px;}
+.lp .mini-label > span {display: none;}
+.lp .mini-progress {gap: 5px; font-size: 8px;}
+.lp .mini-progress i {width: 11px;}
+.lp .settings-demo {padding-inline: 15px;}
+.lp .settings-title > svg {display: none;}
+.lp .settings-demo > div {font-size: 11px;}
+.lp .settings-demo b {font-size: 10px;}
+.lp .role-tag {font-size: 7px;}
+.lp .team-person {padding: 11px; gap: 7px;}
+.lp .team-person .avatar {width: 27px; height: 27px; font-size: 8px;}
+.lp .team-person small {font-size: 8px;}
+.lp .price-card {padding: 25px;}
+}
+.lp .intro-grid p, .lp .benefit-row p, .lp .workflow-heading > p, .lp .workflow-tab small, .lp .detail-block > p, .lp .pricing-heading > p, .lp .faq-section > div:first-child > p, .lp .faq-list details > p {color: #5e626b;}
+.lp .plan-description, .lp .plan-includes li, .lp .billing-note, .lp .pricing-footnote {color: #677080;}
+.lp .dialog-content > p, .lp .dialog-content .form-privacy, .lp .form-success p {color: #626c7c;}
+@media (prefers-reduced-motion: reduce) {
+html:has(.lp) {scroll-behavior: auto;}
+.lp *, .lp *::before, .lp *::after {animation: none !important; transition: none !important;}
+}
+
+/* 2026-11 mark: drawn with strokes in the current color (see components/brand.tsx). */
+.lp .brand-mark { color: var(--ink); }
+.lp .app-brand .lp-mark { color: #24262d; }
+.lp .cta-mark { color: #c1caff; }
+.lp .cta-note a, .lp .footer-bottom a { text-decoration: underline; text-underline-offset: 3px; }
+/* The header button is a link now (it was a <button>), so keep its button colors over the nav link color. */
+.lp .main-nav > a.nav-cta, .lp .main-nav > a.nav-cta:hover { color: #fff; }
+@media (max-width: 600px) {
+  .lp .main-nav > a.nav-cta { padding: 11px 16px; }
+}
