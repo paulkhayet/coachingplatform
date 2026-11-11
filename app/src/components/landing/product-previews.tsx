@@ -1,4 +1,4 @@
-import { CalendarCheck, CalendarClock, ChevronsUpDown, CircleCheck, Clock, CreditCard, Home, Link2, LogOut, Sun, UsersRound, Video } from 'lucide-react'
+import { CalendarCheck, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleCheck, Clock, CreditCard, Globe, Home, Link2, LogOut, Sun, UsersRound, Video } from 'lucide-react'
 import { Logo } from '@/components/brand'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +10,7 @@ import { ScaledPreview } from './scaled-preview'
 
 // Real schedulefa.st screens for the landing page, built from the app's own components and layout classes
 // with sample people (example.com addresses). Keep them in step when the screens they copy change:
-// app/layout.tsx + nav.tsx + business-switcher.tsx, app/bookings, b/[business]/[page] (+ picker, time grid),
+// app/layout.tsx + nav.tsx + business-switcher.tsx, app/bookings, b/[business]/[page] (+ picker.tsx),
 // b/[business]/[page]/booked, app/team, and the booking page form's price section.
 
 /** A Button's look without a <button> element (the landing page styles real buttons its own way). */
@@ -134,7 +134,7 @@ export function BookingsPreview() {
 function PublicShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="bg-muted/30 text-foreground grid text-left">
-      <main className="mx-auto w-full max-w-3xl px-6 py-10">{children}</main>
+      <main className="mx-auto w-full max-w-5xl px-6 py-10">{children}</main>
       <footer className="grid justify-items-center gap-2 pb-6">
         <span className="text-muted-foreground flex items-center gap-1.5 text-xs">Scheduling by <Logo className="text-xs [&_svg]:size-4" /></span>
       </footer>
@@ -142,36 +142,59 @@ function PublicShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-const days = ['Mon, Nov 9', 'Tue, Nov 10', 'Wed, Nov 11', 'Thu, Nov 12', 'Fri, Nov 13']
-const times = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '1:00 PM', '1:30 PM', '2:00 PM', '3:30 PM', '4:00 PM']
+// November 2026 as the booking calendar shows it: weekdays with open times are tinted, the 16th is chosen.
+const NOV_2026_FIRST_WEEKDAY = 0 // Sunday
+const openDays = new Set([11, 12, 13, 16, 17, 18, 19, 20, 23, 24, 25, 27, 30])
+const times = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '1:00 PM', '1:30 PM']
 
 export function BookingPagePreview() {
+  const cells = [...Array(NOV_2026_FIRST_WEEKDAY).fill(null), ...Array.from({ length: 30 }, (_, i) => i + 1)]
   return (
-    <ScaledPreview width={780} url={`schedulefa.st/b/${SLUG}/intro-call`} label="A schedulefa.st booking page: the call's details beside the days and open times families choose from.">
+    <ScaledPreview width={980} url={`schedulefa.st/b/${SLUG}/intro-call`} label="A schedulefa.st booking page: the call's details, a month calendar with open days highlighted and a time zone picker, and the chosen day's times.">
       <PublicShell>
-        <div className="grid grid-cols-[15rem_1fr] gap-6">
-          <div className="grid content-start gap-3">
-            <p className="text-muted-foreground text-sm">{BUSINESS}</p>
+        <div className="bg-card text-card-foreground grid grid-cols-[17rem_1fr] overflow-hidden rounded-xl border shadow-xs">
+          <div className="grid content-start gap-3 border-r p-6">
+            <div className="flex items-center gap-2.5">
+              <div className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-md text-sm font-bold">W</div>
+              <p className="text-muted-foreground text-sm font-medium">{BUSINESS}</p>
+            </div>
             <div className="text-2xl font-semibold tracking-tight">Free intro call</div>
-            <div className="text-muted-foreground grid gap-1.5 text-sm">
-              <span className="flex items-center gap-2"><Clock className="size-4" /> 30 minutes with Alex Morgan</span>
-              <span className="flex items-center gap-2"><Video className="size-4" /> Zoom call (link sent when you book)</span>
+            <div className="text-muted-foreground grid gap-2 text-sm">
+              <span className="flex items-start gap-2"><Clock className="mt-0.5 size-4 shrink-0" /> 30 minutes with Alex Morgan</span>
+              <span className="flex items-start gap-2"><Video className="mt-0.5 size-4 shrink-0" /> Zoom call (link sent when you book)</span>
             </div>
             <p className="text-sm">A short call to talk about your goals and see if we’re a good fit.</p>
           </div>
-          <Card>
-            <CardContent className="grid gap-4">
-              <p className="text-muted-foreground text-xs">Times are in Pacific Standard Time.</p>
-              <div className="flex gap-2 overflow-hidden pb-1">
-                {days.map((d, i) => (
-                  <span key={d} className={cn('shrink-0 rounded-md border px-3 py-2 text-sm', i === 0 ? 'border-primary bg-primary text-primary-foreground' : '')}>{d}</span>
+          <div className="grid gap-5 p-6">
+            <div className="text-lg font-semibold tracking-tight">Select a date & time</div>
+            <div className="grid grid-cols-[minmax(0,1fr)_11rem] gap-6">
+              <div className="grid content-start gap-5">
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between text-sm"><ChevronLeft className="text-muted-foreground size-4" /><span className="font-medium">November 2026</span><ChevronRight className="size-4" /></div>
+                  <div className="grid grid-cols-7 text-center text-[0.8rem]">
+                    {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => <span key={d} className="text-muted-foreground py-1">{d}</span>)}
+                    {cells.map((d, i) => (
+                      <span key={i} className="flex h-10 items-center justify-center">
+                        {d && (
+                          <span className={cn('flex size-10 items-center justify-center rounded-full text-sm', d === 16 ? 'bg-primary text-primary-foreground font-semibold' : openDays.has(d) ? 'bg-accent text-accent-foreground font-semibold' : 'text-muted-foreground opacity-50')}>{d}</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <span className="text-sm font-medium">Time zone</span>
+                  <span className="border-input flex h-9 w-full max-w-sm items-center gap-2 rounded-md border px-3 text-sm shadow-xs"><Globe className="text-muted-foreground size-4" /> Pacific Time <span className="text-muted-foreground">(10:30am)</span><ChevronDown className="text-muted-foreground ml-auto size-4" /></span>
+                </div>
+              </div>
+              <div className="grid content-start gap-3">
+                <p className="text-sm font-medium">Monday, November 16</p>
+                {times.map((t) => (
+                  <span key={t} className="border-primary/40 text-primary flex h-11 items-center justify-center rounded-md border text-sm font-semibold">{t}</span>
                 ))}
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {times.map((t) => <UiButton key={t} variant="outline">{t}</UiButton>)}
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </PublicShell>
     </ScaledPreview>

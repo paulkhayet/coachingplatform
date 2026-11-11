@@ -65,7 +65,7 @@ export default async function BookedPage({ params, searchParams }: { params: Pro
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
-        <LocalTime start={booking.startsAt.toISOString()} end={booking.endsAt.toISOString()} fallbackZone={booking.guestTimezone ?? 'UTC'} />
+        <LocalTime start={booking.startsAt.toISOString()} end={booking.endsAt.toISOString()} zone={booking.guestTimezone} />
         {booking.paymentStatus === 'paid' && booking.priceCents && <p className="text-muted-foreground">{formatCents(booking.priceCents)} paid by card.</p>}
         {booking.paymentStatus === 'refunded' && <p className="text-muted-foreground">Refunded in full.</p>}
         {!cancelled && booking.locationDetail && (

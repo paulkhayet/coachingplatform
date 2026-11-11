@@ -53,7 +53,7 @@ export default async function ManageBookingPage({ params, searchParams }: { para
           <CardDescription>With {view.hostName} · {view.business.name}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
-          <LocalTime start={booking.startsAt.toISOString()} end={booking.endsAt.toISOString()} fallbackZone={booking.guestTimezone ?? 'UTC'} />
+          <LocalTime start={booking.startsAt.toISOString()} end={booking.endsAt.toISOString()} zone={booking.guestTimezone} />
           {booking.status === 'confirmed' && booking.locationDetail && <p className="text-muted-foreground break-all">{booking.locationDetail}</p>}
           {!changeable && booking.status === 'confirmed' && <p className="text-muted-foreground">This call has started or finished, so it can’t be changed here.</p>}
         </CardContent>
