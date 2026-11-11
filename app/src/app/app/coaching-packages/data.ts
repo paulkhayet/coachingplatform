@@ -19,14 +19,14 @@ export type PackageSummary = {
   credit_units: number
   price_cents: number
   archived_at: string | null
-}
-
-export type PackageDetails = PackageSummary & {
   description: string | null
   session_formats: PackageSessionFormat[]
   installment_count: number | null
   installment_cadence: 'weekly' | 'monthly' | null
   eligible_coach_ids: string[] | null
+}
+
+export type PackageDetails = PackageSummary & {
   cancellation_notice_hours: number | null
   late_cancellation: 'inherit' | 'preserve' | 'forfeit'
   expiration: 'inherit' | 'end_of_term'

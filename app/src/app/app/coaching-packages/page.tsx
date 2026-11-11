@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ChevronRight, Package, Plus } from 'lucide-react'
+import { ArrowRight, Package, Plus } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card'
 import { formatCents } from '@/lib/booking/policy'
 import { formatCredits } from '@/lib/coaching-packages'
 import { canManageCoachingPackages } from '@/lib/roles'
@@ -13,12 +13,75 @@ import { requirePackageAccess, type PackageSummary } from './data'
 
 export const metadata: Metadata = { title: 'Coaching packages' }
 
+function PackageCard({ pkg, canManage }: { pkg: PackageSummary; canManage: boolean }) {
+  const monthly = pkg.kind === 'monthly'
+  const action = canManage ? 'Edit package' : 'View package'
+  const term = monthly ? 'Ongoing' : `${pkg.term_weeks} ${pkg.term_weeks === 1 ? 'week' : 'weeks'}`
+  const payment = pkg.installment_count
+    ? `Pay in full or ${pkg.installment_count} ${pkg.installment_cadence} payments`
+    : 'Pay in full'
+  const formats = pkg.session_formats.slice(0, 2)
+  const remainingFormats = pkg.session_formats.length - formats.length
+  const coachCount = pkg.eligible_coach_ids?.length
+
+  return (
+    <Card className="gap-4 pb-0">
+      <CardHeader className="gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 text-base leading-snug font-semibold break-words">{pkg.name}</h2>
+          <StatusBadge tone={pkg.archived_at ? 'neutral' : 'success'}>{pkg.archived_at ? 'Archived' : 'Available'}</StatusBadge>
+        </div>
+        {pkg.description && <CardDescription className="line-clamp-2 break-words">{pkg.description}</CardDescription>}
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <div className="min-h-13">
+          <div className="flex flex-wrap items-baseline gap-1.5">
+            <span className="text-2xl font-semibold tracking-tight tabular-nums">{formatCents(pkg.price_cents)}</span>
+            {monthly && <span className="text-muted-foreground text-sm">/ month</span>}
+          </div>
+          {!monthly && <p className="text-muted-foreground text-sm">{payment}</p>}
+        </div>
+        <dl className="bg-muted/60 grid grid-cols-2 gap-3 rounded-lg px-3 py-2.5">
+          <div>
+            <dt className="text-muted-foreground text-xs">Term</dt>
+            <dd className="mt-0.5 text-sm font-medium">{term}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">{monthly ? 'Monthly allowance' : 'Allowance'}</dt>
+            <dd className="mt-0.5 text-sm font-medium">{formatCredits(pkg.credit_units)}</dd>
+          </div>
+        </dl>
+        <div className="grid gap-1.5">
+          <p className="text-muted-foreground text-xs">Session formats</p>
+          <ul className="grid gap-1.5 text-sm">
+            {formats.map((format, index) => (
+              <li key={index} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
+                <span className="min-w-0 break-words">{format.name}</span>
+                <span className="text-muted-foreground tabular-nums">{format.durationMinutes} min · {formatCredits(format.creditUnits)}</span>
+              </li>
+            ))}
+          </ul>
+          {remainingFormats > 0 && <p className="text-muted-foreground text-xs">+{remainingFormats} more {remainingFormats === 1 ? 'format' : 'formats'}</p>}
+        </div>
+      </CardContent>
+      <CardFooter className="mt-auto flex-wrap justify-between gap-2 border-t py-3">
+        <span className="text-muted-foreground text-xs">{coachCount == null ? 'Any active coach' : `${coachCount} selected ${coachCount === 1 ? 'coach' : 'coaches'}`}</span>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/app/coaching-packages/${pkg.id}`} aria-label={`${action}: ${pkg.name}`}>
+            {action} <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  )
+}
+
 export default async function CoachingPackagesPage() {
   const { business, membership } = await requirePackageAccess()
   const canManage = canManageCoachingPackages(membership)
   const supabase = await createClient()
   const { data, error } = await supabase.from('coaching_packages')
-    .select('id, name, kind, term_weeks, credit_units, price_cents, archived_at')
+    .select('id, name, kind, term_weeks, credit_units, price_cents, archived_at, description, session_formats, installment_count, installment_cadence, eligible_coach_ids')
     .eq('business_id', business.id)
     .order('archived_at', { ascending: false, nullsFirst: true })
     .order('name')
@@ -46,24 +109,8 @@ export default async function CoachingPackagesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
-          {data.map((pkg) => (
-            <Card key={pkg.id} className="py-0">
-              <Link href={`/app/coaching-packages/${pkg.id}`} className="hover:bg-muted/50 focus-visible:ring-ring flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl px-5 py-4 focus-visible:ring-2 focus-visible:outline-none">
-                <div className="min-w-40 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium break-words">{pkg.name}</span>
-                    <StatusBadge tone={pkg.archived_at ? 'neutral' : 'success'}>{pkg.archived_at ? 'Archived' : 'Available'}</StatusBadge>
-                  </div>
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    {pkg.kind === 'monthly' ? 'Monthly plan' : `${pkg.term_weeks} ${pkg.term_weeks === 1 ? 'week' : 'weeks'}`} · {formatCredits(pkg.credit_units)}{pkg.kind === 'monthly' ? ' per month' : ''}
-                  </p>
-                </div>
-                <span className="text-sm font-medium tabular-nums">{formatCents(pkg.price_cents)}{pkg.kind === 'monthly' ? ' / month' : ''}</span>
-                <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-              </Link>
-            </Card>
-          ))}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,21rem),1fr))] gap-4">
+          {data.map((pkg) => <PackageCard key={pkg.id} pkg={pkg} canManage={canManage} />)}
         </div>
       )}
     </div>
