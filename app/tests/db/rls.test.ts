@@ -90,6 +90,48 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     expect(await as(sql, marcus, (tx) => tx`SELECT id FROM public.businesses WHERE id = ${willow}`)).toHaveLength(0)
   })
 
+  it('protects package prices and restricts changes to financial staff in the business', async () => {
+    const operator = await createUser(sql, 'package-admin@example.com', 'Package Administrator')
+    const coach = await createUser(sql, 'package-coach@example.com', 'Package Coach')
+    await sql`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES
+      (${willow}, ${operator}, 'admin', false), (${willow}, ${coach}, 'coach', true)`
+    const formats = [{ name: 'Standard', durationMinutes: 60, creditUnits: 100 }, { name: 'Short', durationMinutes: 30, creditUnits: 50 }]
+    const insert = (tx: postgres.TransactionSql) => tx<{ id: string }[]>`
+      INSERT INTO public.coaching_packages (business_id, name, kind, term_weeks, credit_units, price_cents, session_formats)
+      VALUES (${willow}, 'Eight-week bundle', 'fixed', 8, 800, 120000, ${tx.json(formats)}) RETURNING id`
+    const [pkg] = await as(sql, eleni, insert)
+    expect(await as(sql, operator, (tx) => tx`SELECT price_cents FROM public.coaching_packages WHERE id = ${pkg.id}`)).toEqual([{ price_cents: 120000 }])
+    expect(await as(sql, coach, (tx) => tx`SELECT price_cents FROM public.coaching_packages WHERE id = ${pkg.id}`)).toEqual([])
+    expect(await as(sql, outsider, (tx) => tx`SELECT price_cents FROM public.coaching_packages WHERE id = ${pkg.id}`)).toEqual([])
+    await expect(as(sql, null, (tx) => tx`SELECT price_cents FROM public.coaching_packages`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, operator, insert)).rejects.toThrow(/row-level security/)
+    await expect(as(sql, outsider, insert)).rejects.toThrow(/row-level security/)
+    expect(await as(sql, operator, (tx) => tx`UPDATE public.coaching_packages SET price_cents = 1 WHERE id = ${pkg.id} RETURNING id`)).toEqual([])
+    await sql`UPDATE public.memberships SET financial = true WHERE business_id = ${willow} AND user_id = ${operator}`
+    expect(await as(sql, operator, (tx) => tx`UPDATE public.coaching_packages SET price_cents = 125000 WHERE id = ${pkg.id} RETURNING price_cents`)).toEqual([{ price_cents: 125000 }])
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET business_id = ${willow} WHERE id = ${pkg.id}`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, eleni, (tx) => tx`DELETE FROM public.coaching_packages WHERE id = ${pkg.id}`)).rejects.toThrow(/permission denied/)
+  })
+
+  it('saves valid session formats and keeps archived packages when a selected coach leaves', async () => {
+    const coach = await createUser(sql, 'package-selected@example.com', 'Selected Coach')
+    const [member] = await sql<{ id: string }[]>`
+      INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${coach}, 'coach', true) RETURNING id`
+    const [other] = await sql<{ id: string }[]>`SELECT id FROM public.memberships WHERE user_id = ${outsider} AND business_id <> ${willow} LIMIT 1`
+    const [pkg] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.coaching_packages (business_id, name, kind, credit_units, price_cents, session_formats, eligible_coach_ids)
+      VALUES (${willow}, 'Monthly coaching', 'monthly', 400, 40000,
+        ${tx.json([{ name: 'Short', durationMinutes: 30, creditUnits: 50 }])}, ARRAY[${member.id}::uuid]) RETURNING id`)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET eligible_coach_ids = ARRAY[${other.id}::uuid] WHERE id = ${pkg.id}`)).rejects.toThrow(/Choose active coaches/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET credit_units = 25 WHERE id = ${pkg.id}`)).rejects.toThrow(/coaching_packages_formats/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET session_formats = '[{}]'::jsonb WHERE id = ${pkg.id}`)).rejects.toThrow(/coaching_packages_formats/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET installment_count = 3, installment_cadence = 'monthly' WHERE id = ${pkg.id}`)).rejects.toThrow(/coaching_packages_installments/)
+    await sql`UPDATE public.memberships SET status = 'inactive' WHERE id = ${member.id}`
+    expect(await as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET archived_at = now() WHERE id = ${pkg.id} RETURNING id`)).toEqual([{ id: pkg.id }])
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET archived_at = null WHERE id = ${pkg.id}`)).rejects.toThrow(/Choose active coaches/)
+    expect(await as(sql, eleni, (tx) => tx`UPDATE public.coaching_packages SET archived_at = null, eligible_coach_ids = null WHERE id = ${pkg.id} RETURNING archived_at, price_cents`)).toEqual([{ archived_at: null, price_cents: 40000 }])
+  })
+
   it('keeps the reminder trigger away from the API', async () => {
     await expect(as(sql, eleni, (tx) => tx`SELECT private.request_reminders()`)).rejects.toThrow(/permission denied/)
     await expect(as(sql, null, (tx) => tx`SELECT private.request_reminders()`)).rejects.toThrow(/permission denied/)

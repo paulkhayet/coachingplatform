@@ -94,6 +94,60 @@ export const invitations = pgTable(
   ],
 )
 
+export interface PackageSessionFormat {
+  name: string
+  durationMinutes: number
+  creditUnits: number
+}
+
+/** Reusable terms for future coaching purchases. Money is in cents and credits in hundredths. */
+export const coachingPackages = pgTable('coaching_packages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  kind: text('kind').$type<'fixed' | 'monthly'>().notNull(),
+  termWeeks: integer('term_weeks'),
+  creditUnits: integer('credit_units').notNull(),
+  sessionFormats: jsonb('session_formats').$type<PackageSessionFormat[]>().notNull(),
+  priceCents: integer('price_cents').notNull(),
+  installmentCount: integer('installment_count'),
+  installmentCadence: text('installment_cadence').$type<'weekly' | 'monthly'>(),
+  // Null means any active coaching member of this business. Otherwise, use the selected members.
+  eligibleCoachIds: uuid('eligible_coach_ids').array(),
+  cancellationNoticeHours: integer('cancellation_notice_hours'),
+  lateCancellation: text('late_cancellation').$type<'inherit' | 'preserve' | 'forfeit'>().notNull().default('inherit'),
+  expiration: text('expiration').$type<'inherit' | 'end_of_term'>().notNull().default('inherit'),
+  makeupExtensionDays: integer('makeup_extension_days'),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('coaching_packages_business_archive_idx').on(t.businessId, t.archivedAt),
+  check('coaching_packages_name_length', sql`char_length(btrim(${t.name})) between 2 and 100`),
+  check('coaching_packages_description_length', sql`char_length(${t.description}) <= 1000`),
+  check('coaching_packages_term', sql`(${t.kind} = 'fixed' and ${t.termWeeks} is not null and ${t.termWeeks} between 1 and 260) or (${t.kind} = 'monthly' and ${t.termWeeks} is null)`),
+  check('coaching_packages_credit_units', sql`${t.creditUnits} between 1 and 100000`),
+  check('coaching_packages_price', sql`${t.priceCents} between 1 and 100000000`),
+  check('coaching_packages_installments', sql`
+    (${t.installmentCount} is null and ${t.installmentCadence} is null) or
+    (${t.kind} = 'fixed' and ${t.installmentCount} is not null and ${t.installmentCount} between 2 and 24
+     and ${t.installmentCadence} is not null and ${t.installmentCadence} in ('weekly', 'monthly')
+     and ${t.priceCents} >= ${t.installmentCount})`),
+  check('coaching_packages_formats', sql`
+    case when jsonb_typeof(${t.sessionFormats}) = 'array' then
+      jsonb_array_length(${t.sessionFormats}) between 1 and 10 and not jsonb_path_exists(
+        ${t.sessionFormats},
+        '$[*] ? (@.type() != "object" || !exists(@.name) || @.name.type() != "string" || @.name == "" || !exists(@.durationMinutes) || @.durationMinutes.type() != "number" || @.durationMinutes < 1 || @.durationMinutes > 480 || @.durationMinutes != @.durationMinutes.floor() || !exists(@.creditUnits) || @.creditUnits.type() != "number" || @.creditUnits < 1 || @.creditUnits > $allowance || @.creditUnits != @.creditUnits.floor())',
+        jsonb_build_object('allowance', ${t.creditUnits})
+      ) else false end`),
+  check('coaching_packages_coach_ids', sql`${t.eligibleCoachIds} is null or (cardinality(${t.eligibleCoachIds}) between 1 and 200 and array_position(${t.eligibleCoachIds}, null) is null)`),
+  check('coaching_packages_cancellation', sql`${t.cancellationNoticeHours} between 0 and 720`),
+  check('coaching_packages_late_cancellation', sql`${t.lateCancellation} in ('inherit', 'preserve', 'forfeit')`),
+  check('coaching_packages_expiration', sql`${t.expiration} in ('inherit', 'end_of_term')`),
+  check('coaching_packages_makeups', sql`${t.makeupExtensionDays} between 0 and 365`),
+])
+
 /** A weekly working window in the coach's own time zone, in minutes after local midnight (0 = Sunday). */
 export interface WeeklyWindow {
   day: number

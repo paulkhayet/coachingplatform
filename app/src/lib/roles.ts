@@ -11,5 +11,7 @@ export const canManageBookings = (m: { id: string; role: MemberRole }, hostMembe
 export const canSeePayments = (role: MemberRole) => role === 'owner' || role === 'admin'
 /** Connecting or changing the Stripe account is a financial action: owners, or administrators with financial delegation (P-02). */
 export const canManagePayments = (m: { role: MemberRole; financial: boolean }) => m.role === 'owner' || (m.role === 'admin' && m.financial)
+/** Saving prices and payment terms requires financial delegation. */
+export const canManageCoachingPackages = canManagePayments
 /** Owners and administrators choose who hosts a booking page, including shared pages (D-061; mirrors can_manage_booking_page). */
 export const canAssignHosts = (role: MemberRole) => role === 'owner' || role === 'admin'
