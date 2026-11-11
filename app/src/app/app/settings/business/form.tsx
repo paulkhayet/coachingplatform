@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { startTransition, useActionState, useState } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,8 +43,15 @@ export function ReservationSettingsForm({ initial, save }: {
   const [enabled, setEnabled] = useState(initial.enabled)
   const [reminder, setReminder] = useState(initial.reminder?.toString() ?? '')
   const [cutoff, setCutoff] = useState(initial.cutoff?.toString() ?? '')
+  // Submit through a transition rather than `action={...}`: React resets a form after an action prop runs,
+  // which unticks the controlled checkbox on screen while its state stays on, so a second save turned it off.
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    startTransition(() => action(form))
+  }
   return (
-    <form action={action} className="grid gap-4">
+    <form onSubmit={submit} className="grid gap-4">
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="advanceReservations" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} className="accent-primary size-4" />
         Allow reservations before payment
