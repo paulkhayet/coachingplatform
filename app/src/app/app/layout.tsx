@@ -45,7 +45,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         <div className="border-b px-4 py-2 md:hidden"><Nav showPricing={showPricing} withSettings /></div>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        {/* Pages are centred; a page marked data-layout="flush" (Settings) sits against the sidebar instead. */}
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8 has-[[data-layout=flush]]:mx-0 has-[[data-layout=flush]]:max-w-none">{children}</main>
       </div>
     </div>
   )
