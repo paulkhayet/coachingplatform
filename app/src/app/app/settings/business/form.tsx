@@ -3,6 +3,8 @@
 import { useActionState, useState } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import type { WeeklyWindow } from '@/db/schema'
 import { DayRows, useDays } from '../../availability/forms'
 import { saveOpeningHours, type OpeningHoursState } from './actions'
@@ -29,6 +31,58 @@ export function OpeningHoursForm({ initial, businessName }: { initial: WeeklyWin
       </fieldset>
       {mode === 'some' && <DayRows days={days} update={update} offLabel="Closed" />}
       <Button type="submit" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : 'Save opening hours'}</Button>
+    </form>
+  )
+}
+
+export function ReservationSettingsForm({ initial, save }: {
+  initial: { enabled: boolean; reminder: number | null; cutoff: number | null }
+  save: (state: OpeningHoursState, form: FormData) => Promise<OpeningHoursState>
+}) {
+  const [state, action, pending] = useActionState(save, {})
+  const [enabled, setEnabled] = useState(initial.enabled)
+  const [reminder, setReminder] = useState(initial.reminder?.toString() ?? '')
+  const [cutoff, setCutoff] = useState(initial.cutoff?.toString() ?? '')
+  return (
+    <form action={action} className="grid gap-4">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="advanceReservations" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} className="accent-primary size-4" />
+        Allow reservations before payment
+      </label>
+      <div className="grid max-w-lg gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="payment-reminder-hours">Remind before session (hours)</Label>
+          <Input id="payment-reminder-hours" name="paymentReminderHours" type="number" min={1} max={720} step={1}
+            value={reminder} onChange={(event) => setReminder(event.target.value)} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="unpaid-cancellation-hours">Cancel before session (hours)</Label>
+          <Input id="unpaid-cancellation-hours" name="unpaidCancellationHours" type="number" min={1} max={720} step={1}
+            value={cutoff} onChange={(event) => setCutoff(event.target.value)} />
+        </div>
+      </div>
+      <p className="text-muted-foreground text-xs">Leave either field blank to turn it off. Payment reminders go to the selected client or guardian. These settings apply to new reservations.</p>
+      {state.message && <Alert variant={state.ok ? 'success' : 'destructive'}><AlertDescription>{state.message}</AlertDescription></Alert>}
+      <Button type="submit" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : 'Save reservation settings'}</Button>
+    </form>
+  )
+}
+
+export function BusinessNameForm({ name, save }: {
+  name: string
+  save: (state: OpeningHoursState, form: FormData) => Promise<OpeningHoursState>
+}) {
+  const [state, action, pending] = useActionState(save, {})
+  const [value, setValue] = useState(name)
+  return (
+    <form action={action} className="grid gap-3">
+      <div className="grid max-w-sm gap-1.5">
+        <Label htmlFor="business-name">Business name</Label>
+        <Input id="business-name" name="name" autoComplete="organization" value={value} onChange={(event) => setValue(event.target.value)}
+          minLength={2} maxLength={80} required />
+      </div>
+      {state.message && <Alert variant={state.ok ? 'success' : 'destructive'}><AlertDescription>{state.message}</AlertDescription></Alert>}
+      <Button type="submit" variant="outline" className="justify-self-start" disabled={pending || name === value}>{pending ? 'Saving…' : 'Save business name'}</Button>
     </form>
   )
 }

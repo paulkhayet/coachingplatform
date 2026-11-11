@@ -169,6 +169,27 @@
       "when": 1794431807396,
       "tag": "0023_coaching_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794434899271,
+      "tag": "0024_weekly_coaching_series",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794435928698,
+      "tag": "0025_advance_coaching_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794436633634,
+      "tag": "0026_settings_profiles_and_billing",
+      "breakpoints": true
     }
   ]
 }

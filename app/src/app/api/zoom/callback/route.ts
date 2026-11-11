@@ -3,8 +3,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { requireWorkspace } from '@/lib/workspace'
 import { ZOOM_OAUTH_COOKIE, exchangeZoomCode, isZoomConfigured, saveZoomConnection, zoomMe } from '@/lib/zoom/server'
-
-const AVAILABILITY = '/app/availability'
+import { INTEGRATIONS_PATH } from '@/lib/settings-paths'
 
 function sameString(a: string, b: string) {
   const x = Buffer.from(a)
@@ -20,8 +19,8 @@ export async function GET(request: Request) {
   const raw = jar.get(ZOOM_OAUTH_COOKIE)?.value
   jar.delete({ name: ZOOM_OAUTH_COOKIE, path: '/api/zoom' })
 
-  if (params.get('error')) redirect(`${AVAILABILITY}?zoom=denied`)
-  if (!isZoomConfigured) redirect(`${AVAILABILITY}?zoom=not_configured`)
+  if (params.get('error')) redirect(`${INTEGRATIONS_PATH}?zoom=denied`)
+  if (!isZoomConfigured) redirect(`${INTEGRATIONS_PATH}?zoom=not_configured`)
   let saved: { state: string; verifier: string; userId: string } | null = null
   try {
     saved = raw ? JSON.parse(raw) : null
@@ -31,7 +30,7 @@ export async function GET(request: Request) {
   const code = params.get('code')
   const state = params.get('state') ?? ''
   // The reply must match the request this browser started, for this same person.
-  if (!saved || !code || !sameString(state, saved.state) || saved.userId !== user.id) redirect(`${AVAILABILITY}?zoom=expired`)
+  if (!saved || !code || !sameString(state, saved.state) || saved.userId !== user.id) redirect(`${INTEGRATIONS_PATH}?zoom=expired`)
 
   let outcome = 'connected'
   try {
@@ -42,5 +41,5 @@ export async function GET(request: Request) {
     console.error('Zoom connection failed', error)
     outcome = 'error'
   }
-  redirect(`${AVAILABILITY}?zoom=${outcome}`)
+  redirect(`${INTEGRATIONS_PATH}?zoom=${outcome}`)
 }

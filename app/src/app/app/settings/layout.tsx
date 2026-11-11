@@ -1,0 +1,17 @@
+import { canManageTeam } from '@/lib/roles'
+import { requireWorkspace } from '@/lib/workspace'
+import { SettingsNav } from './nav'
+
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const { business, membership } = await requireWorkspace()
+  return (
+    <div className="grid gap-6">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-muted-foreground mt-1 text-sm">Manage your account and settings for {business.name}.</p>
+      </header>
+      <SettingsNav showSubscription={canManageTeam(membership.role)} />
+      <div className="min-w-0">{children}</div>
+    </div>
+  )
+}

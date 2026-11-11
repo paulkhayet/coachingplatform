@@ -17,6 +17,9 @@ export const businesses = pgTable(
     timezone: text('timezone').notNull().default('America/New_York'),
     // When the business takes bookings at all, for everyone (D-059), in its own time zone. Null = no limit.
     openingHours: jsonb('opening_hours').$type<WeeklyWindow[]>(),
+    allowAdvanceReservations: boolean('allow_advance_reservations').notNull().default(false),
+    paymentReminderHours: integer('payment_reminder_hours'),
+    unpaidCancellationHours: integer('unpaid_cancellation_hours'),
     createdBy: uuid('created_by').references(() => authUsers.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -26,6 +29,9 @@ export const businesses = pgTable(
     check('businesses_slug_format', sql`${t.slug} ~ '^[a-z0-9](?:[a-z0-9-]{1,48}[a-z0-9])$'`),
     check('businesses_name_length', sql`char_length(${t.name}) between 2 and 80`),
     check('businesses_opening_hours_array', sql`${t.openingHours} is null or jsonb_typeof(${t.openingHours}) = 'array'`),
+    check('businesses_reservation_hours', sql`(${t.paymentReminderHours} is null or ${t.paymentReminderHours} between 1 and 720)
+      and (${t.unpaidCancellationHours} is null or ${t.unpaidCancellationHours} between 1 and 720)
+      and ${t.paymentReminderHours} > ${t.unpaidCancellationHours}`),
   ],
 )
 
@@ -36,8 +42,22 @@ export const profiles = pgTable('profiles', {
     .references(() => authUsers.id, { onDelete: 'cascade' }),
   fullName: text('full_name'),
   email: text('email'),
+  avatarPath: text('avatar_path'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => [
+  check('profiles_avatar_path_owner', sql`${t.avatarPath} is null or split_part(${t.avatarPath}, '/', 1) = ${t.id}::text`),
+])
+
+/** The platform's Billing customer, separate from a business's Stripe Connect account. */
+export const workspaceBillingCustomers = pgTable('workspace_billing_customers', {
+  businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  livemode: boolean('livemode').notNull(),
+  stripeCustomerId: text('stripe_customer_id').notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.businessId, t.livemode] }),
+  uniqueIndex('workspace_billing_customer_key').on(t.livemode, t.stripeCustomerId),
+  check('workspace_billing_customer_id_format', sql`${t.stripeCustomerId} ~ '^cus_[A-Za-z0-9]+$'`),
+])
 
 /** A person's role inside one business. Staff seats are counted from active and invited rows (D-043, P-15). */
 export const memberships = pgTable(
@@ -453,6 +473,12 @@ export const bookings = pgTable(
     creditLateCancellation: text('credit_late_cancellation').$type<'preserve' | 'forfeit'>(),
     creditCancellationOutcome: text('credit_cancellation_outcome').$type<'released' | 'forfeited'>(),
     attendedAt: timestamp('attended_at', { withTimezone: true }),
+    coachingSeriesId: uuid('coaching_series_id'),
+    creditCoveredAt: timestamp('credit_covered_at', { withTimezone: true }),
+    paymentReminderHours: integer('payment_reminder_hours'),
+    paymentReminderSentAt: timestamp('payment_reminder_sent_at', { withTimezone: true }),
+    unpaidCancellationHours: integer('unpaid_cancellation_hours'),
+    unpaidCancelled: boolean('unpaid_cancelled').notNull().default(false),
   },
   (t) => [
     foreignKey({ columns: [t.businessId, t.coachingClientId, t.creditPeriodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'bookings_credit_period_fk' }).onDelete('restrict'),
@@ -466,10 +492,13 @@ export const bookings = pgTable(
     index('bookings_host_user_starts_idx').on(t.hostUserId, t.startsAt),
     index('bookings_page_idx').on(t.bookingPageId),
     index('bookings_coaching_client_idx').on(t.businessId, t.coachingClientId, t.creditPeriodId, t.startsAt).where(sql`${t.coachingClientId} is not null`),
+    index('bookings_coaching_series_idx').on(t.coachingSeriesId).where(sql`${t.coachingSeriesId} is not null`),
+    index('bookings_unpaid_coaching_starts_idx').on(t.startsAt).where(sql`${t.coachingClientId} is not null and ${t.creditCoveredAt} is null and ${t.status} = 'confirmed'`),
     check('bookings_order', sql`${t.endsAt} > ${t.startsAt}`),
     check('bookings_guest_name_length', sql`char_length(${t.guestName}) between 1 and 120`),
     check('bookings_guest_email_length', sql`(${t.guestEmail} is null and ${t.coachingClientId} is not null) or (${t.guestEmail} is not null and char_length(${t.guestEmail}) between 3 and 254)`),
     check('bookings_guest_notes_length', sql`char_length(${t.guestNotes}) <= 2000`),
+    check('bookings_coaching_series', sql`${t.coachingSeriesId} is null or ${t.coachingClientId} is not null`),
     check('bookings_coaching_terms', sql`
       (${t.coachingClientId} is null and ${t.creditPeriodId} is null and ${t.creditUnits} is null
        and ${t.creditNoticeHours} is null and ${t.creditLateCancellation} is null
@@ -484,6 +513,12 @@ export const bookings = pgTable(
            and ${t.creditCancellationOutcome} in ('released', 'forfeited'))))`),
   ],
 )
+
+/** Meeting details held by the server until this session has paid coverage. */
+export const coachingReservationLocations = pgTable('coaching_reservation_locations', {
+  bookingId: uuid('booking_id').primaryKey().references(() => bookings.id, { onDelete: 'cascade' }),
+  detail: text('detail').notNull(),
+})
 
 /** A person's connected Google Calendar (D-039, D-057), used by every business they work with. Written
  *  only by the server; only the person can read it. */

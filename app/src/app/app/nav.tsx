@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarCheck, CalendarClock, Clock, ContactRound, CreditCard, Home, Link2, Package, UsersRound } from 'lucide-react'
+import { CalendarCheck, CalendarClock, ContactRound, Home, Link2, Package, Settings, UsersRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const items = [
@@ -13,8 +13,7 @@ const items = [
   { href: '/app/coaching-packages', label: 'Coaching packages', icon: Package, pricing: true },
   { href: '/app/availability', label: 'Availability', icon: CalendarClock },
   { href: '/app/team', label: 'Team', icon: UsersRound },
-  { href: '/app/settings/business', label: 'Business hours', icon: Clock },
-  { href: '/app/settings/payments', label: 'Payments', icon: CreditCard },
+  { href: '/app/settings', label: 'Settings', icon: Settings },
 ]
 
 export function Nav({ showPricing = false }: { showPricing?: boolean }) {

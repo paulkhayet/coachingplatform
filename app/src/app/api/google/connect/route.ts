@@ -4,14 +4,13 @@ import { redirect } from 'next/navigation'
 import { requireWorkspace } from '@/lib/workspace'
 import { OAUTH_COOKIE, googleAuthUrl } from '@/lib/google/scopes'
 import { calendarAllowed, googleClientId, googleRedirectUri, isGoogleCalendarConfigured } from '@/lib/google/server'
-
-const AVAILABILITY = '/app/availability'
+import { INTEGRATIONS_PATH } from '@/lib/settings-paths'
 
 /** Starts connecting the signed-in person's own Google Calendar (used by all their businesses). */
 export async function GET() {
   const { user } = await requireWorkspace()
-  if (!isGoogleCalendarConfigured) redirect(`${AVAILABILITY}?calendar=not_configured`)
-  if (!calendarAllowed(user.email)) redirect(`${AVAILABILITY}?calendar=not_available`)
+  if (!isGoogleCalendarConfigured) redirect(`${INTEGRATIONS_PATH}?calendar=not_configured`)
+  if (!calendarAllowed(user.email)) redirect(`${INTEGRATIONS_PATH}?calendar=not_available`)
 
   // One-time values tying Google's reply to this browser and this person (state + PKCE).
   const state = randomBytes(24).toString('base64url')

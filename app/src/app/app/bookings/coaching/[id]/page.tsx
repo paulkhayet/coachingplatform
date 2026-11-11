@@ -3,13 +3,14 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { z } from 'zod'
 import { coachOptions } from '@/app/app/booking-pages/hosts'
-import { saveCoachingOutcome } from '@/app/app/clients/coaching-actions'
-import { CoachingOutcomeForm } from '@/app/app/clients/coaching-forms'
+import { moveCoachingAction, saveCoachingOutcome } from '@/app/app/clients/coaching-actions'
+import { CoachingMoveForm, CoachingOutcomeForm } from '@/app/app/clients/coaching-forms'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { creditCancellationOutcome } from '@/lib/clients/session-policy'
+import { businessDate, unpaidDeadline } from '@/lib/clients/credits'
 import { formatCredits } from '@/lib/coaching-packages'
 import { canManageClients } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
@@ -22,11 +23,13 @@ type Row = {
   guest_name: string; guest_email: string | null; title: string; starts_at: string; ends_at: string; status: string;
   credit_units: number; credit_notice_hours: number; credit_late_cancellation: 'preserve' | 'forfeit';
   credit_cancellation_outcome: 'released' | 'forfeited' | null; attended_at: string | null;
+  coaching_series_id: string | null;
+  credit_covered_at: string | null; unpaid_cancellation_hours: number | null; unpaid_cancelled: boolean;
   location_type: 'video_link' | 'phone' | 'in_person' | 'zoom'; location_detail: string | null;
   calendar_sync_error: string | null; meeting_error: string | null; business: { timezone: string; name: string } | null;
 }
 
-const messages: Record<string, string> = { booked: 'Session booked. Credits are reserved.', attended: 'Attendance recorded. The reserved credits are now used.', cancelled: 'Session cancelled.' }
+const messages: Record<string, string> = { booked: 'Session booked. Credits are reserved.', moved: 'Session moved. Its credits are still reserved.', attended: 'Attendance recorded. The reserved credits are now used.', cancelled: 'Session cancelled.' }
 
 export default async function CoachingSessionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ status?: string }> }) {
   const { user, business, workspaces } = await requireWorkspace()
@@ -34,7 +37,7 @@ export default async function CoachingSessionPage({ params, searchParams }: { pa
   if (!z.uuid().safeParse(id).success) notFound()
   const supabase = await createClient()
   const { data: session, error } = await supabase.from('bookings')
-    .select('id, business_id, coaching_client_id, host_membership_id, host_user_id, guest_name, guest_email, title, starts_at, ends_at, status, credit_units, credit_notice_hours, credit_late_cancellation, credit_cancellation_outcome, attended_at, location_type, location_detail, calendar_sync_error, meeting_error, business:businesses(timezone,name)')
+    .select('id, business_id, coaching_client_id, host_membership_id, host_user_id, guest_name, guest_email, title, starts_at, ends_at, status, credit_units, credit_notice_hours, credit_late_cancellation, credit_cancellation_outcome, attended_at, coaching_series_id, credit_covered_at, unpaid_cancellation_hours, unpaid_cancelled, location_type, location_detail, calendar_sync_error, meeting_error, business:businesses(timezone,name)')
     .eq('id', id).not('coaching_client_id', 'is', null).maybeSingle<Row>()
   if (error) return <Alert variant="destructive"><AlertDescription>Couldn’t load this coaching session.</AlertDescription></Alert>
   if (!session) notFound()
@@ -56,9 +59,11 @@ export default async function CoachingSessionPage({ params, searchParams }: { pa
   const cancelled = session.status === 'cancelled'
   const attended = Boolean(session.attended_at)
   const scheduled = !cancelled && !attended
+  const paid = Boolean(session.credit_covered_at)
+  const cutoff = session.unpaid_cancellation_hours !== null ? unpaidDeadline(start, session.unpaid_cancellation_hours) : null
   const credits = formatCredits(session.credit_units)
-  const message = status && Object.hasOwn(messages, status) ? messages[status] : null
-  const familyOutcome = creditCancellationOutcome({ by: 'guest', startsAt: start, now, noticeHours: session.credit_notice_hours, late: session.credit_late_cancellation })
+  const message = status === 'booked' && !paid ? 'Time reserved. Payment is needed to confirm the session.' : status && Object.hasOwn(messages, status) ? messages[status] : null
+  const familyOutcome = paid ? creditCancellationOutcome({ by: 'guest', startsAt: start, now, noticeHours: session.credit_notice_hours, late: session.credit_late_cancellation }) : 'released'
   const video = session.location_type === 'zoom' || session.location_type === 'video_link'
   const joinUrl = video && session.location_detail && /^https?:\/\//i.test(session.location_detail) ? session.location_detail : null
 
@@ -68,11 +73,19 @@ export default async function CoachingSessionPage({ params, searchParams }: { pa
         <Link href={client.data ? `/app/clients/${client.data.id}` : '/app/bookings'} className="text-muted-foreground text-sm hover:underline">← {client.data ? session.guest_name : 'Bookings'}</Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight break-words">{session.title} with {session.guest_name}</h1>
-          <StatusBadge tone={cancelled ? 'neutral' : 'success'}>{cancelled ? 'Cancelled' : attended ? 'Attended' : 'Scheduled'}</StatusBadge>
+          <StatusBadge tone={cancelled ? 'neutral' : paid ? 'success' : 'warning'}>
+            {cancelled ? (session.unpaid_cancelled ? 'Cancelled for nonpayment' : 'Cancelled') : attended ? 'Attended' : paid ? 'Covered' : 'Payment needed'}
+          </StatusBadge>
+          {session.coaching_series_id && <StatusBadge tone="neutral">Weekly series</StatusBadge>}
         </div>
         {!sameBusiness && <p className="text-muted-foreground mt-1 text-sm">{activeWorkspace.name}</p>}
       </div>
       {message && <Alert variant="success"><AlertDescription>{message}</AlertDescription></Alert>}
+      {scheduled && !paid && <Alert variant="warning"><AlertDescription>
+        {start <= now ? 'This reservation passed without paid coverage. Cancel it to release its credits.' :
+          'Meeting details will be available once payment covers this session.'}
+        {cutoff && start > now && (cutoff > now ? ` The reservation will be cancelled if unpaid by ${time.format(cutoff)}.` : ' The payment cutoff has passed. This reservation is due to be released.')}
+      </AlertDescription></Alert>}
       {session.meeting_error && scheduled && <Alert variant="warning"><AlertDescription>{session.meeting_error}</AlertDescription></Alert>}
       {session.calendar_sync_error && scheduled && <Alert variant="warning"><AlertDescription>{session.calendar_sync_error}</AlertDescription></Alert>}
       <Card className="gap-4">
@@ -84,13 +97,20 @@ export default async function CoachingSessionPage({ params, searchParams }: { pa
             <div><dt className="text-muted-foreground text-xs">Coach</dt><dd className="mt-0.5 text-sm break-words">{coach}</dd></div>
             <div><dt className="text-muted-foreground text-xs">Credits</dt><dd className="mt-0.5 text-sm">{credits} {cancelled ? session.credit_cancellation_outcome : attended ? 'used' : 'reserved'}</dd></div>
             <div><dt className="text-muted-foreground text-xs">Invited contact</dt><dd className="mt-0.5 text-sm break-all">{session.guest_email ?? 'No email recipient'}</dd></div>
-            <div><dt className="text-muted-foreground text-xs">Family cancellation</dt><dd className="mt-0.5 text-sm">{session.credit_notice_hours} hours’ notice · {session.credit_late_cancellation === 'forfeit' ? 'Forfeit credits if late' : 'Release credits if late'}</dd></div>
+            {paid && <div><dt className="text-muted-foreground text-xs">Family cancellation</dt><dd className="mt-0.5 text-sm">{session.credit_notice_hours} hours’ notice · {session.credit_late_cancellation === 'forfeit' ? 'Forfeit credits if late' : 'Release credits if late'}</dd></div>}
           </dl>
-          {scheduled && joinUrl && <Button asChild variant="outline" size="sm" className="justify-self-start"><a href={joinUrl} target="_blank" rel="noreferrer">Open meeting link</a></Button>}
-          {scheduled && !video && session.location_detail && <p className="text-sm break-words">{session.location_detail}</p>}
+          {scheduled && paid && joinUrl && <Button asChild variant="outline" size="sm" className="justify-self-start"><a href={joinUrl} target="_blank" rel="noreferrer">Open meeting link</a></Button>}
+          {scheduled && paid && !video && session.location_detail && <p className="text-sm break-words">{session.location_detail}</p>}
         </CardContent>
       </Card>
-      {scheduled && canManage && <Card><CardContent><CoachingOutcomeForm action={saveCoachingOutcome.bind(null, session.business_id, session.id)} canAttend={end <= now} familyOutcome={familyOutcome} credits={credits} /></CardContent></Card>}
+      {scheduled && canManage && start > now && (paid || !cutoff || cutoff > now) && <Card><CardContent>
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold">Reschedule session</summary>
+          <div className="mt-3"><CoachingMoveForm key={session.starts_at} action={moveCoachingAction.bind(null, session.business_id, session.id, session.starts_at)}
+            initialDate={businessDate(timezone, start)} today={businessDate(timezone, now)} timezone={timezone} /></div>
+        </details>
+      </CardContent></Card>}
+      {scheduled && canManage && <Card><CardContent><CoachingOutcomeForm action={saveCoachingOutcome.bind(null, session.business_id, session.id)} paid={paid} canAttend={end <= now} familyOutcome={familyOutcome} credits={credits} /></CardContent></Card>}
     </div>
   )
 }

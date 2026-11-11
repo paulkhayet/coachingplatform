@@ -79,7 +79,7 @@ export default async function EditBookingPage({ params, searchParams }: { params
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">{p.title}</h1>
       </div>
       {saved && <Alert variant="success"><AlertDescription>Saved.</AlertDescription></Alert>}
-      {missingZoom.length > 0 && <Alert variant="warning"><AlertDescription>{missingZoom.join(', ')} {missingZoom.length === 1 ? 'hasn’t' : 'haven’t'} connected Zoom, so their bookings on this page won’t get a meeting link. They can connect it on their Availability page.</AlertDescription></Alert>}
+      {missingZoom.length > 0 && <Alert variant="warning"><AlertDescription>{missingZoom.join(', ')} {missingZoom.length === 1 ? 'hasn’t' : 'haven’t'} connected Zoom, so their bookings on this page won’t get a meeting link. They can connect it in Settings → Integrations.</AlertDescription></Alert>}
       {hosts === 'failed' && <Alert variant="destructive"><AlertDescription>The page was created but its group of coaches couldn’t be saved, so it’s turned off. Choose the coaches again and save.</AlertDescription></Alert>}
       <Card className="py-4">
         <CardContent className="flex flex-wrap items-center gap-3">

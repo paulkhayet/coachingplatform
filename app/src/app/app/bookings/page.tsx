@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { TriangleAlert } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Badge, StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/server'
@@ -33,10 +33,11 @@ type Row = {
   zoom_meeting_id: string | null
   meeting_error: string | null
   coaching_client_id: string | null
+  credit_covered_at: string | null
   business?: { name: string } | null
 }
 
-const COLUMNS = 'id, title, starts_at, ends_at, guest_name, guest_email, guest_notes, host_membership_id, calendar_sync_error, google_event_id, price_cents, payment_status, answers, business_id, zoom_meeting_id, meeting_error, coaching_client_id'
+const COLUMNS = 'id, title, starts_at, ends_at, guest_name, guest_email, guest_notes, host_membership_id, calendar_sync_error, google_event_id, price_cents, payment_status, answers, business_id, zoom_meeting_id, meeting_error, coaching_client_id, credit_covered_at'
 
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const { business, membership, user, workspaces } = await requireWorkspace()
@@ -63,7 +64,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const zone = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'long' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? timeZone
   // Hosts can always cancel their own calls; owners and administrators can cancel any in their business.
   const canCancel = (b: Row) => mine || canManageBookings(membership, b.host_membership_id)
-  const needsAttendance = (past ?? []).filter(canCancel)
+  const needsOutcome = (past ?? []).filter(canCancel)
 
   return (
     <div className="grid gap-6">
@@ -79,17 +80,18 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
           <Link href="/app/bookings?view=mine" className={cn('rounded-md px-3 py-1.5', mine ? 'bg-background font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground')} aria-current={mine ? 'page' : undefined}>All my calls</Link>
         </nav>
       )}
-      {needsAttendance.length > 0 && <Card>
-        <CardHeader><h2 className="font-semibold">Needs attendance</h2></CardHeader>
+      {needsOutcome.length > 0 && <Card>
+        <CardHeader><h2 className="font-semibold">Sessions to review</h2></CardHeader>
         <CardContent>
           <ul className="divide-y">
-            {needsAttendance.map((b) => (
+            {needsOutcome.map((b) => (
               <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
                 <div>
                   <p className="text-sm font-medium">{b.title} with {b.guest_name}</p>
                   <p className="text-muted-foreground text-xs">{day.format(new Date(b.starts_at))} · {time.format(new Date(b.starts_at))}{mine && b.business ? ` · ${b.business.name}` : ''}</p>
+                  {!b.credit_covered_at && <StatusBadge tone="warning">Unpaid reservation</StatusBadge>}
                 </div>
-                <Button asChild variant="outline" size="sm"><Link href={`/app/bookings/coaching/${b.id}`}>Record outcome</Link></Button>
+                <Button asChild variant="outline" size="sm"><Link href={`/app/bookings/coaching/${b.id}`}>{b.credit_covered_at ? 'Record outcome' : 'View reservation'}</Link></Button>
               </li>
             ))}
           </ul>
@@ -122,6 +124,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                     {b.google_event_id && <Badge variant="outline">On Google Calendar</Badge>}
                     {b.calendar_sync_error && <Badge variant="outline" className="text-warning"><TriangleAlert /> Not on Google Calendar</Badge>}
                     {b.coaching_client_id && <Badge variant="outline">Coaching session</Badge>}
+                    {b.coaching_client_id && <StatusBadge tone={b.credit_covered_at ? 'success' : 'warning'}>{b.credit_covered_at ? 'Covered' : 'Payment needed'}</StatusBadge>}
                     {b.zoom_meeting_id && <Badge variant="outline">{b.guest_email ? 'Zoom link sent' : 'Zoom link ready'}</Badge>}
                     {b.meeting_error && <Badge variant="outline" className="text-warning" title={b.meeting_error}><TriangleAlert /> No Zoom link</Badge>}
                   </div>

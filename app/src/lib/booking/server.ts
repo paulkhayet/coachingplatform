@@ -18,15 +18,16 @@ import {
 } from '@/db/schema'
 import { siteUrl } from '@/lib/env'
 import { DEFAULT_WEEKLY_HOURS, bookableStarts, hoursForBusiness, parseWeeklyHours, subtract, zonedTime, type Interval } from '@/lib/slots'
-import { cancelCoachingForDepartedHost } from '@/lib/clients/sessions'
+import { unpaidDeadline } from '@/lib/clients/credits'
+import { cancelCoachingForDepartedHost, cancelUnpaidReservation } from '@/lib/clients/sessions'
 import { busyTimes, createBookingEvent, deleteBookingEvent, updateBookingEvent } from '@/lib/google/calendar'
 import { getConnection } from '@/lib/google/server'
 import { stripe } from '@/lib/stripe/server'
-import { sendEmail } from '@/lib/email/server'
+import { isEmailConfigured, sendEmail } from '@/lib/email/server'
 import { createZoomMeeting, deleteZoomMeeting, updateZoomMeeting } from '@/lib/zoom/server'
 import { formatAnswer } from './questions'
 import { deriveKey, fairestFirst, formatCents, guestCanChange, manageToken, refundOnCancel, verifyManageToken } from './policy'
-import { guestCancelled, guestConfirmation, guestReminder, guestRescheduled, hostGuestChange, hostNewBooking, type CallDetails } from './emails'
+import { guestCancelled, guestConfirmation, guestReminder, guestRescheduled, hostGuestChange, hostNewBooking, reservationPaymentCancelled, reservationPaymentReminder, type CallDetails } from './emails'
 import type { GuestBookingInput } from './schemas'
 
 // Public booking (D-049, D-056). Guests have no account, so these run with the server's own database
@@ -243,8 +244,29 @@ async function hostStarts(page: Pick<BookingPage, 'durationMinutes' | 'bufferBef
   return { starts: all.filter((s) => s >= from && s <= to), calendarUnavailable: false }
 }
 
+type CoachingSlotInput = { clientId: string; coachId: string; durationMinutes: number; ignoreBookingId?: string }
+
+async function coachingStartsInRange(input: CoachingSlotInput, from: Date, to: Date, now: Date) {
+  if (to < from) return { starts: [], calendarUnavailable: false }
+  const [host, clientBusy] = await Promise.all([
+    hostStarts({ durationMinutes: input.durationMinutes, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, minNoticeMinutes: 0 }, input.coachId, from, to, now, input.ignoreBookingId),
+    adminDb().select({ start: bookings.startsAt, end: bookings.endsAt }).from(bookings)
+      .where(and(eq(bookings.coachingClientId, input.clientId), eq(bookings.status, 'confirmed'), gt(bookings.endsAt, from),
+        lt(bookings.startsAt, new Date(to.getTime() + input.durationMinutes * 60_000)), input.ignoreBookingId ? ne(bookings.id, input.ignoreBookingId) : undefined)),
+  ])
+  return { ...host, starts: host.starts.filter((start) => !clientBusy.some((busy) => start < busy.end && start.getTime() + input.durationMinutes * 60_000 > busy.start.getTime())) }
+}
+
+/** A weekly preview checks its dates in one calendar range rather than making a request per occurrence. */
+export async function availableCoachingDates(input: CoachingSlotInput, dates: Date[], now = new Date()) {
+  if (!dates.length) return { starts: [], calendarUnavailable: false }
+  const wanted = new Set(dates.map((date) => date.getTime()))
+  const result = await coachingStartsInRange(input, new Date(Math.min(...wanted)), new Date(Math.max(...wanted)), now)
+  return { ...result, starts: result.starts.filter((date) => wanted.has(date.getTime())) }
+}
+
 /** Staff select a day in the business time zone. Only starts free for both coach and client are offered. */
-export async function availableCoachingStarts(input: { clientId: string; coachId: string; durationMinutes: number; day: string; endsOn: string; timezone: string }, now = new Date()) {
+export async function availableCoachingStarts(input: CoachingSlotInput & { day: string; endsOn: string; timezone: string }, now = new Date()) {
   const atMidnight = (day: string, minutes = 0) => {
     const [year, month, date] = day.split('-').map(Number)
     return zonedTime(year, month, date, minutes, input.timezone)
@@ -253,14 +275,7 @@ export async function availableCoachingStarts(input: { clientId: string; coachId
   const until = atMidnight(input.day, 1440)
   const periodEnd = atMidnight(input.endsOn)
   const to = new Date(Math.min(until.getTime() - 1, periodEnd.getTime() - input.durationMinutes * 60_000, now.getTime() + MAX_LOOKAHEAD_DAYS * DAY_MS))
-  if (to < from) return { starts: [], calendarUnavailable: false }
-  const [host, clientBusy] = await Promise.all([
-    hostStarts({ durationMinutes: input.durationMinutes, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, minNoticeMinutes: 0 }, input.coachId, from, to, now),
-    adminDb().select({ start: bookings.startsAt, end: bookings.endsAt }).from(bookings)
-      .where(and(eq(bookings.coachingClientId, input.clientId), eq(bookings.status, 'confirmed'), gt(bookings.endsAt, from),
-        lt(bookings.startsAt, new Date(to.getTime() + input.durationMinutes * 60_000)))),
-  ])
-  return { ...host, starts: host.starts.filter((start) => !clientBusy.some((busy) => start < busy.end && start.getTime() + input.durationMinutes * 60_000 > busy.start.getTime())) }
+  return coachingStartsInRange(input, from, to, now)
 }
 
 /**
@@ -514,6 +529,7 @@ async function addZoomMeeting(c: Ctx) {
 export async function afterConfirmed(bookingId: string) {
   const first = await context(bookingId)
   if (!first || first.booking.status !== 'confirmed') return
+  if (first.booking.coachingClientId && !first.booking.creditCoveredAt) return
   // The Zoom link comes first, so the calendar invitation and emails include it.
   await addZoomMeeting(first)
   const c = first.booking.locationType === 'zoom' ? ((await context(bookingId)) ?? first) : first
@@ -545,6 +561,13 @@ export async function afterConfirmed(bookingId: string) {
     for (const a of b.answers) extras.push([a.label, formatAnswer(a.value)])
     if (b.guestNotes) extras.push(['Note', b.guestNotes])
     await sendEmail(c.hostEmail, hostNewBooking({ ...details(c, false), guestEmail: b.guestEmail, staffBooked: Boolean(b.coachingClientId), extras }), { replyTo: b.guestEmail, idempotencyKey: `host-new:${b.id}` })
+  }
+}
+
+export async function syncCoachingConfirmations(ids: string[]) {
+  for (let i = 0; i < ids.length; i += 3) {
+    const results = await Promise.allSettled(ids.slice(i, i + 3).map(afterConfirmed))
+    if (results.some((result) => result.status === 'rejected')) console.error('Some coaching session confirmations could not be sent')
   }
 }
 
@@ -598,7 +621,11 @@ export async function afterBookingCancelled(b: Booking, decision: 'full' | 'none
   }
   const c = await context(b.id)
   if (c) {
-    if (b.guestEmail) await sendEmail(b.guestEmail, guestCancelled(details(c, true), by, decision), { replyTo: c.hostEmail, idempotencyKey: `cancel:${b.id}` })
+    if (b.guestEmail) {
+      const call = details(c, true)
+      const message = b.unpaidCancelled ? reservationPaymentCancelled(call) : guestCancelled(call, by, decision)
+      await sendEmail(b.guestEmail, message, { replyTo: c.hostEmail, idempotencyKey: `cancel:${b.id}` })
+    }
     if (by === 'guest' && c.hostEmail) await sendEmail(c.hostEmail, hostGuestChange({ ...details(c, false), guestEmail: b.guestEmail }, 'cancelled', decision), { replyTo: b.guestEmail, idempotencyKey: `host-cancel:${b.id}` })
   }
 }
@@ -619,26 +646,38 @@ export async function rescheduleBooking(bookingId: string, newStart: Date, now =
   if (!check.starts.some((s) => s.getTime() === newStart.getTime())) return { ok: false, reason: 'taken' }
 
   const newEnd = new Date(newStart.getTime() + (b.endsAt.getTime() - b.startsAt.getTime()))
+  let moved: Booking
   try {
-    const [moved] = await db
+    const [row] = await db
       .update(bookings)
       .set({ startsAt: newStart, endsAt: newEnd, reminderSentAt: null })
       .where(and(eq(bookings.id, b.id), eq(bookings.status, 'confirmed')))
-      .returning({ id: bookings.id })
-    if (!moved) return { ok: false, reason: 'closed' }
+      .returning()
+    if (!row) return { ok: false, reason: 'closed' }
+    moved = row
   } catch (error) {
     if (isOverlap(error)) return { ok: false, reason: 'taken' }
     throw error
   }
 
-  const c = await context(b.id)
-  if (!c) return { ok: true }
+  await afterBookingMoved(moved)
+  return { ok: true }
+}
+
+/** Apply the committed time to the existing provider records and notify the original invitees. */
+export async function afterBookingMoved(moved: Booking) {
+  if (moved.coachingClientId && !moved.creditCoveredAt) return
+  const c = await context(moved.id)
+  if (!c || c.booking.status !== 'confirmed' || c.booking.startsAt.getTime() !== moved.startsAt.getTime()) return
+  const b = c.booking
+  const db = adminDb()
   if (b.zoomMeetingId) {
     try {
-      await updateZoomMeeting(b.hostUserId, b.zoomMeetingId, meetingFor({ ...b, startsAt: newStart, endsAt: newEnd }, c.business.timezone))
+      await updateZoomMeeting(b.hostUserId, b.zoomMeetingId, meetingFor(b, c.business.timezone))
+      if (b.meetingError) await db.update(bookings).set({ meetingError: null }).where(eq(bookings.id, b.id))
     } catch (error) {
-      // The link stays the same either way; only Zoom's own schedule is out of date.
       console.error('Moving the Zoom meeting failed', error)
+      await db.update(bookings).set({ meetingError: 'Couldn’t update the time in Zoom.' }).where(eq(bookings.id, b.id))
     }
   }
   if (b.googleEventId && b.googleCalendarId) {
@@ -647,22 +686,22 @@ export async function rescheduleBooking(bookingId: string, newStart: Date, now =
         summary: `${b.title} with ${b.guestName}`,
         description: eventDescription(c),
         location: b.locationDetail ?? undefined,
-        start: newStart,
-        end: newEnd,
+        start: b.startsAt,
+        end: b.endsAt,
         timeZone: b.guestTimezone || c.business.timezone,
-        attendees: [{ email: b.guestEmail, displayName: b.guestName }],
+        attendees: b.guestEmail ? [{ email: b.guestEmail, displayName: b.guestName }] : [],
         bookingId: b.id,
         notify: true,
       })
+      if (b.calendarSyncError) await db.update(bookings).set({ calendarSyncError: null }).where(eq(bookings.id, b.id))
     } catch (error) {
       console.error('Moving the Google Calendar event failed', error)
       await db.update(bookings).set({ calendarSyncError: 'Couldn’t move this booking in Google Calendar.' }).where(eq(bookings.id, b.id))
     }
   }
-  const stamp = newStart.getTime()
-  await sendEmail(b.guestEmail, guestRescheduled(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `moved:${b.id}:${stamp}` })
-  if (c.hostEmail) await sendEmail(c.hostEmail, hostGuestChange({ ...details(c, false), guestEmail: b.guestEmail }, 'rescheduled'), { replyTo: b.guestEmail, idempotencyKey: `host-moved:${b.id}:${stamp}` })
-  return { ok: true }
+  const stamp = Date.now()
+  if (b.guestEmail) await sendEmail(b.guestEmail, guestRescheduled(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `moved:${b.id}:${stamp}` })
+  if (c.hostEmail) await sendEmail(c.hostEmail, hostGuestChange({ ...details(c, false), guestEmail: b.guestEmail, staffMoved: Boolean(b.coachingClientId) }, 'rescheduled'), { replyTo: b.guestEmail, idempotencyKey: `host-moved:${b.id}:${stamp}` })
 }
 
 /**
@@ -684,7 +723,7 @@ export async function releaseMember(membershipId: string, now = new Date()) {
         const session = await cancelCoachingForDepartedHost(db, id, membershipId, now)
         if (session) {
           cancelled++
-          await afterBookingCancelled(session)
+          await Promise.all([afterBookingCancelled(session), syncCoachingConfirmations(session.coveredIds)])
         }
       } else if ((await cancelBooking(id, 'business', now)).ok) cancelled++
     } catch (error) {
@@ -721,9 +760,10 @@ export async function sendDueReminders(now = new Date()) {
         eq(bookings.status, 'confirmed'),
         isNotNull(bookings.guestEmail),
         isNull(bookings.reminderSentAt),
+        or(isNull(bookings.coachingClientId), isNotNull(bookings.creditCoveredAt)),
         gt(bookings.startsAt, now),
         lte(bookings.startsAt, new Date(now.getTime() + DAY_MS)),
-        lte(bookings.createdAt, sql`${bookings.startsAt} - interval '24 hours'`),
+        sql`coalesce(${bookings.creditCoveredAt}, ${bookings.createdAt}) <= ${bookings.startsAt} - interval '24 hours'`,
       ),
     )
     .returning({ id: bookings.id })
@@ -734,4 +774,54 @@ export async function sendDueReminders(now = new Date()) {
     if (await sendEmail(c.booking.guestEmail, guestReminder(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `remind:${id}:${c.booking.startsAt.getTime()}` })) sent++
   }
   return { claimed: claimed.length, sent }
+}
+
+/** Release holds that missed the payment cutoff, then remind contacts about upcoming unpaid reservations. */
+export async function processUnpaidReservations(now = new Date()) {
+  const db = adminDb()
+  const unpaid = and(isNotNull(bookings.coachingClientId), eq(bookings.status, 'confirmed'), isNull(bookings.creditCoveredAt))
+  const cutoff = sql`${bookings.startsAt} - ${bookings.unpaidCancellationHours} * interval '1 hour'`
+  const currentTime = sql`${now.toISOString()}::timestamptz`
+  const due = await db.select({ id: bookings.id }).from(bookings)
+    .where(and(unpaid, lte(cutoff, currentTime))).orderBy(cutoff, bookings.id).limit(30)
+  let cancelled = 0
+  // A separate transaction rechecks coverage and time under the same lock used to record payments.
+  for (const { id } of due) {
+    try {
+      const session = await cancelUnpaidReservation(db, id, now)
+      if (!session) continue
+      cancelled++
+      await Promise.all([afterBookingCancelled(session), syncCoachingConfirmations(session.coveredIds)])
+    } catch (error) {
+      console.error('Unpaid reservation cancellation failed', error)
+    }
+  }
+  if (!isEmailConfigured) return { cancelled, reminded: 0 }
+  const ready = and(unpaid, isNull(bookings.paymentReminderSentAt), isNotNull(bookings.guestEmail), gt(bookings.startsAt, now),
+    or(isNull(bookings.unpaidCancellationHours), gt(cutoff, currentTime)),
+    sql`${bookings.startsAt} - ${bookings.paymentReminderHours} * interval '1 hour' <= ${currentTime}`)
+  const candidates = await db.select({ id: bookings.id }).from(bookings).where(ready).orderBy(bookings.startsAt, bookings.id).limit(30)
+  let reminded = 0
+  for (const { id } of candidates) {
+    const [claimed] = await db.update(bookings).set({ paymentReminderSentAt: now }).where(and(eq(bookings.id, id), ready))
+      .returning({ startsAt: bookings.startsAt })
+    if (!claimed) continue
+    try {
+      const c = await context(id)
+      const b = c?.booking
+      if (!c || !b?.guestEmail || b.creditCoveredAt || b.status !== 'confirmed' || b.startsAt.getTime() !== claimed.startsAt.getTime()) continue
+      const deadline = b.unpaidCancellationHours === null ? null : unpaidDeadline(claimed.startsAt, b.unpaidCancellationHours)
+      if (await sendEmail(b.guestEmail, reservationPaymentReminder(details(c, true), deadline), {
+        replyTo: c.hostEmail, idempotencyKey: `payment-needed:${id}:${claimed.startsAt.getTime()}`,
+      })) {
+        reminded++
+        continue
+      }
+    } catch (error) {
+      console.error('Reservation payment reminder failed', error)
+    }
+    await db.update(bookings).set({ paymentReminderSentAt: null })
+      .where(and(eq(bookings.id, id), eq(bookings.paymentReminderSentAt, now), isNull(bookings.creditCoveredAt)))
+  }
+  return { cancelled, reminded }
 }

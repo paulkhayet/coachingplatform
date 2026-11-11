@@ -16,12 +16,11 @@ const outcomes: Record<string, { ok: boolean; text: string }> = {
 
 /** D-038: each coach connects their own Zoom account; Zoom booking pages create a meeting per booking. */
 export async function ZoomCard({ userId, outcome }: { userId: string; outcome?: string }) {
-  if (!isZoomConfigured) return null
-  const message = outcome ? outcomes[outcome] : undefined
+  const message = outcome && Object.hasOwn(outcomes, outcome) ? outcomes[outcome] : undefined
   let connection: Awaited<ReturnType<typeof getZoomConnection>> | undefined
   let failed = false
   try {
-    connection = await getZoomConnection(userId)
+    if (isZoomConfigured) connection = await getZoomConnection(userId)
   } catch (error) {
     console.error('Looking up the Zoom connection failed', error)
     failed = true
@@ -34,7 +33,9 @@ export async function ZoomCard({ userId, outcome }: { userId: string; outcome?: 
       </CardHeader>
       <CardContent className="grid gap-4">
         {message && <Alert variant={message.ok ? 'success' : 'destructive'}><AlertDescription>{message.text}</AlertDescription></Alert>}
-        {failed ? (
+        {!isZoomConfigured ? (
+          <p className="text-muted-foreground text-sm">Zoom connections are unavailable on this deployment.</p>
+        ) : failed ? (
           <Alert variant="warning"><TriangleAlert /><AlertDescription>We couldn’t check your Zoom connection just now. Refresh to try again.</AlertDescription></Alert>
         ) : !connection ? (
           <>

@@ -3,13 +3,12 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { requireWorkspace } from '@/lib/workspace'
 import { ZOOM_OAUTH_COOKIE, isZoomConfigured, zoomAuthUrl } from '@/lib/zoom/server'
-
-const AVAILABILITY = '/app/availability'
+import { INTEGRATIONS_PATH } from '@/lib/settings-paths'
 
 /** Starts connecting the signed-in person's own Zoom account (used by all their businesses). */
 export async function GET() {
   const { user } = await requireWorkspace()
-  if (!isZoomConfigured) redirect(`${AVAILABILITY}?zoom=not_configured`)
+  if (!isZoomConfigured) redirect(`${INTEGRATIONS_PATH}?zoom=not_configured`)
   // One-time values tying Zoom's reply to this browser and this person (state + PKCE).
   const state = randomBytes(24).toString('base64url')
   const verifier = randomBytes(48).toString('base64url')

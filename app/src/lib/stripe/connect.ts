@@ -4,6 +4,7 @@ import { adminDb } from '@/db/server'
 import { stripeAccounts, type StripeAccountRow } from '@/db/schema'
 import { siteUrl } from '@/lib/env'
 import { accountFields } from '@/lib/payments'
+import { INTEGRATIONS_PATH } from '@/lib/settings-paths'
 import type { Workspace } from '@/lib/workspace'
 import { stripe, stripeLivemode } from './server'
 
@@ -58,7 +59,7 @@ export async function createOnboardingLink(stripeAccountId: string): Promise<str
     type: 'account_onboarding',
     // Stripe sends people here if the link expired or was already used; it makes a fresh one.
     refresh_url: `${siteUrl}${PAYMENTS_PATH}/onboarding`,
-    return_url: `${siteUrl}${PAYMENTS_PATH}?returned=1`,
+    return_url: `${siteUrl}${INTEGRATIONS_PATH}?returned=1#stripe-connect`,
   })
   return link.url
 }

@@ -1,14 +1,68 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { startTransition, useActionState, useState, type FormEvent } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { CoachingBookingState, CoachingOutcomeState } from './coaching-actions'
+import { MAX_WEEKLY_SESSIONS } from '@/lib/clients/session-policy'
+import type { CoachingBookingState, CoachingMoveState, CoachingOutcomeState, WeeklyPreview } from './coaching-actions'
 
 type Choice = { id: string; name: string }
 const selectClass = 'bg-background border-input focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60'
+
+// Date and time choices stay on screen while the server previews availability.
+function submitForm(event: FormEvent<HTMLFormElement>, dispatch: (data: FormData) => void) {
+  event.preventDefault()
+  const data = new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter)
+  startTransition(() => dispatch(data))
+}
+
+function WeeklyDates({ preview, pending, timezone }: { preview: WeeklyPreview; pending: boolean; timezone: string }) {
+  const [selected, setSelected] = useState(() => {
+    const dates: string[] = []
+    for (const date of preview.dates) {
+      if (dates.length === preview.reservableSlots) break
+      if (!date.issue && (!date.needsCoverageNow || dates.length < preview.fundedSlots)) dates.push(date.start)
+    }
+    return dates
+  })
+  const dateFormat = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+  const credits = selected.length * preview.creditUnits / 100
+  const isUnfunded = (start: string) => selected.filter((date) => date < start).length >= preview.fundedSlots
+  const insideCutoff = preview.dates.some((date) => date.needsCoverageNow && selected.includes(date.start) && isUnfunded(date.start))
+  return (
+    <fieldset disabled={pending} className="grid gap-3 rounded-lg border p-3">
+      <legend className="px-1 text-sm font-semibold">Weekly dates</legend>
+      <p className="text-muted-foreground text-sm">{selected.length} of {preview.dates.length} selected · {credits} {credits === 1 ? 'credit' : 'credits'} to reserve</p>
+      <ul className="divide-y">
+        {preview.dates.map((date) => {
+          const checked = selected.includes(date.start)
+          const atLimit = selected.length >= preview.reservableSlots
+          const unpaid = isUnfunded(date.start)
+          const requiresPayment = date.needsCoverageNow && unpaid
+          return (
+            <li key={date.start} className="py-2">
+              <label className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <input type="checkbox" name="selectedStarts" value={date.start} checked={checked} disabled={Boolean(date.issue) || (!checked && (atLimit || requiresPayment))}
+                    onChange={(e) => setSelected((current) => e.target.checked ? [...current, date.start] : current.filter((start) => start !== date.start))} className="accent-primary size-4" />
+                  {dateFormat.format(new Date(date.start))}
+                </span>
+                <StatusBadge tone={date.issue || requiresPayment || (checked && unpaid) || (!checked && atLimit) ? 'warning' : checked ? 'success' : 'neutral'}>
+                  {date.issue ?? (requiresPayment ? 'Inside payment cutoff' : checked ? (unpaid ? 'Payment needed' : 'Covered') : atLimit ? 'Credit limit reached' : 'Open')}
+                </StatusBadge>
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+      {insideCutoff && <p className="text-warning text-sm">Deselect any unpaid date inside the payment cutoff.</p>}
+      <Button type="submit" name="intent" value="book-series" className="justify-self-start" disabled={pending || !selected.length || insideCutoff}>{pending ? 'Booking…' : 'Confirm selected sessions'}</Button>
+    </fieldset>
+  )
+}
 
 export function CoachingBookingForm({ action, formats, coaches, contacts, firstDate, lastDate, timezone, noticeHours, lateCancellation, zoomAvailable, defaultCoach }: {
   action: (state: CoachingBookingState, data: FormData) => Promise<CoachingBookingState>
@@ -25,12 +79,15 @@ export function CoachingBookingForm({ action, formats, coaches, contacts, firstD
   const [contact, setContact] = useState('none')
   const [notice, setNotice] = useState('')
   const [late, setLate] = useState('')
+  const [weekly, setWeekly] = useState(false)
+  const [repeatCount, setRepeatCount] = useState('4')
   const slots = state.selection?.coachId === coach && String(state.selection.formatIndex) === format && state.selection.day === day ? state.slots ?? [] : []
+  const preview = slots.length && weekly && state.preview?.anchor === start && String(state.preview.count) === repeatCount ? state.preview : null
   const time = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
   const change = (set: (value: string) => void, value: string) => { set(value); setStart('') }
 
   return (
-    <form action={submit} className="grid gap-4">
+    <form onSubmit={(event) => submitForm(event, submit)} className="grid gap-4">
       <fieldset disabled={pending} className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor="coaching-format">Session format</Label>
@@ -97,16 +154,59 @@ export function CoachingBookingForm({ action, formats, coaches, contacts, firstD
             </select>
           </div>}
         </div>}
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-primary size-4" checked={weekly} onChange={(e) => setWeekly(e.target.checked)} /> Repeat weekly</label>
+        {weekly && <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid gap-1.5">
+            <Label htmlFor="coaching-week-count">Number of weekly dates</Label>
+            <Input id="coaching-week-count" name="repeatCount" type="number" min={2} max={MAX_WEEKLY_SESSIONS} step={1} value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} required />
+          </div>
+          <Button type="submit" name="intent" value="preview" variant="outline" formNoValidate disabled={pending || !slots.includes(start)}>Preview weekly dates</Button>
+        </div>}
       </fieldset>}
       {state.message && <Alert variant="info"><AlertDescription>{state.message}</AlertDescription></Alert>}
-      {slots.length > 0 && <Button type="submit" name="intent" value="book" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : 'Book session'}</Button>}
+      {slots.length > 0 && !weekly && state.singleNeedsPayment && <p className="text-muted-foreground text-sm">Payment needed. The time will be held and meeting details will go out once payment covers the session.</p>}
+      {slots.length > 0 && !weekly && <Button type="submit" name="intent" value="book" className="justify-self-start" disabled={pending}>{pending ? 'Saving…' : state.singleNeedsPayment ? 'Reserve session' : 'Book session'}</Button>}
+      {preview && <WeeklyDates key={preview.key} preview={preview} pending={pending} timezone={timezone} />}
     </form>
   )
 }
 
-export function CoachingOutcomeForm({ action, canAttend, familyOutcome, credits }: {
+export function CoachingMoveForm({ action, initialDate, today, timezone }: {
+  action: (state: CoachingMoveState, data: FormData) => Promise<CoachingMoveState>
+  initialDate: string; today: string; timezone: string;
+}) {
+  const [state, submit, pending] = useActionState(action, {})
+  const [day, setDay] = useState(initialDate)
+  const [start, setStart] = useState('')
+  const slots = state.day === day ? state.slots ?? [] : []
+  const time = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+
+  return (
+    <form onSubmit={(event) => submitForm(event, submit)} className="grid gap-4">
+      <p className="text-muted-foreground text-sm">Choose another time with the same coach in this credit period. The reserved credits stay with this session.</p>
+      <fieldset disabled={pending} className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid gap-1.5">
+          <Label htmlFor="move-coaching-day">New date</Label>
+          <Input id="move-coaching-day" name="day" type="date" min={today} value={day} onChange={(event) => { setDay(event.target.value); setStart('') }} required />
+        </div>
+        <Button type="submit" name="intent" value="availability" variant="outline" formNoValidate disabled={pending}>Find open times</Button>
+      </fieldset>
+      {slots.length > 0 && <div className="grid gap-1.5">
+        <Label htmlFor="move-coaching-time">New time</Label>
+        <select id="move-coaching-time" name="startsAt" className={selectClass} value={slots.includes(start) ? start : ''} onChange={(event) => setStart(event.target.value)} required>
+          <option value="">Choose a time</option>
+          {slots.map((slot) => <option key={slot} value={slot}>{time.format(new Date(slot))}</option>)}
+        </select>
+      </div>}
+      {state.message && <Alert variant="info"><AlertDescription>{state.message}</AlertDescription></Alert>}
+      {slots.length > 0 && <Button type="submit" name="intent" value="move" className="justify-self-start" disabled={pending || !slots.includes(start)}>{pending ? 'Moving…' : 'Move session'}</Button>}
+    </form>
+  )
+}
+
+export function CoachingOutcomeForm({ action, paid, canAttend, familyOutcome, credits }: {
   action: (state: CoachingOutcomeState, data: FormData) => Promise<CoachingOutcomeState>
-  canAttend: boolean; familyOutcome: 'released' | 'forfeited'; credits: string;
+  paid: boolean; canAttend: boolean; familyOutcome: 'released' | 'forfeited'; credits: string;
 }) {
   const [state, submit, pending] = useActionState(action, {})
   const [by, setBy] = useState('business')
@@ -114,10 +214,10 @@ export function CoachingOutcomeForm({ action, canAttend, familyOutcome, credits 
 
   return (
     <form action={submit} className="grid gap-4">
-      <div className="grid justify-items-start gap-1.5">
+      {paid && <div className="grid justify-items-start gap-1.5">
         <Button type="submit" name="intent" value="attend" disabled={!canAttend || pending}>Mark attended</Button>
         <p className="text-muted-foreground text-xs">{canAttend ? `Attendance uses the ${credits} held for this session.` : 'Attendance can be recorded after the session ends.'}</p>
-      </div>
+      </div>}
       <details className="rounded-lg border px-3 py-2.5">
         <summary className="cursor-pointer text-sm font-medium">Cancel session</summary>
         <fieldset disabled={pending} className="mt-3 grid gap-3">

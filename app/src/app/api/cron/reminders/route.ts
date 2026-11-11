@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
-import { sendDueReminders } from '@/lib/booking/server'
+import { processUnpaidReservations, sendDueReminders } from '@/lib/booking/server'
 
 // Sends booking reminders (D-056). Call it every 15 minutes with "Authorization: Bearer <CRON_SECRET>"
 // (Supabase pg_cron + pg_net, or Vercel Cron, which sends that header itself). Safe to call often:
@@ -16,8 +16,10 @@ function authorized(request: Request) {
 
 async function run(request: Request) {
   if (!authorized(request)) return new Response('Unauthorized', { status: 401 })
-  const result = await sendDueReminders()
-  return Response.json(result)
+  const now = new Date()
+  const reservations = await processUnpaidReservations(now)
+  const result = await sendDueReminders(now)
+  return Response.json({ ...result, reservations })
 }
 
 export const GET = run

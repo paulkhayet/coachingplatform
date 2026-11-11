@@ -18,6 +18,8 @@ export type CreditBalanceRow = {
   used_units: number
   forfeited_units: number
   expired_units: number
+  unpaid_reserved_units: number
+  waiting_reserved_units: number
   /** Null for roles that cannot read payment records, or when there are no payments. */
   paid_cents: number | null
 }

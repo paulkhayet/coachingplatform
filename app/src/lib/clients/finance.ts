@@ -4,6 +4,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { AdminDb } from '@/db/server'
 import { clientCreditEvents, clientCreditPayments, clientCreditPeriods, clientPackages, coachingClients, coachingPackages, memberships, type AssignedPackageTerms, type OFFLINE_PAYMENT_METHODS } from '@/db/schema'
 import { canManagePayments } from '@/lib/roles'
+import { allocateCoverage } from './coverage'
 import { fundedCreditUnits, servicePeriodEnd } from './credits'
 
 type ClientActor = { userId: string; businessId: string; clientId: string }
@@ -66,7 +67,7 @@ type PaymentInput = {
   reference: string | null
 }
 
-export async function recordClientPayment(db: AdminDb, actor: ClientActor, input: PaymentInput) {
+export async function recordClientPayment(db: AdminDb, actor: ClientActor, input: PaymentInput, now = new Date()) {
   return db.transaction(async (tx) => {
     await checkFinancialStaff(tx, actor)
     // Serialize payments for the same period so cumulative funding and balance limits stay correct.
@@ -80,7 +81,7 @@ export async function recordClientPayment(db: AdminDb, actor: ClientActor, input
     const [existing] = await tx.select().from(clientCreditPayments).where(eq(clientCreditPayments.id, input.id))
     if (existing) {
       if (existing.businessId === actor.businessId && existing.clientId === actor.clientId && existing.periodId === period.id &&
-        existing.amountCents === input.amountCents && existing.method === input.method && existing.receivedOn === input.receivedOn && existing.reference === input.reference) return
+        existing.amountCents === input.amountCents && existing.method === input.method && existing.receivedOn === input.receivedOn && existing.reference === input.reference) return []
       throw new ClientFinanceError('This payment was already submitted. Refresh the client page and try again.')
     }
 
@@ -95,5 +96,7 @@ export async function recordClientPayment(db: AdminDb, actor: ClientActor, input
     await tx.insert(clientCreditPayments).values({ ...scope, id: input.id, amountCents: input.amountCents, method: input.method,
       receivedOn: input.receivedOn, reference: input.reference, recordedBy: actor.userId })
     if (after > before) await tx.insert(clientCreditEvents).values({ ...scope, kind: 'funded', creditUnits: after - before, paymentId: input.id })
+    const { coveredIds } = await allocateCoverage(tx, scope, now)
+    return coveredIds
   })
 }

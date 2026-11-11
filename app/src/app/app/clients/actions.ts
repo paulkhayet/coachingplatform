@@ -2,10 +2,12 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { z } from 'zod'
 import { OFFLINE_PAYMENT_METHODS } from '@/db/schema'
 import { adminDb } from '@/db/server'
 import { parseDollars } from '@/lib/booking/policy'
+import { syncCoachingConfirmations } from '@/lib/booking/server'
 import { businessDate } from '@/lib/clients/credits'
 import { assignClientPackage, ClientFinanceError, recordClientPayment } from '@/lib/clients/finance'
 import { canManageClients, canManagePayments } from '@/lib/roles'
@@ -118,9 +120,13 @@ export async function saveOfflinePayment(businessId: string, clientId: string, p
   if (!parsed.success) return { errors: fieldErrors(parsed.error) }
   if (parsed.data.receivedOn > businessDate(business.timezone)) return { errors: { receivedOn: 'Choose today or an earlier date.' } }
   try {
-    await recordClientPayment(adminDb(), { businessId, clientId, userId: user.id }, {
+    const coveredIds = await recordClientPayment(adminDb(), { businessId, clientId, userId: user.id }, {
       ...parsed.data, id: requestId, periodId, reference: parsed.data.reference || null,
     })
+    if (coveredIds.length) {
+      after(() => syncCoachingConfirmations(coveredIds))
+      revalidatePath('/app/bookings', 'layout')
+    }
   } catch (error) {
     if (!(error instanceof ClientFinanceError)) console.error('Could not record offline payment', error instanceof Error ? error.name : 'unknown error')
     return { message: error instanceof ClientFinanceError ? error.message : 'The payment could not be recorded. Try again.' }

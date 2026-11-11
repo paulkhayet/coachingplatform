@@ -73,6 +73,24 @@ export function guestReminder(d: CallDetails): EmailMessage {
   return { subject, ...render(`See you soon, ${d.guestName}`, [`This is a reminder of your ${d.title} with ${d.businessName}.`], detailRows(d), d.manageUrl ? { label: 'Reschedule or cancel', url: d.manageUrl } : undefined, changeFooter(d)) }
 }
 
+export function reservationPaymentReminder(d: CallDetails, cutoff: Date | null): EmailMessage {
+  const subject = `Payment needed for ${d.title} with ${d.businessName}`
+  const paragraphs = ['We’re holding this time for your coaching session. Contact the business to arrange payment and receive your meeting details.']
+  const rows = detailRows({ ...d, location: null, paymentLine: undefined })
+  if (cutoff) {
+    const format = new Intl.DateTimeFormat('en-US', { timeZone: d.timeZone, dateStyle: 'full', timeStyle: 'short' })
+    rows.push(['Pay by', format.format(cutoff)])
+    paragraphs.push('The reservation will be released if payment hasn’t covered the session by the deadline.')
+  }
+  return { subject, ...render(subject, paragraphs, rows, undefined, changeFooter(d)) }
+}
+
+export function reservationPaymentCancelled(d: CallDetails): EmailMessage {
+  const subject = `Reservation cancelled for ${d.title} with ${d.businessName}`
+  return { subject, ...render(subject, ['The payment deadline passed and the reserved time was released. Contact the business to arrange a new session.'],
+    detailRows({ ...d, location: null, paymentLine: undefined }), undefined, changeFooter(d)) }
+}
+
 export function guestCancelled(d: CallDetails, by: 'guest' | 'business', refund: 'full' | 'none' | 'not_paid'): EmailMessage {
   const subject = `Cancelled: ${d.title} with ${d.businessName}`
   const lines = [by === 'guest' ? `You cancelled your ${d.title} with ${d.businessName}.` : `${d.businessName} cancelled your ${d.title}.`]
@@ -86,9 +104,9 @@ export function hostNewBooking(d: CallDetails & { guestEmail: string | null; sta
   return { subject, ...render(d.staffBooked ? `${d.title} with ${d.guestName}` : `${d.guestName} booked ${d.title}`, [d.staffBooked ? 'A coaching session was scheduled for you.' : 'A new call was booked through your booking page.'], [...detailRows(d), ['Guest', d.guestEmail ? `${d.guestName} <${d.guestEmail}>` : d.guestName], ...d.extras], undefined, 'See all bookings in schedulefa.st → Bookings.') }
 }
 
-export function hostGuestChange(d: CallDetails & { guestEmail: string | null }, change: 'cancelled' | 'rescheduled', refund?: 'full' | 'none' | 'not_paid'): EmailMessage {
+export function hostGuestChange(d: CallDetails & { guestEmail: string | null; staffMoved?: boolean }, change: 'cancelled' | 'rescheduled', refund?: 'full' | 'none' | 'not_paid'): EmailMessage {
   const subject = `${change === 'cancelled' ? 'Cancelled' : 'Rescheduled'}: ${d.title} with ${d.guestName}`
-  const lines = [change === 'cancelled' ? `${d.guestName} cancelled their ${d.title}.` : `${d.guestName} moved their ${d.title} to a new time.`]
+  const lines = [change === 'cancelled' ? `${d.guestName} cancelled their ${d.title}.` : d.staffMoved ? 'This coaching session was moved to a new time.' : `${d.guestName} moved their ${d.title} to a new time.`]
   if (refund === 'full') lines.push('They were refunded in full automatically.')
   if (refund === 'none') lines.push('It was after the refund cutoff, so no refund was made.')
   return { subject, ...render(subject, lines, [...detailRows(d), ['Guest', d.guestEmail ? `${d.guestName} <${d.guestEmail}>` : d.guestName]]) }

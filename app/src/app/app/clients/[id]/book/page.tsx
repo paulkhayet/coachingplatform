@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { coachOptions } from '@/app/app/booking-pages/hosts'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
-import { availableCreditUnits, businessDate } from '@/lib/clients/credits'
+import { availableCreditUnits, availablePurchasedUnits, businessDate } from '@/lib/clients/credits'
 import { formatCredits } from '@/lib/coaching-packages'
 import { canManageClients } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
@@ -42,7 +42,8 @@ export default async function BookCoachingPage({ params, searchParams }: { param
   const terms = assignment.terms
   const coaches = team.filter((coach) => !terms.eligibleCoachIds || terms.eligibleCoachIds.includes(coach.id))
   const balance = availableCreditUnits(period)
-  const formats = terms.sessionFormats.flatMap((format, index) => format.creditUnits <= balance ? [{ id: String(index), name: `${format.name} · ${format.durationMinutes} min · ${formatCredits(format.creditUnits)}` }] : [])
+  const allowance = business.allow_advance_reservations ? availablePurchasedUnits(period) : balance
+  const formats = terms.sessionFormats.flatMap((format, index) => format.creditUnits <= allowance ? [{ id: String(index), name: `${format.name} · ${format.durationMinutes} min · ${formatCredits(format.creditUnits)}` }] : [])
   const contacts = [
     ...(client.data.email ? [{ id: 'client', name: `${client.data.name} · ${client.data.email}` }] : []),
     ...(guardians.data ?? []).flatMap((guardian) => guardian.email ? [{ id: guardian.id, name: `${guardian.name} · ${guardian.email}` }] : []),
@@ -64,11 +65,11 @@ export default async function BookCoachingPage({ params, searchParams }: { param
       <Card>
         <CardHeader>
           <h2 className="font-semibold">{period.name}</h2>
-          <CardDescription>{formatCredits(balance)} available</CardDescription>
+          <CardDescription>{formatCredits(balance)} funded and available{business.allow_advance_reservations && ` · ${formatCredits(allowance)} available to reserve`}</CardDescription>
         </CardHeader>
         <CardContent>
           {firstDate > lastDate ? <p className="text-muted-foreground text-sm">There are no dates in this credit period within the booking window.</p>
-            : !formats.length ? <p className="text-muted-foreground text-sm">This package needs more funded credits to book a session.</p>
+            : !formats.length ? <p className="text-muted-foreground text-sm">{business.allow_advance_reservations ? 'This package has insufficient allowance to reserve a session.' : 'This package needs more funded credits to book a session.'}</p>
               : !coaches.length ? <p className="text-muted-foreground text-sm">There are no active coaches eligible for this package.</p>
                 : <CoachingBookingForm action={bookCoachingAction.bind(null, business.id, id, periodId, randomUUID())} formats={formats} coaches={coaches}
                   contacts={contacts} firstDate={firstDate} lastDate={lastDate} timezone={business.timezone} noticeHours={terms.cancellationNoticeHours}

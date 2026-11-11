@@ -73,9 +73,9 @@ export default async function TodayPage() {
     { label: 'Check your weekly hours', detail: schedule.data ? 'Families can book you inside these hours.' : 'You’re bookable weekdays 9 to 5 until you change them.', done: Boolean(schedule.data), href: '/app/availability', action: 'Set hours' },
     { label: 'Create your first booking page', detail: 'A link families use to pick a time with you.', done: livePages.length > 0, href: '/app/booking-pages/new', action: 'Create page' },
   ]
-  if (googleOpen) steps.push({ label: 'Connect Google Calendar', detail: 'Your busy times block bookings, and bookings land on your calendar.', done: google.connection?.status === 'active', href: '/app/availability', action: 'Connect' })
-  if (isZoomConfigured) steps.push({ label: 'Connect Zoom', detail: 'Give each booking its own meeting link.', done: zoom?.status === 'active', href: '/app/availability', action: 'Connect', optional: true })
-  if (managesPayments) steps.push({ label: 'Connect Stripe to take payments', detail: 'Charge for calls, paid straight to your account.', done: Boolean(stripe.data?.charges_enabled && !stripe.data.disconnected_at), href: '/app/settings/payments', action: 'Set up', optional: true })
+  if (googleOpen) steps.push({ label: 'Connect Google Calendar', detail: 'Your busy times block bookings, and bookings land on your calendar.', done: google.connection?.status === 'active', href: '/app/settings/integrations', action: 'Connect' })
+  if (isZoomConfigured) steps.push({ label: 'Connect Zoom', detail: 'Give each booking its own meeting link.', done: zoom?.status === 'active', href: '/app/settings/integrations', action: 'Connect', optional: true })
+  if (managesPayments) steps.push({ label: 'Connect Stripe to take payments', detail: 'Charge for calls, paid straight to your account.', done: Boolean(stripe.data?.charges_enabled && !stripe.data.disconnected_at), href: '/app/settings/integrations#stripe-connect', action: 'Set up', optional: true })
   if (isOwner) steps.push({ label: 'Invite your team', detail: 'Add coaches and administrators by email.', done: (members.count ?? 0) > 1 || (invites.count ?? 0) > 0, href: '/app/team', action: 'Invite', optional: true })
   const doneCount = steps.filter((s) => s.done).length
   const setupDone = steps.every((s) => s.done || s.optional)

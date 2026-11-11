@@ -9,6 +9,7 @@ END $$;
 DROP SCHEMA IF EXISTS auth CASCADE;
 DROP SCHEMA IF EXISTS drizzle CASCADE;
 DROP SCHEMA IF EXISTS private CASCADE;
+DROP SCHEMA IF EXISTS storage CASCADE;
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 CREATE SCHEMA auth;
@@ -27,3 +28,23 @@ GRANT USAGE ON SCHEMA public, auth TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated;
 -- Supabase grants table privileges to these roles by default and relies on RLS to restrict rows.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated;
+
+CREATE SCHEMA storage;
+CREATE TABLE storage.buckets (
+  id text PRIMARY KEY,
+  name text NOT NULL UNIQUE,
+  public boolean NOT NULL DEFAULT false,
+  file_size_limit bigint,
+  allowed_mime_types text[]
+);
+CREATE TABLE storage.objects (
+  bucket_id text NOT NULL REFERENCES storage.buckets(id),
+  name text NOT NULL,
+  PRIMARY KEY (bucket_id, name)
+);
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+CREATE FUNCTION storage.foldername(name text) RETURNS text[]
+LANGUAGE sql IMMUTABLE
+AS $$ SELECT (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
+GRANT USAGE ON SCHEMA storage TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO anon, authenticated;

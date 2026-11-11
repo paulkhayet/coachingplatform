@@ -50,7 +50,7 @@ export default function PrivacyPage() {
         Google user data is used only to provide these features to the person who connected it. We do not sell it, share it with anyone except
         the service providers listed below who help us run schedulefa.st, use it for advertising, or use it to train AI models, and no person
         at schedulefa.st reads it unless you ask us to for support or the law requires it. A coach can disconnect Google Calendar at any time
-        on the Availability page, which deletes the stored token and revokes our access. Our use of information received from Google APIs
+        in Settings → Integrations, which deletes the stored token and revokes our access. Our use of information received from Google APIs
         adheres to the{' '}
         <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>,
         including the Limited Use requirements.

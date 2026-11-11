@@ -1,0 +1,3 @@
+ALTER TABLE "bookings" ADD COLUMN "coaching_series_id" uuid;--> statement-breakpoint
+CREATE INDEX "bookings_coaching_series_idx" ON "bookings" USING btree ("coaching_series_id") WHERE "bookings"."coaching_series_id" is not null;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_coaching_series" CHECK ("bookings"."coaching_series_id" is null or "bookings"."coaching_client_id" is not null);

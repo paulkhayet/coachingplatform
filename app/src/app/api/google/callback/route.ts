@@ -4,8 +4,7 @@ import { redirect } from 'next/navigation'
 import { requireWorkspace } from '@/lib/workspace'
 import { OAUTH_COOKIE, idTokenClaims, missingCalendarScopes } from '@/lib/google/scopes'
 import { calendarAllowed, exchangeCode, isGoogleCalendarConfigured, revokeToken, saveConnection } from '@/lib/google/server'
-
-const AVAILABILITY = '/app/availability'
+import { INTEGRATIONS_PATH } from '@/lib/settings-paths'
 
 function sameString(a: string, b: string) {
   const x = Buffer.from(a)
@@ -21,8 +20,8 @@ export async function GET(request: Request) {
   const raw = jar.get(OAUTH_COOKIE)?.value
   jar.delete({ name: OAUTH_COOKIE, path: '/api/google' })
 
-  if (params.get('error')) redirect(`${AVAILABILITY}?calendar=denied`)
-  if (!isGoogleCalendarConfigured || !calendarAllowed(user.email)) redirect(`${AVAILABILITY}?calendar=not_available`)
+  if (params.get('error')) redirect(`${INTEGRATIONS_PATH}?calendar=denied`)
+  if (!isGoogleCalendarConfigured || !calendarAllowed(user.email)) redirect(`${INTEGRATIONS_PATH}?calendar=not_available`)
 
   let saved: { state: string; verifier: string; userId: string } | null = null
   try {
@@ -33,7 +32,7 @@ export async function GET(request: Request) {
   const code = params.get('code')
   const state = params.get('state') ?? ''
   // The reply must match the request this browser started, for this same person.
-  if (!saved || !code || !sameString(state, saved.state) || saved.userId !== user.id) redirect(`${AVAILABILITY}?calendar=expired`)
+  if (!saved || !code || !sameString(state, saved.state) || saved.userId !== user.id) redirect(`${INTEGRATIONS_PATH}?calendar=expired`)
 
   let outcome = 'connected'
   try {
@@ -62,5 +61,5 @@ export async function GET(request: Request) {
     console.error('Google Calendar connection failed', error)
     outcome = 'error'
   }
-  redirect(`${AVAILABILITY}?calendar=${outcome}`)
+  redirect(`${INTEGRATIONS_PATH}?calendar=${outcome}`)
 }

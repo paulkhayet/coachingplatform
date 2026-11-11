@@ -160,7 +160,7 @@ export function BookingPageForm({ action, defaults, businessSlug, submitLabel, p
         </div>
       </div>
       {locationType === 'zoom' ? (
-        <p className="text-muted-foreground -mt-2 text-xs">Each booking gets its own meeting on the host’s Zoom account, sent with the confirmation. Hosts connect Zoom on their Availability page.</p>
+        <p className="text-muted-foreground -mt-2 text-xs">Each booking gets its own meeting on the host’s Zoom account, sent with the confirmation. Hosts connect Zoom in Settings → Integrations.</p>
       ) : (
         <Field id="locationDetail" label="Location details" defaultValue={v('locationDetail')} hint={locationHint[locationType]} error={e.locationDetail} />
       )}

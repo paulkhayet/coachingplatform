@@ -4,6 +4,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { requireWorkspace } from '@/lib/workspace'
+import { profilePhotoUrl } from '@/lib/profile-photo'
 import { canSeePricing, roleLabel } from '@/lib/roles'
 import { signOut } from '../(auth)/actions'
 import { Nav } from './nav'
@@ -12,6 +13,7 @@ import { BusinessSwitcher } from './business-switcher'
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, membership, business, workspaces } = await requireWorkspace()
   const showPricing = canSeePricing(membership.role)
+  const photo = await profilePhotoUrl(user.avatarPath)
   return (
     <div className="flex min-h-svh">
       <aside className="bg-sidebar border-sidebar-border sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r p-3 md:flex">
@@ -19,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <BusinessSwitcher current={{ id: business.id, name: business.name }} slug={business.slug} workspaces={workspaces} />
         <div className="mt-5 flex-1"><Nav showPricing={showPricing} /></div>
         <div className="flex items-center gap-2 border-t pt-3">
-          <Avatar name={user.fullName} className="size-7" />
+          <Avatar name={user.fullName} src={photo} className="size-7" />
           <div className="grid min-w-0 flex-1 leading-tight">
             <span className="truncate text-sm font-medium">{user.fullName}</span>
             <span className="text-muted-foreground truncate text-xs">{roleLabel[membership.role]}</span>

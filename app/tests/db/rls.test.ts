@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import * as schema from '@/db/schema'
 import { assignClientPackage, recordClientPayment } from '@/lib/clients/finance'
-import { cancelCoachingForDepartedHost, finishCoachingSession, reserveCoachingSession } from '@/lib/clients/sessions'
+import { cancelCoachingForDepartedHost, cancelUnpaidReservation, finishCoachingSession, moveCoachingSession, reserveCoachingSeries, reserveCoachingSession } from '@/lib/clients/sessions'
 import { acceptInvitation, findInvitation, hashToken, sendInvitation } from '@/lib/team/invitations'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DB_URL, as, createUser, resetDatabase } from './helpers'
@@ -36,6 +36,28 @@ describe.skipIf(!DB_URL)('row-level security', () => {
   it('creates a profile for every new user', async () => {
     const [p] = await sql`SELECT full_name, email FROM public.profiles WHERE id = ${eleni}`
     expect(p).toEqual({ full_name: 'Eleni Morgan', email: 'eleni@example.com' })
+  })
+
+  it('keeps profile photos private and restricts each profile to its own folder', async () => {
+    const path = `${eleni}/photo.png`
+    await as(sql, eleni, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('profile-photos', ${path})`)
+    expect(await as(sql, eleni, (tx) => tx`UPDATE profiles SET avatar_path = ${path} WHERE id = ${eleni} RETURNING avatar_path`)).toEqual([{ avatar_path: path }])
+    expect(await as(sql, eleni, (tx) => tx`SELECT name FROM storage.objects`)).toEqual([{ name: path }])
+    expect(await as(sql, outsider, (tx) => tx`SELECT name FROM storage.objects`)).toEqual([])
+    expect(await as(sql, null, (tx) => tx`SELECT name FROM storage.objects`)).toEqual([])
+    expect(await as(sql, outsider, (tx) => tx`DELETE FROM storage.objects WHERE name = ${path} RETURNING name`)).toEqual([])
+    await expect(as(sql, outsider, (tx) => tx`INSERT INTO storage.objects (bucket_id, name) VALUES ('profile-photos', ${eleni + '/other.png'})`)).rejects.toThrow(/row-level security/)
+    await expect(as(sql, outsider, (tx) => tx`UPDATE profiles SET avatar_path = ${path} WHERE id = ${outsider}`)).rejects.toThrow(/profiles_avatar_path_owner/)
+    expect(await as(sql, eleni, (tx) => tx`DELETE FROM storage.objects WHERE name = ${path} RETURNING name`)).toEqual([{ name: path }])
+    await as(sql, eleni, (tx) => tx`UPDATE profiles SET avatar_path = null WHERE id = ${eleni}`)
+  })
+
+  it('keeps platform billing customer links off the data API', async () => {
+    await sql`INSERT INTO workspace_billing_customers (business_id, livemode, stripe_customer_id)
+      VALUES (${willow}, false, 'cus_testWorkspace'), (${willow}, true, 'cus_liveWorkspace')`
+    await expect(as(sql, eleni, (tx) => tx`SELECT stripe_customer_id FROM workspace_billing_customers`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE workspace_billing_customers SET stripe_customer_id = 'cus_other'`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, null, (tx) => tx`SELECT stripe_customer_id FROM workspace_billing_customers`)).rejects.toThrow(/permission denied/)
   })
 
   it('makes the creator the owner of their new business', async () => {
@@ -233,15 +255,22 @@ describe.skipIf(!DB_URL)('row-level security', () => {
       locationType: 'phone' as const, locationDetail: 'Coach calls the client', contact: 'none', noticeHours: null, lateCancellation: null }
     await expect(reserveCoachingSession(db, scope, session, now)).rejects.toThrow(/funded credits/)
     await recordClientPayment(db, actor, { id: randomUUID(), periodId, amountCents: 40000, method: 'check', receivedOn: '2026-11-11', reference: null })
-    expect(await reserveCoachingSession(db, scope, session, now)).toEqual({ id: session.id, created: true })
-    expect(await reserveCoachingSession(db, scope, session, now)).toEqual({ id: session.id, created: false })
+    expect(await reserveCoachingSession(db, scope, session, now)).toEqual({ id: session.id, coveredIds: [session.id], created: true })
+    expect(await reserveCoachingSession(db, scope, session, now)).toEqual({ id: session.id, coveredIds: [], created: false })
     await expect(reserveCoachingSession(db, scope, { ...session, id: randomUUID(), coachId: other.id }, now)).rejects.toMatchObject({ cause: { code: '23P01' } })
     expect(await as(sql, hostUser, (tx) => tx`SELECT id FROM public.bookings WHERE id = ${session.id}`)).toEqual([{ id: session.id }])
     expect(await as(sql, otherUser, (tx) => tx`SELECT id FROM public.bookings WHERE id = ${session.id}`)).toEqual([])
     expect(await as(sql, eleni, (tx) => tx`SELECT reserved_units, used_units FROM public.client_credit_balances(${willow}, ${client.id})`)).toEqual([{ reserved_units: 100, used_units: 0 }])
     await expect(finishCoachingSession(db, { ...actor, userId: otherUser }, session.id, { action: 'attend' }, now)).rejects.toThrow(/access to manage/)
     await expect(finishCoachingSession(db, actor, session.id, { action: 'attend' }, now)).rejects.toThrow(/after the session ends/)
-    const afterSession = new Date('2026-11-12T17:01:00Z')
+    const newStart = new Date('2026-11-12T18:00:00Z')
+    await expect(moveCoachingSession(db, { ...actor, userId: otherUser }, session.id, session.startsAt, newStart, now)).rejects.toThrow(/access to manage/)
+    await sql`UPDATE public.bookings SET reminder_sent_at = now() WHERE id = ${session.id}`
+    const moved = await moveCoachingSession(db, { ...actor, userId: hostUser }, session.id, session.startsAt, newStart, now)
+    expect(moved).toMatchObject({ startsAt: newStart, endsAt: new Date('2026-11-12T19:00:00Z'), reminderSentAt: null, creditUnits: 100 })
+    await expect(moveCoachingSession(db, actor, session.id, session.startsAt, new Date('2026-11-12T20:00:00Z'), now)).rejects.toThrow(/session changed/)
+    expect(await sql`SELECT kind, credit_units FROM public.client_credit_events WHERE booking_id = ${session.id}`).toEqual([{ kind: 'reserved', credit_units: 100 }])
+    const afterSession = new Date('2026-11-12T19:01:00Z')
     await finishCoachingSession(db, { ...actor, userId: hostUser }, session.id, { action: 'attend' }, afterSession)
     await expect(finishCoachingSession(db, actor, session.id, { action: 'attend' }, afterSession)).rejects.toThrow(/already has an outcome/)
 
@@ -256,6 +285,84 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     expect((await cancelCoachingForDepartedHost(db, departure.id, host.id, now))?.creditCancellationOutcome).toBe('released')
     expect(await as(sql, eleni, (tx) => tx`SELECT funded_units, reserved_units, used_units, forfeited_units FROM public.client_credit_balances(${willow}, ${client.id})`))
       .toEqual([{ funded_units: 400, reserved_units: 0, used_units: 100, forfeited_units: 100 }])
+
+    const starts = ['2026-11-16T16:00:00Z', '2026-11-23T16:00:00Z', '2026-11-30T16:00:00Z'].map((day) => new Date(day))
+    const seriesId = randomUUID()
+    await expect(reserveCoachingSeries(db, scope, { ...session, id: seriesId, starts }, now)).rejects.toThrow(/funded credits/)
+    await sql`INSERT INTO public.bookings (business_id, host_membership_id, host_user_id, title, starts_at, ends_at, guest_name, guest_email, location_type)
+      VALUES (${willow}, ${host.id}, ${hostUser}, 'Existing consultation', ${starts[1]}, '2026-11-23T17:00:00Z', 'Guest', 'guest@example.com', 'phone')`
+    await expect(reserveCoachingSeries(db, scope, { ...session, id: seriesId, starts: starts.slice(0, 2) }, now)).rejects.toMatchObject({ cause: { code: '23P01' } })
+    expect(await sql`SELECT id FROM public.bookings WHERE coaching_series_id = ${seriesId}`).toEqual([])
+    const selected = [starts[0], starts[2]]
+    const series = await reserveCoachingSeries(db, scope, { ...session, id: seriesId, starts: selected }, now)
+    expect(series.created).toBe(true)
+    expect(series.ids).toHaveLength(2)
+    expect((await reserveCoachingSeries(db, scope, { ...session, id: seriesId, starts: selected }, now)).created).toBe(false)
+    const movedOccurrence = await moveCoachingSession(db, actor, series.ids[0], starts[0], new Date('2026-11-16T17:00:00Z'), now)
+    expect(movedOccurrence.coachingSeriesId).toBe(seriesId)
+    expect(await sql`SELECT starts_at FROM public.bookings WHERE id = ${series.ids[1]}`).toEqual([{ starts_at: starts[2] }])
+    expect(await as(sql, eleni, (tx) => tx`SELECT reserved_units, used_units, forfeited_units FROM public.client_credit_balances(${willow}, ${client.id})`))
+      .toEqual([{ reserved_units: 200, used_units: 100, forfeited_units: 100 }])
+  })
+
+  it('holds package capacity, keeps details private, and settles advance reservations in order', async () => {
+    financeSql ??= postgres(DB_URL!, { max: 1, prepare: false, onnotice: () => {} })
+    const db = drizzle(financeSql, { schema })
+    const [business] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      SELECT public.create_business('Advance Coaching', 'advance-coaching') AS id`)
+    const coachUser = await createUser(sql, 'advance-coach@example.com', 'Advance Coach')
+    const [coach] = await sql<{ id: string }[]>`
+      INSERT INTO memberships (business_id, user_id, role, coaches) VALUES (${business.id}, ${coachUser}, 'coach', true) RETURNING id`
+    expect(await as(sql, coachUser, (tx) => tx`UPDATE businesses SET allow_advance_reservations = true WHERE id = ${business.id} RETURNING id`)).toHaveLength(0)
+    expect(await as(sql, eleni, (tx) => tx`UPDATE businesses SET allow_advance_reservations = true,
+      payment_reminder_hours = 48, unpaid_cancellation_hours = 24 WHERE id = ${business.id} RETURNING id`)).toHaveLength(1)
+    await expect(sql`UPDATE businesses SET payment_reminder_hours = 24 WHERE id = ${business.id}`).rejects.toThrow(/businesses_reservation_hours/)
+
+    const [client] = await sql<{ id: string }[]>`INSERT INTO coaching_clients (business_id, name) VALUES (${business.id}, 'Advance Client') RETURNING id`
+    const [pkg] = await sql<{ id: string }[]>`
+      INSERT INTO coaching_packages (business_id, name, kind, term_weeks, credit_units, price_cents, session_formats, cancellation_notice_hours, late_cancellation, updated_at)
+      VALUES (${business.id}, 'Five Sessions', 'fixed', 5, 500, 50000,
+        ${sql.json([{ name: 'Standard', durationMinutes: 60, creditUnits: 100 }])}, 24, 'forfeit', '2026-11-11T12:00:00Z') RETURNING id`
+    const actor = { businessId: business.id, clientId: client.id, userId: eleni }
+    const periodId = await assignClientPackage(db, actor, { id: randomUUID(), packageId: pkg.id, packageVersion: '2026-11-11T12:00:00Z', startsOn: '2026-11-11' })
+    const scope = { ...actor, periodId }
+    const now = new Date('2026-11-11T12:00:00Z')
+    const payment = { id: randomUUID(), periodId, amountCents: 10000, method: 'check' as const, receivedOn: '2026-11-11', reference: null }
+    await recordClientPayment(db, actor, payment, now)
+    const starts = ['12', '13', '15', '18', '20'].map((day) => new Date(`2026-11-${day}T16:00:00Z`))
+    const details = { id: randomUUID(), coachId: coach.id, formatIndex: 0, locationType: 'video_link' as const,
+      locationDetail: 'https://example.com/private-meeting', contact: 'none', noticeHours: null, lateCancellation: null }
+    await expect(reserveCoachingSeries(db, scope, { ...details, starts: [new Date('2026-11-11T16:00:00Z'), new Date('2026-11-12T10:00:00Z')] }, now))
+      .rejects.toThrow(/inside the payment cutoff/)
+    const { ids: [first, second, third, fourth, fifth], coveredIds } = await reserveCoachingSeries(db, scope, { ...details, starts: [...starts].reverse() }, now)
+    expect(coveredIds).toEqual([first])
+    await expect(reserveCoachingSession(db, scope, { ...details, id: randomUUID(), startsAt: new Date('2026-11-21T16:00:00Z') }, now))
+      .rejects.toThrow(/package allowance/)
+    expect(await as(sql, coachUser, (tx) => tx`SELECT location_detail, credit_covered_at FROM bookings WHERE id = ${second}`))
+      .toEqual([{ location_detail: null, credit_covered_at: null }])
+    await expect(as(sql, eleni, (tx) => tx`SELECT detail FROM coaching_reservation_locations`)).rejects.toThrow(/permission denied/)
+    await expect(finishCoachingSession(db, actor, second, { action: 'attend' }, new Date('2026-11-13T18:00:00Z')))
+      .rejects.toThrow(/paid credit coverage/)
+
+    const installment = { ...payment, id: randomUUID() }
+    expect(await recordClientPayment(db, actor, installment, now)).toEqual([second])
+    expect(await recordClientPayment(db, actor, installment, now)).toEqual([])
+    expect(await as(sql, coachUser, (tx) => tx`SELECT location_detail, credit_covered_at FROM bookings WHERE id = ${second}`))
+      .toEqual([{ location_detail: details.locationDetail, credit_covered_at: now }])
+    expect(await cancelUnpaidReservation(db, second, new Date('2026-11-12T16:00:00Z'))).toBeNull()
+    const cancelled = await finishCoachingSession(db, actor, first, { action: 'cancel', by: 'business' }, now)
+    expect(cancelled.coveredIds).toEqual([third])
+    await finishCoachingSession(db, actor, second, { action: 'attend' }, new Date('2026-11-13T17:01:00Z'))
+
+    const deadline = new Date('2026-11-17T16:00:00Z')
+    expect(await cancelUnpaidReservation(db, fourth, new Date(deadline.getTime() - 1))).toBeNull()
+    expect(await recordClientPayment(db, actor, { ...payment, id: randomUUID() }, deadline)).toEqual([fifth])
+    expect(await cancelUnpaidReservation(db, fourth, deadline)).toMatchObject({ unpaidCancelled: true, creditCancellationOutcome: 'released', status: 'cancelled' })
+    expect(await cancelUnpaidReservation(db, fourth, deadline)).toBeNull()
+    expect(await sql`SELECT detail FROM coaching_reservation_locations WHERE booking_id = ${fourth}`).toHaveLength(0)
+    expect(await as(sql, eleni, (tx) => tx`SELECT funded_units, reserved_units, unpaid_reserved_units, used_units, forfeited_units
+      FROM client_credit_balances(${business.id}, ${client.id})`))
+      .toEqual([{ funded_units: 300, reserved_units: 200, unpaid_reserved_units: 0, used_units: 100, forfeited_units: 0 }])
   })
 
   it('validates new businesses', async () => {

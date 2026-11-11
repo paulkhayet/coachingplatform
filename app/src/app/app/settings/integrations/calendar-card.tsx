@@ -19,7 +19,7 @@ const outcomes: Record<string, { ok: boolean; text: string }> = {
 }
 
 export async function CalendarCard({ userId, email, outcome }: { userId: string; email: string; outcome?: string }) {
-  const message = outcome ? outcomes[outcome] : undefined
+  const message = outcome && Object.hasOwn(outcomes, outcome) ? outcomes[outcome] : undefined
   const allowed = isGoogleCalendarConfigured && calendarAllowed(email)
   const { connection, failed } = allowed ? await lookupConnection(userId) : { connection: undefined, failed: false }
   if (failed) {

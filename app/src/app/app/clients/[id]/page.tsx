@@ -23,9 +23,10 @@ export const metadata: Metadata = { title: 'Client' }
 
 const messages: Record<string, string> = {
   client: 'Client saved.', guardian: 'Guardian contact saved.', package: 'Package assigned.', payment: 'Payment recorded.',
+  series: 'Selected weekly sessions booked. Credits are reserved.',
 }
 const empty = { data: [], error: null }
-type SessionSummary = { id: string; title: string; starts_at: string; status: string; attended_at: string | null }
+type SessionSummary = { id: string; title: string; starts_at: string; status: string; attended_at: string | null; credit_covered_at: string | null; unpaid_cancelled: boolean }
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ status?: string }> }) {
   const { business, membership } = await requireWorkspace()
@@ -54,7 +55,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       .eq('business_id', business.id).eq('client_id', id).order('recorded_at', { ascending: false }).limit(100).returns<CreditPaymentRow[]>() : empty,
     finance ? supabase.from('coaching_packages').select('id, name, kind, price_cents, credit_units, updated_at')
       .eq('business_id', business.id).is('archived_at', null).order('name').returns<PackageOption[]>() : empty,
-    supabase.from('bookings').select('id, title, starts_at, status, attended_at')
+    supabase.from('bookings').select('id, title, starts_at, status, attended_at, credit_covered_at, unpaid_cancelled')
       .eq('business_id', business.id).eq('coaching_client_id', id).order('starts_at', { ascending: false }).limit(30).returns<SessionSummary[]>(),
   ])
 
@@ -127,7 +128,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                     <p className="text-muted-foreground text-xs">{sessionTime.format(new Date(session.starts_at))}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge tone={session.status === 'cancelled' ? 'neutral' : 'success'}>{session.status === 'cancelled' ? 'Cancelled' : session.attended_at ? 'Attended' : 'Scheduled'}</StatusBadge>
+                    <StatusBadge tone={session.status === 'cancelled' ? 'neutral' : session.credit_covered_at ? 'success' : 'warning'}>
+                      {session.status === 'cancelled' ? (session.unpaid_cancelled ? 'Cancelled for nonpayment' : 'Cancelled') : session.attended_at ? 'Attended' : session.credit_covered_at ? 'Covered' : 'Payment needed'}
+                    </StatusBadge>
                     <Button asChild variant="ghost" size="sm"><Link href={`/app/bookings/coaching/${session.id}`}>View session</Link></Button>
                   </div>
                 </li>
@@ -147,7 +150,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             <CreditPeriod key={period.id} period={period} terms={termsByAssignment.get(period.client_package_id)}
               events={(events.data ?? []).filter((event) => event.period_id === period.id)}
               payments={(payments.data ?? []).filter((payment) => payment.period_id === period.id)}
-              canBook={manager} canRecord={finance} businessId={business.id} clientId={id} today={today} timezone={business.timezone} />
+              canBook={manager} allowAdvance={business.allow_advance_reservations} canRecord={finance}
+              businessId={business.id} clientId={id} today={today} timezone={business.timezone} />
           ))}
           {!periods.length && <p className="text-muted-foreground text-sm">No coaching package has been assigned.</p>}
           {finance && <Card className="gap-4">

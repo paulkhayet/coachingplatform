@@ -5,7 +5,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { AssignedPackageTerms } from '@/db/schema'
 import { formatCents } from '@/lib/booking/policy'
-import { availableCreditUnits, formatClientDate, formatServicePeriod } from '@/lib/clients/credits'
+import { availableCreditUnits, availablePurchasedUnits, formatClientDate, formatServicePeriod } from '@/lib/clients/credits'
 import { formatCredits } from '@/lib/coaching-packages'
 import { saveOfflinePayment } from './actions'
 import { paymentMethodLabels, type CreditBalanceRow, type CreditEventRow, type CreditPaymentRow } from './data'
@@ -16,9 +16,9 @@ const eventLabels: Record<CreditEventRow['kind'], string> = {
   used: 'Credits used', forfeited: 'Credits forfeited', expired: 'Credits expired',
 }
 
-export function CreditPeriod({ period, terms, events, payments, canBook, canRecord, businessId, clientId, today, timezone }: {
+export function CreditPeriod({ period, terms, events, payments, canBook, allowAdvance, canRecord, businessId, clientId, today, timezone }: {
   period: CreditBalanceRow; terms?: AssignedPackageTerms; events: CreditEventRow[]; payments: CreditPaymentRow[];
-  canBook: boolean; canRecord: boolean; businessId: string; clientId: string; today: string; timezone: string;
+  canBook: boolean; allowAdvance: boolean; canRecord: boolean; businessId: string; clientId: string; today: string; timezone: string;
 }) {
   const ended = today >= period.ends_on
   const upcoming = today < period.starts_on
@@ -26,11 +26,12 @@ export function CreditPeriod({ period, terms, events, payments, canBook, canReco
   const paid = period.paid_cents ?? 0
   const remaining = terms ? Math.max(0, terms.priceCents - paid) : 0
   const available = expired ? 0 : availableCreditUnits(period)
+  const reservable = allowAdvance ? availablePurchasedUnits(period) : available
   const metrics = [
     { label: 'Funded', units: period.funded_units },
     { label: 'Reserved', units: period.reserved_units },
     { label: 'Used', units: period.used_units },
-    { label: ended ? 'Remaining' : 'Available', units: available },
+    { label: ended ? 'Remaining paid' : 'Paid and available', units: available },
   ]
   const formatActivityDate = new Intl.DateTimeFormat('en-US', { timeZone: timezone, dateStyle: 'medium' })
 
@@ -54,7 +55,8 @@ export function CreditPeriod({ period, terms, events, payments, canBook, canReco
             </div>
           ))}
         </dl>
-        {canBook && !ended && terms?.sessionFormats.some((format) => format.creditUnits <= available) && (
+        {period.unpaid_reserved_units > 0 && <p className="text-muted-foreground text-sm">Payment needed for {formatCredits(period.unpaid_reserved_units)} currently reserved.</p>}
+        {canBook && !ended && terms?.sessionFormats.some((format) => format.creditUnits <= reservable) && (
           <Button asChild size="sm" className="justify-self-start"><Link href={`/app/clients/${clientId}/book?period=${period.id}`}>Book session</Link></Button>
         )}
         {period.forfeited_units > 0 && <p className="text-muted-foreground text-sm">{formatCredits(period.forfeited_units)} forfeited.</p>}

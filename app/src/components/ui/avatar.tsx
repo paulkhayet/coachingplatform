@@ -6,12 +6,13 @@ export function initials(name: string) {
   return name.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase()
 }
 
-export function Avatar({ name, className }: { name: string; className?: string }) {
+export function Avatar({ name, src, className }: { name: string; src?: string | null; className?: string }) {
   let h = 0
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
   return (
-    <span className={cn('inline-flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold dark:opacity-90', tones[h % tones.length], className)} aria-hidden="true">
+    <span className={cn('relative inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold dark:opacity-90', tones[h % tones.length], className)} aria-hidden="true">
       {initials(name)}
+      {src && <img src={src} alt="" className="absolute inset-0 size-full object-cover" referrerPolicy="no-referrer" />}
     </span>
   )
 }
