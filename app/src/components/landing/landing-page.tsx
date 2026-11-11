@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { MARK_VIEWBOX, MarkPaths } from '@/components/brand'
 import { PricingPlans, SiteNav, WorkflowTabs, type FlowTab, type Plan } from './interactive'
+import { BookingPagePreview, BookingsPreview, ConfirmationPreview, PaymentsPreview, TeamPreview } from './product-previews'
 import '@/app/landing.css'
 
 // The marketing home page (from the landing/ design). Copy describes what is live today; anything still in
-// development is labelled as coming next. Prices are planned, not charged (no billing is built yet).
+// development is labelled as coming next. Product images are the real screens (product-previews.tsx). Prices are planned, not charged (no billing is built yet).
 
 function BrandMark({ className }: { className: string }) {
   return (
@@ -52,66 +53,22 @@ function SvgLibrary() {
 
 const flows: FlowTab[] = [
   {
-    id: 'welcome',
+    id: 'flow-book',
     title: 'Share a booking page.',
     summary: 'Families see only the times you and your business are open, answer your questions, and pay by card when a call is paid.',
-    panel: (
-      <>
-        <div className="mini-label"><Icon id="link" /> BOOKING PAGE <span>Illustrative example</span></div>
-        <div className="inquiry-card">
-          <div className="inquiry-top">
-            <span className="avatar avatar-peach">JL</span>
-            <span><b>Jamie Lee</b><small>Booking a free intro call · 30 minutes · Zoom</small></span>
-            <span className="new-tag">New booking</span>
-          </div>
-          <div className="intake-answer"><small>WHICH SUBJECT DO YOU NEED HELP WITH?</small><p>Math. Building confidence before the next unit test.</p></div>
-          <div className="inquiry-source"><span>schedulefa.st/b/willow-coaching</span><span>Thu, Nov 5 · 10:00 AM</span></div>
-        </div>
-        <div className="flow-connector" aria-hidden="true"></div>
-        <div className="matching-card">
-          <span className="match-icon"><Icon id="check" /></span>
-          <div><b>Booked. Confirmation sent.</b><small>Calendar invitation and Zoom link included</small></div>
-          <span className="avatar avatar-sage">AM</span>
-        </div>
-        <div className="mini-progress"><span className="complete">Pick a time</span><i></i><span className="complete">Your details</span><i></i><span className="current">Confirmed</span></div>
-        <p className="visual-footnote">No account needed to book.</p>
-      </>
-    ),
+    panel: <BookingPagePreview />,
   },
   {
-    id: 'sessions',
+    id: 'flow-confirm',
     title: 'Every call, organized.',
     summary: 'A calendar event, a Zoom link, a confirmation and a reminder 24 hours before. Guests reschedule or cancel from their own link.',
-    panel: (
-      <>
-        <div className="mini-label"><Icon id="calendar" /> CALENDAR & REMINDERS <span>Illustrative example</span></div>
-        <div className="session-demo">
-          <span className="session-demo-date">THURSDAY <strong>05</strong> NOVEMBER</span>
-          <div><span className="soft-tag">Tutoring session</span><h3>Your next call.<br />Already organized.</h3><p>Noah & Alex · 60 minutes · Paid $45</p></div>
-        </div>
-        <div className="handled-row"><Icon id="check" /><span>On Google Calendar</span><Icon id="check" /><span>Zoom link ready</span></div>
-        <div className="matching-card">
-          <span className="match-icon"><Icon id="mail" /></span>
-          <div><b>The reminder, on its way.</b><small>Emailed to the guest 24 hours before the call</small></div>
-        </div>
-        <div className="draft-strip"><Icon id="clock" /><span>Need to move it? Guests reschedule or cancel from their link, and refunds follow your cutoff.</span></div>
-      </>
-    ),
+    panel: <ConfirmationPreview />,
   },
   {
-    id: 'team',
+    id: 'flow-team',
     title: 'Your whole team, aligned.',
-    summary: 'Owner, administrator and coach roles. Shared booking pages send each call to a free coach, spread evenly.',
-    panel: (
-      <>
-        <div className="mini-label"><Icon id="people" /> TEAM <span>Illustrative example</span></div>
-        <div className="team-demo-heading"><h3>One team. One workspace.</h3><p>Clear roles, everyone's own hours, fair assignment.</p></div>
-        <div className="team-person"><span className="avatar avatar-sage">JL</span><span><b>Jordan Lee</b><small>Business hours, team & payments</small></span><span className="role-tag">Owner</span></div>
-        <div className="team-person"><span className="avatar avatar-peach">MP</span><span><b>Maya Patel</b><small>Booking pages & every booking</small></span><span className="role-tag">Administrator</span></div>
-        <div className="team-person"><span className="avatar avatar-lilac">AM</span><span><b>Alex Morgan</b><small>Own hours, calendar & calls</small></span><span className="role-tag">Coach</span></div>
-        <div className="pool-note"><Icon id="layers" /><span>Any available coach: each call goes to a free coach, spread evenly.</span></div>
-      </>
-    ),
+    summary: 'Owner, administrator and coach roles, and each coach’s free times. Shared booking pages send each call to a free coach, spread evenly.',
+    panel: <TeamPreview />,
   },
 ]
 
@@ -154,61 +111,10 @@ export function LandingPage() {
           </div>
           <p className="hero-note">Free to start.<span>No credit card required · Families book without an account</span></p>
 
-          <div className="product-scene" aria-label="Illustrative preview of the schedulefa.st workspace">
-            <div className="scene-glow" aria-hidden="true"></div>
-            <div className="app-window">
-              <aside className="app-sidebar" aria-hidden="true">
-                <div className="app-brand"><BrandMark className="lp-mark" /><span>schedulefa.st</span></div>
-                <div className="workspace-label"><span className="workspace-monogram">W</span><span>Willow Coaching<small>Your workspace</small></span><span className="workspace-chevron">⌄</span></div>
-                <div className="app-menu">
-                  <span className="active"><Icon id="home" />Today</span>
-                  <span><Icon id="calendar" />Bookings <b>7</b></span>
-                  <span><Icon id="link" />Booking pages</span>
-                  <span><Icon id="clock" />Availability</span>
-                  <span><Icon id="people" />Team</span>
-                  <span><Icon id="card" />Payments</span>
-                </div>
-                <div className="sidebar-bottom"><span className="avatar avatar-sage">AM</span><span>Alex Morgan<small>Owner & coach</small></span><span>⌄</span></div>
-              </aside>
-              <div className="app-main">
-                <div className="app-topbar"><span>Workspace <span className="breadcrumb">/</span> Today</span><span className="today-label">Wednesday, November 4 <i></i></span></div>
-                <div className="app-content">
-                  <div className="app-heading"><div><p>TODAY</p><h2>Your calls, at a glance.</h2><span>Every booking. Every link. Every reminder.</span></div><span className="small-date">NOV<br /><strong>04</strong></span></div>
-                  <div className="app-stats">
-                    <div><span>Calls this week <Icon id="calendar" /></span><strong>7 <small>booked through your pages</small></strong></div>
-                    <div><span>Paid this week <Icon id="card" /></span><strong>$540 <small>to your own Stripe account</small></strong></div>
-                    <div><span>Reminders sent <Icon id="mail" /></span><strong>12 <small>24 hours before each call</small></strong></div>
-                  </div>
-                  <div className="app-panels">
-                    <div className="pipeline-panel">
-                      <div className="panel-heading"><h3>Upcoming bookings</h3><span>All bookings <span aria-hidden="true">↗</span></span></div>
-                      <table className="client-table" aria-label="Illustrative upcoming bookings">
-                        <thead><tr><th>Guest</th><th>Call</th><th>Status</th></tr></thead>
-                        <tbody>
-                          <tr><td><span className="avatar avatar-peach">JL</span><span><b>Jamie Lee</b><small>Free intro call</small></span></td><td>Thu · 10:00 AM</td><td><span className="pipeline-status status-blue">Confirmed</span></td></tr>
-                          <tr><td><span className="avatar avatar-lilac">NC</span><span><b>Noah Carter</b><small>Tutoring session</small></span></td><td>Thu · 4:30 PM</td><td><span className="pipeline-status status-green">Paid $45</span></td></tr>
-                          <tr><td><span className="avatar avatar-sage">SR</span><span><b>Sophie Reynolds</b><small>Weekly check-in</small></span></td><td>Today · 2:00 PM</td><td><span className="pipeline-status">Zoom link sent</span></td></tr>
-                        </tbody>
-                      </table>
-                      <div className="pipeline-footer"><Icon id="layers" /><span>3 booking pages live, one shared by your team</span><span aria-hidden="true">→</span></div>
-                    </div>
-                    <div className="next-panel">
-                      <div className="panel-heading"><h3>Today&apos;s schedule</h3><span>•••</span></div>
-                      <p className="next-label">YOUR NEXT CALL</p>
-                      <div className="next-client"><span className="avatar avatar-peach">SR</span><div><b>Sophie Reynolds</b><small>Weekly check-in</small></div></div>
-                      <div className="next-detail"><Icon id="clock" />Today, 2:00 – 3:00 PM</div>
-                      <div className="next-detail"><Icon id="video" />Zoom link ready</div>
-                      <div className="paid-status"><Icon id="check" />Paid & on Google Calendar</div>
-                      <div className="next-divider"></div>
-                      <div className="reminder-ready"><span className="mail-circle"><Icon id="mail" /></span><div><b>Reminder delivered</b><small>Sent 24 hours before the call</small></div><Icon id="check" className="check-small" /></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="floating-note"><span className="floating-icon"><Icon id="calendar" /></span><div><b>New booking from your page</b><span>Confirmation and calendar invite sent.</span></div><span className="floating-check">✓</span></div>
+          <div className="product-scene">
+            <BookingsPreview />
           </div>
-          <p className="preview-caption">Illustrative product preview · Sample data</p>
+          <p className="preview-caption">The real schedulefa.st app, shown with sample data.</p>
           <div className="coverage-strip" aria-label="What schedulefa.st does today"><span>Booking pages</span><span>Google Calendar</span><span>Zoom links</span><span>Stripe payments</span><span>Email reminders</span><span>Teams</span></div>
         </section>
 
@@ -243,12 +149,7 @@ export function LandingPage() {
             <div className="section-kicker">PAYMENTS WITH STRIPE</div>
             <h2>Get paid<br />when they book.</h2>
             <p>Set a price on any booking page and families pay by card when they book, straight to your own Stripe account. Refunds follow the cutoff you choose, and if you cancel, they’re refunded in full.</p>
-            <div className="followup-demo">
-              <div><span className="ai-label"><Icon id="card" /> PAID BOOKING</span><span className="draft-label">Example</span></div>
-              <h3>Tutoring session · $45</h3>
-              <p>Paid by card at booking. Full refund if cancelled 24 hours or more before the call.</p>
-              <div className="draft-bottom"><span>Paid to: your Stripe account</span><span className="draft-action">No fee from schedulefa.st</span></div>
-            </div>
+            <div className="detail-preview"><PaymentsPreview /></div>
           </article>
           <article className="detail-block settings-block">
             <div className="section-kicker">COMING NEXT</div>

@@ -640,3 +640,64 @@ html:has(.lp) {scroll-behavior: auto;}
 @media (max-width: 600px) {
   .lp .main-nav > a.nav-cta { padding: 11px 16px; }
 }
+
+/* Real product screens (components/landing/product-previews.tsx) in a browser frame. They always use the
+   app's light theme, like the rest of this page, even when the visitor's device is in dark mode. */
+.lp .product-ui {
+  --radius: 0.45rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0.006 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.006 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.006 270);
+  --primary: oklch(0.55 0.21 268);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.003 265);
+  --secondary-foreground: oklch(0.21 0.006 270);
+  --muted: oklch(0.967 0.003 265);
+  --muted-foreground: oklch(0.52 0.012 265);
+  --accent: oklch(0.96 0.02 270);
+  --accent-foreground: oklch(0.42 0.17 268);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0.004 265);
+  --input: oklch(0.912 0.004 265);
+  --ring: oklch(0.55 0.21 268);
+  --success: oklch(0.55 0.14 152);
+  --warning: oklch(0.66 0.15 65);
+  --sidebar: oklch(0.985 0.002 265);
+  --sidebar-foreground: oklch(0.3 0.008 270);
+  --sidebar-accent: oklch(0.955 0.004 265);
+  --sidebar-accent-foreground: oklch(0.2 0.006 270);
+  --sidebar-border: oklch(0.922 0.004 265);
+  color-scheme: light;
+  transform-origin: top left;
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.lp .product-ui svg { display: inline-block; }
+.lp .product-ui p { margin: 0; }
+.lp .ui-frame { margin: 0; overflow: hidden; background: #fff; border: 1px solid #e0e3ea; border-radius: 10px; box-shadow: 0 15px 35px #161c2a0d; text-align: left; }
+.lp .ui-frame-bar { display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 12px; background: #f6f7f9; border-bottom: 1px solid #e6e8ee; }
+.lp .ui-frame-dots { display: flex; gap: 6px; }
+.lp .ui-frame-dots i { width: 9px; height: 9px; border-radius: 50%; background: #dcdfe6; }
+.lp .ui-frame-url { flex: 1; max-width: 360px; margin-inline: auto; padding: 3px 10px; border-radius: 6px; background: #fff; border: 1px solid #e6e8ee; color: #8a909c; font-size: 11px; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.lp .ui-frame-stage { position: relative; overflow: hidden; }
+.lp .product-scene > .ui-frame { box-shadow: 0 15px 35px #161c2a0b; }
+.lp .workflow-visual .flow-panel > .ui-frame { box-shadow: 0 10px 25px #161c2a0a; }
+.lp .detail-preview { margin-top: 31px; }
+@media (max-width: 600px) {
+  .lp .ui-frame-bar { height: 26px; }
+  .lp .ui-frame-dots i { width: 7px; height: 7px; }
+  .lp .ui-frame-url { font-size: 9px; }
+}
+/* The full-size screen is positioned out of flow so it never stretches its container; the stage takes the
+   scaled height that ScaledPreview measures. */
+.lp .ui-frame { width: 100%; min-width: 0; }
+.lp .ui-frame-stage > .product-ui { position: absolute; top: 0; left: 0; }
+.lp .flow-panel, .lp .detail-block, .lp .product-scene { min-width: 0; }
+@media (max-width: 600px) {
+  .lp .workflow-visual { min-height: 0; }
+}
