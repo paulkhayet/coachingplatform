@@ -6,6 +6,7 @@ import { businesses, invitations, memberships, profiles, type MemberRole } from 
 import { siteUrl } from '@/lib/env'
 import { sendEmail } from '@/lib/email/server'
 import { teamInviteEmail } from '@/lib/booking/emails'
+import { businessLogoUrl } from '@/lib/business-logo'
 import { roleLabel } from '@/lib/roles'
 
 // D-060: owners invite people by email. The link carries a random token and we store only its hash, so a
@@ -59,7 +60,8 @@ export async function sendInvitation(opts: {
     .returning({ id: invitations.id })
   if (replaced.length === 0) await db.insert(invitations).values({ businessId: opts.businessId, email, ...fields })
   const url = inviteUrl(token)
-  const emailed = await sendEmail(email, teamInviteEmail({ businessName: opts.businessName, inviterName: opts.inviter.name, roleLabel: roleLabel[opts.role], url, expires: expiresAt }), { replyTo: opts.inviter.email })
+  const [brand] = await db.select({ logoPath: businesses.logoPath }).from(businesses).where(eq(businesses.id, opts.businessId))
+  const emailed = await sendEmail(email, teamInviteEmail({ businessName: opts.businessName, logoUrl: businessLogoUrl(brand?.logoPath), inviterName: opts.inviter.name, roleLabel: roleLabel[opts.role], url, expires: expiresAt }), { replyTo: opts.inviter.email })
   return { url, emailed }
 }
 

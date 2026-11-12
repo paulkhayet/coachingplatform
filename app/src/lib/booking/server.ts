@@ -8,6 +8,7 @@ import {
   bookingPages,
   bookings,
   businesses,
+  familyAccess,
   membershipAvailability,
   memberships,
   profiles,
@@ -18,6 +19,7 @@ import {
   type BookingPage,
 } from '@/db/schema'
 import { siteUrl } from '@/lib/env'
+import { businessLogoUrl } from '@/lib/business-logo'
 import { DEFAULT_WEEKLY_HOURS, bookableStarts, hoursForBusiness, parseWeeklyHours, subtract, zonedTime, type Interval } from '@/lib/slots'
 import { unpaidDeadline } from '@/lib/clients/credits'
 import { cancelCoachingForDepartedHost, cancelUnpaidReservation } from '@/lib/clients/sessions'
@@ -28,7 +30,7 @@ import { isEmailConfigured, sendEmail } from '@/lib/email/server'
 import { createZoomMeeting, deleteZoomMeeting, updateZoomMeeting } from '@/lib/zoom/server'
 import { formatAnswer } from './questions'
 import { deriveKey, fairestFirst, formatCents, guestCanChange, manageToken, refundOnCancel, verifyManageToken } from './policy'
-import { guestCancelled, guestConfirmation, guestReminder, guestRescheduled, hostGuestChange, hostNewBooking, reservationPaymentCancelled, reservationPaymentReminder, type CallDetails } from './emails'
+import { familySessionEmail, guestCancelled, guestConfirmation, guestReminder, guestRescheduled, hostGuestChange, hostNewBooking, reservationPaymentCancelled, reservationPaymentReminder, type CallDetails } from './emails'
 import type { GuestBookingInput } from './schemas'
 
 // Public booking (D-049, D-056). Guests have no account, so these run with the server's own database
@@ -470,7 +472,7 @@ export async function syncCheckout(bookingId: string, sessionId: string) {
 
 async function context(bookingId: string) {
   const [row] = await adminDb()
-    .select({ booking: bookings, business: { name: businesses.name, slug: businesses.slug, timezone: businesses.timezone }, hostName: profiles.fullName, hostEmail: profiles.email })
+    .select({ booking: bookings, business: { name: businesses.name, slug: businesses.slug, timezone: businesses.timezone, logoPath: businesses.logoPath }, hostName: profiles.fullName, hostEmail: profiles.email })
     .from(bookings)
     .innerJoin(businesses, eq(businesses.id, bookings.businessId))
     .innerJoin(memberships, eq(memberships.id, bookings.hostMembershipId))
@@ -495,7 +497,40 @@ function details(c: Ctx, forGuest: boolean): CallDetails {
     location: b.locationDetail,
     manageUrl: forGuest && !b.coachingClientId ? manageUrl(b.id) : undefined,
     paymentLine: b.paymentStatus === 'paid' && b.priceCents ? `${formatCents(b.priceCents)} paid` : undefined,
+    logoUrl: businessLogoUrl(c.business.logoPath),
   }
+}
+
+/**
+ * Parents and guardians following this student in the family portal (D-073) who may see sessions. The
+ * session's own contact is left out: they already get the regular email.
+ */
+async function familyRecipients(b: Booking) {
+  if (!b.coachingClientId) return []
+  const rows = await adminDb()
+    .select({ id: familyAccess.id, email: profiles.email })
+    .from(familyAccess)
+    .innerJoin(profiles, eq(profiles.id, familyAccess.userId))
+    .where(and(eq(familyAccess.businessId, b.businessId), eq(familyAccess.clientId, b.coachingClientId), isNotNull(familyAccess.acceptedAt),
+      isNull(familyAccess.revokedAt), eq(familyAccess.canViewSessions, true)))
+  const contact = b.guestEmail?.trim().toLowerCase()
+  return rows.flatMap((r) => (r.email && r.email.trim().toLowerCase() !== contact ? [{ id: r.id, email: r.email }] : []))
+}
+
+/** Emails each guardian with portal access about a session. Returns how many were sent. Never throws. */
+async function emailFamily(c: Ctx, kind: Parameters<typeof familySessionEmail>[1], key: string) {
+  let sent = 0
+  try {
+    const recipients = await familyRecipients(c.booking)
+    if (recipients.length === 0) return 0
+    const message = familySessionEmail({ ...details(c, true), portalUrl: `${siteUrl}/family` }, kind)
+    for (const r of recipients) {
+      if (await sendEmail(r.email, message, { replyTo: c.hostEmail, idempotencyKey: `family-${key}:${r.id}` })) sent++
+    }
+  } catch (error) {
+    console.error('Emailing the family failed', error)
+  }
+  return sent
 }
 
 function eventDescription(c: Ctx) {
@@ -557,6 +592,7 @@ export async function afterConfirmed(bookingId: string) {
     await adminDb().update(bookings).set({ calendarSyncError: 'Couldn’t add this booking to Google Calendar.' }).where(eq(bookings.id, b.id))
   }
   if (b.guestEmail) await sendEmail(b.guestEmail, guestConfirmation(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `confirm:${b.id}` })
+  await emailFamily(c, 'booked', `confirm:${b.id}`)
   if (c.hostEmail) {
     const extras: [string, string][] = []
     for (const a of b.answers) extras.push([a.label, formatAnswer(a.value)])
@@ -627,6 +663,8 @@ export async function afterBookingCancelled(b: Booking, decision: 'full' | 'none
       const message = b.unpaidCancelled ? reservationPaymentCancelled(call) : guestCancelled(call, by, decision)
       await sendEmail(b.guestEmail, message, { replyTo: c.hostEmail, idempotencyKey: `cancel:${b.id}` })
     }
+    // Guardians only heard about sessions that were covered and confirmed, so only those get a cancellation.
+    if (b.creditCoveredAt && !b.unpaidCancelled) await emailFamily(c, 'cancelled', `cancel:${b.id}`)
     if (by === 'guest' && c.hostEmail) await sendEmail(c.hostEmail, hostGuestChange({ ...details(c, false), guestEmail: b.guestEmail }, 'cancelled', decision), { replyTo: b.guestEmail, idempotencyKey: `host-cancel:${b.id}` })
   }
 }
@@ -702,6 +740,7 @@ export async function afterBookingMoved(moved: Booking) {
   }
   const stamp = Date.now()
   if (b.guestEmail) await sendEmail(b.guestEmail, guestRescheduled(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `moved:${b.id}:${stamp}` })
+  await emailFamily(c, 'moved', `moved:${b.id}:${stamp}`)
   if (c.hostEmail) await sendEmail(c.hostEmail, hostGuestChange({ ...details(c, false), guestEmail: b.guestEmail, staffMoved: Boolean(b.coachingClientId) }, 'rescheduled'), { replyTo: b.guestEmail, idempotencyKey: `host-moved:${b.id}:${stamp}` })
 }
 
@@ -759,7 +798,8 @@ export async function sendDueReminders(now = new Date()) {
     .where(
       and(
         eq(bookings.status, 'confirmed'),
-        isNotNull(bookings.guestEmail),
+        // A coaching session may have no contact but still have guardians following it in the portal.
+        or(isNotNull(bookings.guestEmail), isNotNull(bookings.coachingClientId)),
         isNull(bookings.reminderSentAt),
         or(isNull(bookings.coachingClientId), isNotNull(bookings.creditCoveredAt)),
         gt(bookings.startsAt, now),
@@ -775,8 +815,10 @@ export async function sendDueReminders(now = new Date()) {
   let sent = 0
   for (const { id } of claimed) {
     const c = await context(id)
-    if (!c?.booking.guestEmail || c.booking.status !== 'confirmed') continue
-    if (await sendEmail(c.booking.guestEmail, guestReminder(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: `remind:${id}:${c.booking.startsAt.getTime()}` })) sent++
+    if (!c || c.booking.status !== 'confirmed') continue
+    const key = `remind:${id}:${c.booking.startsAt.getTime()}`
+    if (c.booking.guestEmail && (await sendEmail(c.booking.guestEmail, guestReminder(details(c, true)), { replyTo: c.hostEmail, idempotencyKey: key }))) sent++
+    sent += await emailFamily(c, 'reminder', key)
   }
   return { claimed: claimed.length, sent }
 }

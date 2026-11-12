@@ -6,6 +6,7 @@ import { businesses, clientGuardians, coachingClients, familyAccess, profiles } 
 import { siteUrl } from '@/lib/env'
 import { sendEmail } from '@/lib/email/server'
 import { familyInviteEmail } from '@/lib/booking/emails'
+import { businessLogoUrl } from '@/lib/business-logo'
 import { hashToken, looksLikeToken } from '@/lib/team/invitations'
 
 // D-073: owners and administrators invite a guardian contact to the family portal. Same link scheme as team
@@ -23,7 +24,7 @@ export async function sendFamilyInvite(opts: {
   inviter: { id: string; name: string; email: string }
 }, db: AdminDb = adminDb()): Promise<{ url: string; emailed: boolean } | { error: string }> {
   const [g] = await db
-    .select({ id: clientGuardians.id, clientId: clientGuardians.clientId, email: clientGuardians.email, clientName: coachingClients.name, businessName: businesses.name })
+    .select({ id: clientGuardians.id, clientId: clientGuardians.clientId, email: clientGuardians.email, clientName: coachingClients.name, businessName: businesses.name, logoPath: businesses.logoPath })
     .from(clientGuardians)
     .innerJoin(coachingClients, and(eq(coachingClients.id, clientGuardians.clientId), eq(coachingClients.businessId, clientGuardians.businessId)))
     .innerJoin(businesses, eq(businesses.id, clientGuardians.businessId))
@@ -47,7 +48,7 @@ export async function sendFamilyInvite(opts: {
   else await db.insert(familyAccess).values({ businessId: opts.businessId, clientId: g.clientId, guardianId: g.id, ...fields })
 
   const url = familyInviteUrl(token)
-  const emailed = await sendEmail(email, familyInviteEmail({ businessName: g.businessName, inviterName: opts.inviter.name, clientName: g.clientName, url, expires: expiresAt }), { replyTo: opts.inviter.email })
+  const emailed = await sendEmail(email, familyInviteEmail({ businessName: g.businessName, logoUrl: businessLogoUrl(g.logoPath), inviterName: opts.inviter.name, clientName: g.clientName, url, expires: expiresAt }), { replyTo: opts.inviter.email })
   return { url, emailed }
 }
 

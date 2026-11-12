@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { BookingQuestion } from '@/db/schema'
 import { parseQuestions, questionsSchema, readAnswers } from './questions'
 import { deriveKey, fairestFirst, formatCents, guestCanChange, manageToken, parseDollars, refundOnCancel, verifyManageToken } from './policy'
-import { guestCancelled, guestConfirmation, whenText } from './emails'
+import { familySessionEmail, guestCancelled, guestConfirmation, whenText } from './emails'
 
 const q = (over: Partial<BookingQuestion>): BookingQuestion => ({ id: 'abc123', label: 'Goals?', type: 'short', options: [], required: false, ...over })
 
@@ -92,6 +92,19 @@ describe('emails', () => {
   it('explains the refund on cancellation', () => {
     expect(guestCancelled(d, 'guest', 'none').text).toContain('after the refund cutoff')
     expect(guestCancelled(d, 'business', 'full').text).toContain('full refund')
+  })
+  it('heads the email with the business logo, or its name without one', () => {
+    const withLogo = guestConfirmation({ ...d, logoUrl: 'https://x.supabase.co/storage/v1/object/public/business-logos/b/logo.webp' })
+    expect(withLogo.html).toContain('<img src="https://x.supabase.co/storage/v1/object/public/business-logos/b/logo.webp" alt="Willow &lt;Coaching&gt;"')
+    expect(guestConfirmation(d).html).not.toContain('<img')
+    expect(guestConfirmation(d).html).toContain('font-weight:600;margin:0 0 24px;color:#17181c">Willow &lt;Coaching&gt;</p>')
+  })
+  it('writes family copies about the student, with the portal link and no manage link (D-073)', () => {
+    const m = familySessionEmail({ ...d, guestName: 'Maya', portalUrl: 'https://www.schedulefa.st/family' }, 'reminder')
+    expect(m.subject).toBe('Reminder: Maya’s Intro call')
+    expect(m.text).toContain('Open the family portal: https://www.schedulefa.st/family')
+    expect(m.text).not.toContain('/m/x')
+    expect(familySessionEmail({ ...d, guestName: 'Maya', portalUrl: 'https://www.schedulefa.st/family', location: 'https://zoom.us/j/1' }, 'cancelled').text).not.toContain('zoom.us')
   })
 })
 

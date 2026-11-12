@@ -18,6 +18,14 @@ export interface CallDetails {
   manageUrl?: string
   /** e.g. "$45 paid" */
   paymentLine?: string
+  /** The business's public logo (D-071), shown at the top of the email. */
+  logoUrl?: string | null
+}
+
+/** Who an email is from: the business's logo (or its name, without one) heads the message. */
+export interface Brand {
+  name: string
+  logoUrl?: string | null
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -29,10 +37,17 @@ export function whenText(start: Date, end: Date, timeZone: string) {
   return `${day}, ${t.format(start)} – ${t.format(end)} ${zone}`
 }
 
-function render(heading: string, paragraphs: string[], details: [string, string][], action?: { label: string; url: string }, footer?: string): { text: string; html: string } {
+function brandHeader(brand: Brand) {
+  return brand.logoUrl
+    ? `<img src="${esc(brand.logoUrl)}" alt="${esc(brand.name)}" height="48" style="display:block;height:48px;max-width:200px;width:auto;margin:0 0 24px;border:0;object-fit:contain">`
+    : `<p style="font-size:15px;font-weight:600;margin:0 0 24px;color:#17181c">${esc(brand.name)}</p>`
+}
+
+function render(heading: string, paragraphs: string[], details: [string, string][], action?: { label: string; url: string }, footer?: string, brand?: Brand): { text: string; html: string } {
   const text = [heading, '', ...paragraphs, '', ...details.map(([k, v]) => `${k}: ${v}`), ...(action ? ['', `${action.label}: ${action.url}`] : []), ...(footer ? ['', footer] : [])].join('\n')
   const html = `<!doctype html><html><body style="margin:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#17181c">
 <div style="max-width:520px;margin:0 auto;padding:32px 20px">
+${brand ? brandHeader(brand) : ''}
 <h1 style="font-size:20px;margin:0 0 16px">${esc(heading)}</h1>
 ${paragraphs.map((p) => `<p style="font-size:15px;line-height:1.5;margin:0 0 12px">${esc(p)}</p>`).join('\n')}
 <table style="width:100%;border-collapse:collapse;margin:16px 0;background:#fff;border:1px solid #e5e7eb;border-radius:8px">
@@ -56,21 +71,23 @@ function detailRows(d: CallDetails): [string, string][] {
   return rows
 }
 
+const brandOf = (d: CallDetails): Brand => ({ name: d.businessName, logoUrl: d.logoUrl })
+
 const changeFooter = (d: CallDetails) => (d.manageUrl ? 'You can reschedule or cancel with the button above until the call starts. Reply to this email to reach the host.' : 'Reply to this email to reach the host.')
 
 export function guestConfirmation(d: CallDetails): EmailMessage {
   const subject = `Booked: ${d.title} with ${d.businessName}`
-  return { subject, ...render(`You’re booked, ${d.guestName}`, [`Your ${d.title} with ${d.businessName} is confirmed.`], detailRows(d), d.manageUrl ? { label: 'Reschedule or cancel', url: d.manageUrl } : undefined, changeFooter(d)) }
+  return { subject, ...render(`You’re booked, ${d.guestName}`, [`Your ${d.title} with ${d.businessName} is confirmed.`], detailRows(d), d.manageUrl ? { label: 'Reschedule or cancel', url: d.manageUrl } : undefined, changeFooter(d), brandOf(d)) }
 }
 
 export function guestRescheduled(d: CallDetails): EmailMessage {
   const subject = `New time: ${d.title} with ${d.businessName}`
-  return { subject, ...render('Your call has a new time', [`Your ${d.title} with ${d.businessName} has moved.`], detailRows(d), d.manageUrl ? { label: 'Reschedule or cancel', url: d.manageUrl } : undefined, changeFooter(d)) }
+  return { subject, ...render('Your call has a new time', [`Your ${d.title} with ${d.businessName} has moved.`], detailRows(d), d.manageUrl ? { label: 'Reschedule or cancel', url: d.manageUrl } : undefined, changeFooter(d), brandOf(d)) }
 }
 
 export function guestReminder(d: CallDetails): EmailMessage {
   const subject = `Reminder: ${d.title} with ${d.businessName}`
-  return { subject, ...render(`See you soon, ${d.guestName}`, [`This is a reminder of your ${d.title} with ${d.businessName}.`], detailRows(d), d.manageUrl ? { label: 'Reschedule or cancel', url: d.manageUrl } : undefined, changeFooter(d)) }
+  return { subject, ...render(`See you soon, ${d.guestName}`, [`This is a reminder of your ${d.title} with ${d.businessName}.`], detailRows(d), d.manageUrl ? { label: 'Reschedule or cancel', url: d.manageUrl } : undefined, changeFooter(d), brandOf(d)) }
 }
 
 export function reservationPaymentReminder(d: CallDetails, cutoff: Date | null): EmailMessage {
@@ -82,13 +99,13 @@ export function reservationPaymentReminder(d: CallDetails, cutoff: Date | null):
     rows.push(['Pay by', format.format(cutoff)])
     paragraphs.push('The reservation will be released if payment hasn’t covered the session by the deadline.')
   }
-  return { subject, ...render(subject, paragraphs, rows, undefined, changeFooter(d)) }
+  return { subject, ...render(subject, paragraphs, rows, undefined, changeFooter(d), brandOf(d)) }
 }
 
 export function reservationPaymentCancelled(d: CallDetails): EmailMessage {
   const subject = `Reservation cancelled for ${d.title} with ${d.businessName}`
   return { subject, ...render(subject, ['The payment deadline passed and the reserved time was released. Contact the business to arrange a new session.'],
-    detailRows({ ...d, location: null, paymentLine: undefined }), undefined, changeFooter(d)) }
+    detailRows({ ...d, location: null, paymentLine: undefined }), undefined, changeFooter(d), brandOf(d)) }
 }
 
 export function guestCancelled(d: CallDetails, by: 'guest' | 'business', refund: 'full' | 'none' | 'not_paid'): EmailMessage {
@@ -96,7 +113,7 @@ export function guestCancelled(d: CallDetails, by: 'guest' | 'business', refund:
   const lines = [by === 'guest' ? `You cancelled your ${d.title} with ${d.businessName}.` : `${d.businessName} cancelled your ${d.title}.`]
   if (refund === 'full') lines.push('You’ll get a full refund to your card. It usually appears within 5–10 business days.')
   if (refund === 'none') lines.push('This was cancelled after the refund cutoff, so the payment isn’t refunded. Reply to this email if you have questions.')
-  return { subject, ...render('Your call is cancelled', lines, detailRows({ ...d, paymentLine: undefined, location: undefined })) }
+  return { subject, ...render('Your call is cancelled', lines, detailRows({ ...d, paymentLine: undefined, location: undefined }), undefined, undefined, brandOf(d)) }
 }
 
 export function hostNewBooking(d: CallDetails & { guestEmail: string | null; staffBooked?: boolean; extras: [string, string][] }): EmailMessage {
@@ -112,8 +129,30 @@ export function hostGuestChange(d: CallDetails & { guestEmail: string | null; st
   return { subject, ...render(subject, lines, [...detailRows(d), ['Guest', d.guestEmail ? `${d.guestName} <${d.guestEmail}>` : d.guestName]]) }
 }
 
+const possessive = (name: string) => `${name}’s`
+
+/**
+ * D-073: a copy of a student's session email for a parent or guardian with family portal access. Written
+ * about the student rather than to them, with a link to the portal instead of a manage link.
+ */
+export function familySessionEmail(d: CallDetails & { portalUrl: string }, kind: 'booked' | 'moved' | 'reminder' | 'cancelled'): EmailMessage {
+  const student = possessive(d.guestName)
+  const copy = {
+    booked: { subject: `Booked: ${student} ${d.title}`, heading: `${student} session is booked`, line: `${student} ${d.title} with ${d.businessName} is confirmed.` },
+    moved: { subject: `New time: ${student} ${d.title}`, heading: `${student} session has a new time`, line: `${student} ${d.title} with ${d.businessName} has moved.` },
+    reminder: { subject: `Reminder: ${student} ${d.title}`, heading: `${student} session is coming up`, line: `This is a reminder of ${student} ${d.title} with ${d.businessName}.` },
+    cancelled: { subject: `Cancelled: ${student} ${d.title}`, heading: `${student} session is cancelled`, line: `${student} ${d.title} with ${d.businessName} was cancelled.` },
+  }[kind]
+  const rows = kind === 'cancelled' ? detailRows({ ...d, location: null, paymentLine: undefined }) : detailRows({ ...d, paymentLine: undefined })
+  return {
+    subject: copy.subject,
+    ...render(copy.heading, [copy.line], rows, { label: 'Open the family portal', url: d.portalUrl },
+      `You’re getting this because ${d.businessName} gave you access to ${student} family portal. Reply to this email to reach the coach.`, brandOf(d)),
+  }
+}
+
 /** D-060: an owner invites someone to join their business. */
-export function teamInviteEmail(d: { businessName: string; inviterName: string; roleLabel: string; url: string; expires: Date }): EmailMessage {
+export function teamInviteEmail(d: { businessName: string; logoUrl?: string | null; inviterName: string; roleLabel: string; url: string; expires: Date }): EmailMessage {
   const until = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(d.expires)
   return {
     subject: `${d.inviterName} invited you to join ${d.businessName}`,
@@ -126,12 +165,13 @@ export function teamInviteEmail(d: { businessName: string; inviterName: string; 
       [['Business', d.businessName], ['Role', d.roleLabel]],
       { label: 'Accept the invitation', url: d.url },
       `The link works once and expires on ${until}. If you weren’t expecting this, you can ignore it.`,
+      { name: d.businessName, logoUrl: d.logoUrl },
     ),
   }
 }
 
 /** D-073: a coaching business invites a parent or guardian to the family portal. */
-export function familyInviteEmail(d: { businessName: string; inviterName: string; clientName: string; url: string; expires: Date }): EmailMessage {
+export function familyInviteEmail(d: { businessName: string; logoUrl?: string | null; inviterName: string; clientName: string; url: string; expires: Date }): EmailMessage {
   const until = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(d.expires)
   return {
     subject: `${d.businessName} invited you to follow ${d.clientName}’s coaching`,
@@ -144,6 +184,7 @@ export function familyInviteEmail(d: { businessName: string; inviterName: string
       [['Business', d.businessName], ['Student', d.clientName]],
       { label: 'Open the invitation', url: d.url },
       `The link works once and expires on ${until}. If you weren’t expecting this, you can ignore it.`,
+      { name: d.businessName, logoUrl: d.logoUrl },
     ),
   }
 }
