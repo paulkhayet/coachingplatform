@@ -15,7 +15,12 @@ export interface CalendarEvent extends Interval {
 }
 
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const HOUR_PX = 48
+/**
+ * On wider screens the week grid stretches to fill the space left in the window (the page lays itself
+ * out as a full-height column), so a whole working day is visible without scrolling. Phones get a
+ * fixed height, since the app's menu sits above the page there.
+ */
+const GRID_HEIGHT = 'h-[28rem] md:h-auto md:min-h-[16rem] md:flex-1'
 const toneClass: Record<CalendarEvent['tone'], string> = {
   // Solid tints (mixed with the card colour) so Google busy stripes don't show through.
   call: 'bg-[color-mix(in_oklab,var(--primary)_14%,var(--card))] border-primary text-foreground hover:bg-[color-mix(in_oklab,var(--primary)_22%,var(--card))]',
@@ -38,17 +43,20 @@ export function WeekView({ days, events, busy, timeZone, today, now }: {
   const eventDays = layoutByDay(events, days, timeZone)
   const busyDays = layoutByDay(busy, days, timeZone)
   const { first, last } = visibleHours([...eventDays.values(), ...busyDays.values()].flat())
-  const height = (last - first) * HOUR_PX
-  const top = (minute: number) => ((minute - first * 60) / 60) * HOUR_PX
+  const hours = last - first
+  // Positions are percentages of the grid's height, so the whole day fits the window (see GRID_HEIGHT).
+  const pct = (minute: number) => ((minute - first * 60) / (hours * 60)) * 100
+  const top = (minute: number) => `${pct(minute)}%`
+  const span = (start: number, end: number) => `max(${end - start < 30 ? 16 : 20}px, ${pct(end) - pct(start)}%)`
   const time = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' })
   const hourLabel = (h: number) => new Intl.DateTimeFormat('en-US', { hour: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(2000, 0, 1, h)))
   const nowParts = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(now)
   const nowMinute = Number(nowParts.find((p) => p.type === 'hour')?.value) * 60 + Number(nowParts.find((p) => p.type === 'minute')?.value)
 
   return (
-    <div className="bg-card overflow-x-auto rounded-xl border">
-      <div className="min-w-[720px]">
-        <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b">
+    <div className="bg-card flex flex-col overflow-x-auto rounded-xl border md:min-h-0 md:flex-1">
+      <div className="flex min-w-[720px] flex-col md:h-full">
+        <div className="grid shrink-0 grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b">
           <div />
           {days.map((d) => {
             const isToday = sameDay(d, today)
@@ -60,32 +68,29 @@ export function WeekView({ days, events, busy, timeZone, today, now }: {
             )
           })}
         </div>
-        <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]">
-          <div className="relative" style={{ height }}>
-            {Array.from({ length: last - first }, (_, i) => (
-              <span key={i} className="text-muted-foreground absolute right-2 -translate-y-1/2 text-[10px]" style={{ top: i * HOUR_PX }}>{i === 0 ? '' : hourLabel(first + i)}</span>
+        <div className={cn('grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]', GRID_HEIGHT)}>
+          <div className="relative">
+            {Array.from({ length: hours }, (_, i) => (
+              <span key={i} className="text-muted-foreground absolute right-2 -translate-y-1/2 text-[10px]" style={{ top: `${(i / hours) * 100}%` }}>{i === 0 ? '' : hourLabel(first + i)}</span>
             ))}
           </div>
           {days.map((d) => {
             const key = toKey(d)
             return (
-              <div key={key} className="relative border-l" style={{ height, backgroundImage: `repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px ${HOUR_PX}px)` }}>
+              <div key={key} className="relative border-l" style={{ backgroundImage: 'linear-gradient(to bottom, var(--border) 1px, transparent 1px)', backgroundSize: `100% ${100 / hours}%` }}>
                 {(busyDays.get(key) ?? []).map((s, i) => (
-                  <div key={i} className={cn('absolute inset-x-0.5 rounded-sm', busyClass)} style={{ top: top(s.start), height: Math.max(6, top(s.end) - top(s.start)) }}
+                  <div key={i} className={cn('absolute inset-x-0.5 overflow-hidden rounded-sm', busyClass)} style={{ top: top(s.start), height: `max(4px, ${pct(s.end) - pct(s.start)}%)` }}
                     title={`Busy on Google Calendar · ${time.format(s.item.start)} – ${time.format(s.item.end)}`}>
-                    {top(s.end) - top(s.start) >= 18 && <span className="text-muted-foreground block px-1.5 pt-0.5 text-[10px]">Busy</span>}
+                    {s.end - s.start >= 30 && <span className="text-muted-foreground block px-1.5 pt-0.5 text-[10px]">Busy</span>}
                   </div>
                 ))}
-                {(eventDays.get(key) ?? []).map((s) => {
-                  const h = Math.max(18, top(s.end) - top(s.start))
-                  return (
-                    <EventChip key={s.item.id + key} event={s.item} className="absolute z-10 shadow-xs"
-                      style={{ top: top(s.start), height: h, left: `calc(${(s.lane / s.lanes) * 100}% + 2px)`, width: `calc(${100 / s.lanes}% - 4px)` }}>
-                      <span className="font-medium">{s.item.title}</span>
-                      {h >= 34 && <span className="text-muted-foreground block">{time.format(s.item.start)} – {time.format(s.item.end)}</span>}
-                    </EventChip>
-                  )
-                })}
+                {(eventDays.get(key) ?? []).map((s) => (
+                  <EventChip key={s.item.id + key} event={s.item} className="absolute z-10 shadow-xs"
+                    style={{ top: top(s.start), height: span(s.start, s.end), left: `calc(${(s.lane / s.lanes) * 100}% + 2px)`, width: `calc(${100 / s.lanes}% - 4px)` }}>
+                    <span className="font-medium">{s.item.title}</span>
+                    {s.end - s.start >= 45 && <span className="text-muted-foreground block">{time.format(s.item.start)} – {time.format(s.item.end)}</span>}
+                  </EventChip>
+                ))}
                 {sameDay(d, today) && nowMinute >= first * 60 && nowMinute <= last * 60 && (
                   <div className="pointer-events-none absolute inset-x-0 z-20 border-t-2 border-red-500" style={{ top: top(nowMinute) }}>
                     <span className="absolute -top-[5px] -left-[5px] size-2 rounded-full bg-red-500" />

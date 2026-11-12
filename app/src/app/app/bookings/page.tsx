@@ -123,8 +123,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const canCancel = (b: Row) => mine || canManageBookings(membership, b.host_membership_id)
   const needsOutcome = (past ?? []).filter(canCancel)
 
+  // The week view fills the window (minus the 3.5rem app header and 4rem page padding) so the whole day
+  // shows without scrolling; other views size to their content.
+  const fillWindow = display === 'week'
   return (
-    <div className="grid gap-6">
+    <div className={cn('grid gap-6', fillWindow && 'md:flex md:h-[calc(100svh-7.5rem)] md:min-h-[34rem] md:flex-col')}>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Bookings</h1>
         <p className="text-muted-foreground mt-1 text-sm">
@@ -172,7 +175,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       </div>
 
       {range ? (
-        <div className="grid gap-3">
+        <div className={cn('grid gap-3', fillWindow && 'md:flex md:min-h-0 md:flex-1 md:flex-col')}>
           {calendarError && <Alert variant="destructive"><AlertDescription>Couldn’t load bookings for this {display}. Refresh to try again.</AlertDescription></Alert>}
           {googleError && <Alert variant="warning"><AlertDescription>Couldn’t read your Google Calendar right now, so busy times aren’t shown.</AlertDescription></Alert>}
           {display === 'week'

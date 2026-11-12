@@ -41,6 +41,7 @@ describe('calendar view', () => {
       ['a', 540, 600, 0, 2], ['b', 570, 630, 1, 2], ['c', 660, 720, 0, 1], ['d', 1380, 1440, 0, 1],
     ])
     expect(byDay.get('2026-11-13')!.map((s) => [s.item.id, s.start, s.end])).toEqual([['d', 0, 60]])
-    expect(visibleHours(thu)).toEqual({ first: 7, last: 24 })
+    expect(visibleHours(thu)).toEqual({ first: 8, last: 24 })
+    expect(visibleHours([])).toEqual({ first: 8, last: 18 })
   })
 })

@@ -90,10 +90,10 @@ export function layoutByDay<T extends Interval>(items: T[], days: CalDate[], tim
   return out
 }
 
-/** The hours to draw in the week view: 7am to 8pm, widened to fit anything outside it. */
+/** The hours to draw in the week view: 8am to 6pm, widened to fit anything outside it. */
 export function visibleHours(segments: { start: number; end: number }[]) {
-  let first = 7
-  let last = 20
+  let first = 8
+  let last = 18
   for (const s of segments) {
     first = Math.min(first, Math.floor(s.start / 60))
     last = Math.max(last, Math.ceil(s.end / 60))
