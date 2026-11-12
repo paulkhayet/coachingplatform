@@ -10,6 +10,8 @@ import { formatCredits } from '@/lib/coaching-packages'
 import { canManageCoachingPackages } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 import { requirePackageAccess, type PackageSummary } from './data'
+import { UpgradeNotice } from '@/components/upgrade-notice'
+import { workspacePlan } from '@/lib/billing/server'
 
 export const metadata: Metadata = { title: 'Coaching packages' }
 
@@ -79,6 +81,7 @@ function PackageCard({ pkg, canManage }: { pkg: PackageSummary; canManage: boole
 export default async function CoachingPackagesPage() {
   const { business, membership } = await requirePackageAccess()
   const canManage = canManageCoachingPackages(membership)
+  const { limits } = await workspacePlan(business.id)
   const supabase = await createClient()
   const { data, error } = await supabase.from('coaching_packages')
     .select('id, name, kind, term_weeks, credit_units, price_cents, archived_at, description, session_formats, installment_count, installment_cadence, eligible_coach_ids')
@@ -94,8 +97,9 @@ export default async function CoachingPackagesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Coaching packages</h1>
           <p className="text-muted-foreground mt-1 text-sm">Set up the bundles and monthly plans your business offers.</p>
         </div>
-        {canManage && !error && <Button asChild><Link href="/app/coaching-packages/new"><Plus /> New package</Link></Button>}
+        {canManage && !error && limits.clients && <Button asChild><Link href="/app/coaching-packages/new"><Plus /> New package</Link></Button>}
       </div>
+      {!limits.clients && <UpgradeNotice title="Coaching packages are on the Solo and Team plans" owner={membership.role === 'owner'}>Sell bundles and monthly plans, then track each client’s credits.</UpgradeNotice>}
       {error ? (
         <Alert variant="destructive"><AlertDescription>Couldn’t load coaching packages. Refresh the page to try again.</AlertDescription></Alert>
       ) : !data?.length ? (

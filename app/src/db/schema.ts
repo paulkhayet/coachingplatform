@@ -67,6 +67,32 @@ export const workspaceBillingCustomers = pgTable('workspace_billing_customers', 
   check('workspace_billing_customer_id_format', sql`${t.stripeCustomerId} ~ '^cus_[A-Za-z0-9]+$'`),
 ])
 
+/**
+ * The workspace's schedulefa.st plan (D-072). Written only by the server: from Stripe subscription
+ * events, or a `complimentary` row the founder adds by hand. No row (or a lapsed one) means the free plan.
+ */
+export const workspaceSubscriptions = pgTable('workspace_subscriptions', {
+  businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  livemode: boolean('livemode').notNull(),
+  source: text('source', { enum: ['stripe', 'complimentary'] }).notNull().default('stripe'),
+  plan: text('plan', { enum: ['solo', 'team'] }).notNull(),
+  billingInterval: text('billing_interval', { enum: ['year', 'month'] }),
+  status: text('status').notNull(),
+  seats: integer('seats').notNull().default(1),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.businessId, t.livemode] }),
+  uniqueIndex('workspace_subscriptions_stripe_key').on(t.stripeSubscriptionId),
+  check('workspace_subscriptions_source', sql`${t.source} in ('stripe', 'complimentary')`),
+  check('workspace_subscriptions_plan', sql`${t.plan} in ('solo', 'team')`),
+  check('workspace_subscriptions_interval', sql`${t.billingInterval} is null or ${t.billingInterval} in ('year', 'month')`),
+  check('workspace_subscriptions_seats', sql`${t.seats} between 1 and 1000`),
+  check('workspace_subscriptions_stripe_id', sql`(${t.source} = 'stripe') = (${t.stripeSubscriptionId} is not null) and (${t.stripeSubscriptionId} is null or ${t.stripeSubscriptionId} ~ '^sub_[A-Za-z0-9]+$')`),
+])
+
 /** A person's role inside one business. Staff seats are counted from active and invited rows (D-043, P-15). */
 export const memberships = pgTable(
   'memberships',

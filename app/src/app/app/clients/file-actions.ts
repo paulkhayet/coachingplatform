@@ -9,6 +9,7 @@ import { adminDb } from '@/db/server'
 import {
   BUSINESS_FILE_QUOTA_BYTES, CLIENT_FILES_BUCKET, MAX_CLIENT_FILE_BYTES, cleanFileName, isAllowedClientFileType, matchesClientFileType,
 } from '@/lib/clients/files'
+import { checkFeature } from '@/lib/billing/server'
 import { canManageClients } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 import { requireWorkspace } from '@/lib/workspace'
@@ -39,6 +40,8 @@ export async function startClientFileUpload(businessId: string, clientId: string
   const supabase = await createClient()
   const { data: client } = await supabase.from('coaching_clients').select('id').eq('id', clientId).eq('business_id', businessId).maybeSingle()
   if (!client) return { ok: false, message: 'You don’t have access to this client.' }
+  const blocked = await checkFeature(businessId, 'clients')
+  if (blocked) return { ok: false, message: blocked }
 
   const db = adminDb()
   await clearStalePending(user.id)

@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { UpgradeNotice } from '@/components/upgrade-notice'
+import { workspacePlan } from '@/lib/billing/server'
 import Link from 'next/link'
 import { ArrowRight, ExternalLink, Plus } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -78,6 +80,7 @@ function BookingPageCard({ page, host, publicPath, canEdit }: { page: Row; host:
 
 export default async function BookingPagesPage() {
   const { business, membership } = await requireWorkspace()
+  const plan = await workspacePlan(business.id)
   const manager = canAssignHosts(membership.role)
   const supabase = await createClient()
   const [{ data: pages, error }, coaches, shared] = await Promise.all([
@@ -107,6 +110,9 @@ export default async function BookingPagesPage() {
         </div>
         <Button asChild><Link href="/app/booking-pages/new"><Plus /> New booking page</Link></Button>
       </div>
+      {plan.plan === 'free' && (pages?.filter((p) => p.active).length ?? 0) >= 1 && (
+        <UpgradeNotice title="You’re using the free plan’s one active booking page" owner={membership.role === 'owner'}>Solo and Team include unlimited booking pages, paid calls, Zoom and reminder emails to guests. You can still add pages and keep them turned off.</UpgradeNotice>
+      )}
       {error ? (
         <Alert variant="destructive"><AlertDescription>Couldn’t load booking pages. Refresh the page to try again.</AlertDescription></Alert>
       ) : !pages?.length ? (

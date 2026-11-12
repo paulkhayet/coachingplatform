@@ -1,4 +1,7 @@
 import type { Metadata } from 'next'
+import { UpgradeNotice } from '@/components/upgrade-notice'
+import { workspacePlan } from '@/lib/billing/server'
+import { formatPlanPrice } from '@/lib/billing/plans'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
@@ -17,6 +20,7 @@ type Row = { id: string; user_id: string; role: MemberRole; status: string; titl
 
 export default async function TeamPage() {
   const { business, user, membership } = await requireWorkspace()
+  const plan = await workspacePlan(business.id)
   const isOwner = canManageTeam(membership.role)
   const supabase = await createClient()
   // Row-level security limits both queries to this business and its members.
@@ -82,7 +86,9 @@ export default async function TeamPage() {
             <CardDescription>They get an email with a link to join {business.name}. Their hours, calendar and other businesses stay theirs; you’ll see when they’re free for you.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
-            <InviteForm businessName={business.name} />
+            {plan.plan === 'team' ? <InviteForm businessName={business.name} /> : (
+              <UpgradeNotice title="Adding people is on the Team plan" owner>Team is {formatPlanPrice('team', 'year')} ({formatPlanPrice('team', 'month')} paid monthly), for everyone on your team.</UpgradeNotice>
+            )}
             {(invites?.length ?? 0) > 0 && (
               <div className="grid gap-2">
                 <p className="text-sm font-medium">Waiting to join</p>

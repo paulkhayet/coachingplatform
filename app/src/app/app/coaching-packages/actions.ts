@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { checkFeature } from '@/lib/billing/server'
 import { readCoachingPackage } from '@/lib/coaching-packages'
 import { canManageCoachingPackages } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
@@ -21,6 +22,7 @@ export async function savePackage(businessId: string, id: string | null, _state:
   if (business.id !== businessId) return { message: 'You switched businesses. Reopen the package in the correct business.' }
   if (!canManageCoachingPackages(membership)) return { message: 'You need financial permission to save packages.' }
   if (id !== null && !z.uuid().safeParse(id).success) return { message: 'This package could not be found.' }
+  if (id === null) { const blocked = await checkFeature(business.id, 'clients'); if (blocked) return { message: blocked } }
 
   const parsed = readCoachingPackage(form)
   if (!parsed.success) return { errors: fieldErrors(parsed.error) }

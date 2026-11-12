@@ -12,6 +12,7 @@ import {
   memberships,
   profiles,
   stripeAccounts,
+  workspaceSubscriptions,
   type Booking,
   type BookingAnswer,
   type BookingPage,
@@ -22,7 +23,7 @@ import { unpaidDeadline } from '@/lib/clients/credits'
 import { cancelCoachingForDepartedHost, cancelUnpaidReservation } from '@/lib/clients/sessions'
 import { busyTimes, createBookingEvent, deleteBookingEvent, updateBookingEvent } from '@/lib/google/calendar'
 import { getConnection } from '@/lib/google/server'
-import { stripe } from '@/lib/stripe/server'
+import { stripe, stripeLivemode } from '@/lib/stripe/server'
 import { isEmailConfigured, sendEmail } from '@/lib/email/server'
 import { createZoomMeeting, deleteZoomMeeting, updateZoomMeeting } from '@/lib/zoom/server'
 import { formatAnswer } from './questions'
@@ -764,6 +765,10 @@ export async function sendDueReminders(now = new Date()) {
         gt(bookings.startsAt, now),
         lte(bookings.startsAt, new Date(now.getTime() + DAY_MS)),
         sql`coalesce(${bookings.creditCoveredAt}, ${bookings.createdAt}) <= ${bookings.startsAt} - interval '24 hours'`,
+        // Reminder emails are a paid-plan feature (D-072). Free bookings stay unclaimed, so a business
+        // that upgrades before the call still gets its reminder sent.
+        sql`exists (select 1 from ${workspaceSubscriptions} ws where ws.business_id = ${bookings.businessId}
+          and (ws.source = 'complimentary' or (ws.livemode = ${stripeLivemode} and ws.status in ('active', 'trialing', 'past_due'))))`,
       ),
     )
     .returning({ id: bookings.id })

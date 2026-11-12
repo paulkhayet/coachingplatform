@@ -12,6 +12,7 @@ import { BUSINESS_COOKIE, requireWorkspace } from '@/lib/workspace'
 import { canManageTeam } from '@/lib/roles'
 import { releaseMember } from '@/lib/booking/server'
 import { sendInvitation, type InviteRole } from '@/lib/team/invitations'
+import { checkCanInvite, syncSeats } from '@/lib/billing/server'
 
 // Removing someone, or leaving, cancels their upcoming bookings with this business (D-058).
 
@@ -40,6 +41,7 @@ export async function removeMember(_prev: TeamState, formData: FormData): Promis
   if (error || !data?.length) return { message: 'We couldn’t remove that person. Try again in a moment.' }
 
   const { cancelled } = await releaseMember(id.data)
+  await syncSeats(business.id)
   revalidatePath('/app/team')
   return { ok: true, message: cancelled ? `Removed. ${cancelled} upcoming ${cancelled === 1 ? 'booking was' : 'bookings were'} cancelled and the guests told.` : 'Removed.' }
 }
@@ -56,6 +58,7 @@ export async function leaveBusiness(_prev: TeamState): Promise<TeamState> {
     .returning({ id: memberships.id })
   if (!left) return { message: 'We couldn’t do that. Try again in a moment.' }
   await releaseMember(membership.id)
+  await syncSeats(business.id)
   ;(await cookies()).delete(BUSINESS_COOKIE)
   redirect('/app')
 }
@@ -85,6 +88,8 @@ export async function inviteMember(_prev: InviteState, formData: FormData): Prom
   const parsed = inviteSchema.safeParse({ email: values.email.trim(), role: values.role, coaches: values.coaches === 'on', title: values.title })
   if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? 'Check the details.', values }
   if (parsed.data.email.toLowerCase() === user.email.toLowerCase()) return { message: 'That’s you. Invite someone else.', values }
+  const blocked = await checkCanInvite(business.id)
+  if (blocked) return { message: blocked, values }
   const sent = await sendInvitation({ businessId: business.id, businessName: business.name, inviter: { id: user.id, name: user.fullName, email: user.email }, ...parsed.data })
   if ('error' in sent) return { message: sent.error, values }
   revalidatePath('/app/team')

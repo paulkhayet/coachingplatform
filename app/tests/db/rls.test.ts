@@ -70,6 +70,19 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     await sql`DELETE FROM public.memberships WHERE user_id = ${admin}` // later tests count Willow's team
   })
 
+  it('shows members their workspace plan but lets only the server set it (D-072)', async () => {
+    await sql`INSERT INTO public.workspace_subscriptions (business_id, livemode, plan, billing_interval, status, seats, stripe_subscription_id)
+      VALUES (${willow}, false, 'team', 'year', 'active', 2, 'sub_TestWillow')`
+    expect(await as(sql, eleni, (tx) => tx`SELECT plan, status FROM public.workspace_subscriptions`)).toEqual([{ plan: 'team', status: 'active' }])
+    expect(await as(sql, outsider, (tx) => tx`SELECT plan FROM public.workspace_subscriptions`)).toEqual([])
+    await expect(as(sql, null, (tx) => tx`SELECT plan FROM public.workspace_subscriptions`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.workspace_subscriptions SET status = 'active', seats = 999`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, outsider, (tx) => tx`INSERT INTO public.workspace_subscriptions (business_id, livemode, source, plan, status)
+      VALUES (${willow}, true, 'complimentary', 'team', 'active')`)).rejects.toThrow(/permission denied/)
+    await expect(sql`INSERT INTO public.workspace_subscriptions (business_id, livemode, source, plan, status) VALUES (${willow}, true, 'stripe', 'solo', 'active')`).rejects.toThrow(/workspace_subscriptions_stripe_id/)
+    await sql`DELETE FROM public.workspace_subscriptions WHERE business_id = ${willow}`
+  })
+
   it('keeps platform billing customer links off the data API', async () => {
     await sql`INSERT INTO workspace_billing_customers (business_id, livemode, stripe_customer_id)
       VALUES (${willow}, false, 'cus_testWorkspace'), (${willow}, true, 'cus_liveWorkspace')`

@@ -5,6 +5,8 @@ import { adminDb, type AdminDb } from '@/db/server'
 import { stripeAccounts, stripeEvents } from '@/db/schema'
 import { accountFields } from '@/lib/payments'
 import { afterPaidCheckout, confirmPaidCheckout, expireCheckout } from '@/lib/booking/server'
+import { syncStripeSubscription } from '@/lib/billing/server'
+import { stripe } from '@/lib/stripe/server'
 
 /** Work to do after the event's database changes are committed (emails, calendar), at most once. */
 type AfterCommit = (() => Promise<void>) | void
@@ -50,10 +52,26 @@ export async function processStripeEvent(event: Stripe.Event): Promise<boolean> 
 
 async function applyEvent(tx: Tx, event: Stripe.Event): Promise<AfterCommit> {
   switch (event.type) {
+    case 'customer.subscription.created':
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted': {
+      // A business's schedulefa.st plan (D-072): only on our own account, never a connected one.
+      if (event.account) return
+      // Read it fresh: the event's shape follows the endpoint's API version, not this SDK's.
+      await syncStripeSubscription(await stripe().subscriptions.retrieve(event.data.object.id), tx)
+      return
+    }
     case 'checkout.session.completed': {
+      const session = event.data.object
+      if (session.mode === 'subscription') {
+        // Plan checkout on our own account: record the new subscription straight away.
+        if (event.account || !session.subscription) return
+        const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id
+        await syncStripeSubscription(await stripe().subscriptions.retrieve(subId), tx)
+        return
+      }
       // A guest paid for a booked call on the business's Stripe account. Confirm it (once), then
       // add it to the calendar and send emails after the commit.
-      const session = event.data.object
       if (session.payment_status !== 'paid') return
       const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent?.id ?? null)
       const result = await confirmPaidCheckout(session.id, paymentIntent, tx)

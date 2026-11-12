@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { MARK_VIEWBOX, MarkPaths } from '@/components/brand'
 import { PricingPlans, SiteNav, WorkflowTabs, type FlowTab, type Plan } from './interactive'
 import { BookingPagePreview, BookingsPreview, ConfirmationPreview, PaymentsPreview, TeamPreview } from './product-previews'
+import { planLimits } from '@/lib/billing/plans'
 import '@/app/landing.css'
 
 // The marketing home page (from the landing/ design). Copy describes what is live today; anything still in
@@ -72,15 +73,17 @@ const flows: FlowTab[] = [
   },
 ]
 
-// Planned prices (D-069): per month, paid yearly or monthly; yearly is shown first. Nothing is charged yet
-// because billing isn't built.
+// Names and prices come from PAID_PLANS in lib/billing/plans.ts, which is what Stripe charges (D-072);
+// only the descriptions live here. The free plan's limits follow planLimits('free').
+const freeLimits = planLimits('free')
 const plans: Plan[] = [
-  { id: 'solo', name: 'Solo', icon: 'home', description: 'Everything a solo coaching business needs.', yearly: 10, monthly: 12, perPerson: false, seats: 'Just you', includes: ['Booking pages & custom questions', 'Google Calendar & Zoom', 'Card payments & refunds', 'Email confirmations & reminders'] },
-  { id: 'team', name: 'Team', icon: 'people', description: 'For coaching and tutoring teams of any size.', yearly: 15, monthly: 17, perPerson: true, featured: 'FOR GROWING TEAMS', seats: 'Priced per person on your team', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Business hours & team free times'] },
+  { id: 'free', icon: 'sparkles', description: 'Try it out and take your first bookings.', seats: freeLimits.people === 1 ? 'Just you' : `Up to ${freeLimits.people} people`, includes: [`${freeLimits.bookingPages} active booking page${freeLimits.bookingPages === 1 ? '' : 's'} & custom questions`, 'Free calls, no charge to families', 'Google Calendar sync', freeLimits.reminders ? 'Email confirmations & reminders' : 'Email confirmations'] },
+  { id: 'solo', icon: 'home', description: 'Everything a solo coaching business needs.', seats: 'Just you', includes: ['Unlimited booking pages & custom questions', 'Paid calls, Google Calendar & Zoom', 'Clients, packages, credits & files', 'Email confirmations & reminders 24 hours before'] },
+  { id: 'team', icon: 'people', description: 'For coaching and tutoring teams of any size.', featured: 'FOR GROWING TEAMS', seats: 'Priced per person on your team', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Business hours & team free times'] },
 ]
 
 const faqs: [string, string][] = [
-  ['Can I use schedulefa.st today?', 'Yes. Create your business for free, set your hours and share a booking page in a few minutes. Families can book free or paid calls right away.'],
+  ['Can I use schedulefa.st today?', 'Yes. Create your business for free, set your hours and share a booking page in a few minutes. The free plan covers one person with one booking page and free calls; upgrade to Solo or Team for paid calls, Zoom, clients and more people.'],
   ['Do families need an account?', 'No. They book with their name and email, answer any questions you add, and get a private link to reschedule or cancel.'],
   ['Does it work with Google Calendar and Zoom?', 'Yes. Both connect to your own accounts: busy times on Google Calendar keep you from being double-booked, each booking is added to your calendar, and Zoom pages create a meeting for every booking. Both connections are opening to everyone as Google and Zoom finish reviewing our app; until then, any booking page can use your own meeting link.'],
   ['Is it for solo coaches or teams?', 'Both. Invite coaches and administrators, set business hours, and share a booking page across a group of coaches. If you work for more than one business, one account covers all of them, without double-booking.'],
@@ -172,10 +175,10 @@ export function LandingPage() {
             <div className="pricing-heading">
               <div className="section-kicker">SIMPLE PRICING</div>
               <h2>Start free.<br />Grow with your team.</h2>
-              <p>Create your business and take bookings for free today.<br />Paid plans are on the way: one price for solo coaches, per person for teams.</p>
+              <p>Free for one person with one booking page and free calls.<br />Upgrade for paid calls, Zoom, clients and packages, and your whole team.</p>
             </div>
             <PricingPlans plans={plans} />
-            <p className="pricing-footnote">Paid plans aren’t live yet. These are planned prices in USD and may change; nothing is charged today.<br />schedulefa.st takes no fee on your coaching payments. Stripe’s standard processing fees apply.</p>
+            <p className="pricing-footnote">Prices in USD. Cancel any time and keep your plan until the end of the period you paid for.<br />schedulefa.st takes no fee on your coaching payments. Stripe’s standard processing fees apply.</p>
           </div>
         </section>
 

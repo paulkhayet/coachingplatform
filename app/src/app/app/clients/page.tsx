@@ -8,6 +8,8 @@ import { coachOptions } from '@/app/app/booking-pages/hosts'
 import { canManageClients } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 import { requireWorkspace } from '@/lib/workspace'
+import { UpgradeNotice } from '@/components/upgrade-notice'
+import { workspacePlan } from '@/lib/billing/server'
 import type { ClientRow } from './data'
 
 export const metadata: Metadata = { title: 'Clients' }
@@ -22,6 +24,7 @@ export default async function ClientsPage() {
     coachOptions(business.id),
   ])
   const coachNames = new Map(coaches.map((coach) => [coach.id, coach.name]))
+  const { limits } = await workspacePlan(business.id)
 
   return (
     <div className="grid gap-6">
@@ -30,8 +33,9 @@ export default async function ClientsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
           <p className="text-muted-foreground mt-1 text-sm">{manager ? 'Manage client records, coaching packages, and credit balances.' : 'View your assigned clients and their credit balances.'}</p>
         </div>
-        {manager && <Button asChild><Link href="/app/clients/new"><Plus /> New client</Link></Button>}
+        {manager && limits.clients && <Button asChild><Link href="/app/clients/new"><Plus /> New client</Link></Button>}
       </div>
+      {!limits.clients && <UpgradeNotice title="Clients are on the Solo and Team plans" owner={membership.role === 'owner'}>Keep client and guardian records, packages, credits and files in one place.</UpgradeNotice>}
       {error ? (
         <Alert variant="destructive"><AlertDescription>Couldn’t load clients. Refresh the page to try again.</AlertDescription></Alert>
       ) : !data?.length ? (

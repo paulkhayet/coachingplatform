@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { acceptInvitation, type AcceptResult } from '@/lib/team/invitations'
 import { BUSINESS_COOKIE, getUser } from '@/lib/workspace'
+import { syncSeats } from '@/lib/billing/server'
 
 export interface JoinState {
   message?: string
@@ -28,6 +29,8 @@ export async function joinBusiness(_prev: JoinState, formData: FormData): Promis
   if (!by) return { message: reasons.gone }
   const result = await acceptInvitation(by, { id: user.id, email: user.email, emailConfirmed: Boolean(user.email_confirmed_at) })
   if (!result.ok) return { message: reasons[result.reason] }
+  // Team is billed per person (D-072).
+  if (!result.alreadyMember) await syncSeats(result.businessId)
   ;(await cookies()).set(BUSINESS_COOKIE, result.businessId, { path: '/', httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 365 })
   redirect('/app')
 }

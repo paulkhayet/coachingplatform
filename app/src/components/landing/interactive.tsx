@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { PAID_PLANS, bestYearlySaving, formatDollars, monthlyDollars, yearlyDollars, type PlanId } from '@/lib/billing/plans'
 
 /** Header navigation with the mobile menu toggle. */
 export function SiteNav() {
@@ -107,47 +108,50 @@ export function WorkflowTabs({ tabs }: { tabs: FlowTab[] }) {
 }
 
 export interface Plan {
-  id: string
-  name: string
+  /** 'free', or the paid plan whose prices come from PAID_PLANS (lib/billing/plans.ts). */
+  id: PlanId
   icon: string
   description: string
-  /** Price per month in USD when paid yearly, and when paid monthly. */
-  yearly: number
-  monthly: number
-  perPerson: boolean
   featured?: string
   seats: string
   includes: string[]
 }
 
-/** The plans with a yearly/monthly switch; yearly is selected first (D-069). Every button starts a free business. */
+/**
+ * The plans with a yearly/monthly switch; yearly is selected first (D-069). Prices are read from
+ * PAID_PLANS, the same numbers Stripe charges (D-072), so changing a price there updates this page.
+ * Every button starts a free business; owners upgrade in Settings → Subscription.
+ */
 export function PricingPlans({ plans }: { plans: Plan[] }) {
   const [billing, setBilling] = useState<'yearly' | 'monthly'>('yearly')
   const yearly = billing === 'yearly'
+  const saving = bestYearlySaving()
   return (
     <>
       <div className="billing-control" role="group" aria-label="Billing frequency">
         <button type="button" className={yearly ? 'selected' : undefined} aria-pressed={yearly} onClick={() => setBilling('yearly')}>
-          Yearly <span>Save with yearly</span>
+          Yearly <span>{saving > 0 ? `Save up to ${saving}%` : 'Billed once a year'}</span>
         </button>
         <button type="button" className={yearly ? undefined : 'selected'} aria-pressed={!yearly} onClick={() => setBilling('monthly')}>Monthly</button>
       </div>
       <div className="pricing-grid">
         {plans.map((p) => {
-          const price = yearly ? p.yearly : p.monthly
-          const per = p.perPerson ? ' per person' : ''
+          const paid = p.id === 'free' ? null : PAID_PLANS[p.id]
+          const name = paid?.name ?? 'Free'
+          const price = p.id === 'free' ? '0' : formatDollars(monthlyDollars(p.id, yearly ? 'year' : 'month'))
+          const per = paid?.perPerson ? ' per person' : ''
+          const note = p.id === 'free' ? 'Free for as long as you like · no card needed'
+            : `${yearly ? `$${yearlyDollars(p.id).toLocaleString('en-US')}${per} billed yearly` : 'Billed monthly'} · start free, upgrade any time`
           return (
             <article key={p.id} className={`price-card${p.featured ? ' featured' : ''}`}>
               {p.featured && <div className="plan-ribbon">{p.featured}</div>}
               <div className="plan-heading">
                 <svg className="icon plan-icon" aria-hidden="true"><use href={`#${p.icon}`} /></svg>
-                <h3>{p.name}</h3>
+                <h3>{name}</h3>
               </div>
               <p className="plan-description">{p.description}</p>
-              <div className="price"><span>$</span><strong>{price}</strong><span>{p.perPerson ? '/ person / month' : '/ month'}</span></div>
-              <p className="billing-note">
-                {yearly ? `$${(p.yearly * 12).toLocaleString('en-US')}${per} billed yearly` : 'Billed monthly'} · planned, not charged today
-              </p>
+              <div className="price"><span>$</span><strong>{price}</strong><span>{p.id === 'free' ? 'forever' : paid?.perPerson ? '/ person / month' : '/ month'}</span></div>
+              <p className="billing-note">{note}</p>
               <Link className={`button price-button${p.featured ? '' : ' button-outline'}`} href="/sign-up">
                 Start free <svg className="icon"><use href="#arrow-up-right" /></svg>
               </Link>

@@ -14,7 +14,9 @@ import { cancelBooking } from '@/lib/booking/server'
 import { coachOptions } from './hosts'
 import { isZoomConfigured } from '@/lib/zoom/server'
 import { adminDb } from '@/db/server'
-import { bookings, memberships } from '@/db/schema'
+import { bookingPages as bookingPagesTable, bookings, memberships } from '@/db/schema'
+import { UPGRADE_MESSAGES } from '@/lib/billing/plans'
+import { checkBookingPageLimit, workspacePlan } from '@/lib/billing/server'
 import { and, eq } from 'drizzle-orm'
 
 // Booking pages are written with the signed-in user's Supabase client, so row-level security decides
@@ -103,6 +105,24 @@ async function saveHosts(supabase: Awaited<ReturnType<typeof createClient>>, pag
   return !insertError
 }
 
+/**
+ * Plan limits (D-072). On the free plan: one active page, free calls only, no Zoom. When editing, only a
+ * change counts, so a page set up before a downgrade keeps working as it is.
+ */
+async function planErrors(businessId: string, d: { priceCents: number | null; locationType: string; active: boolean }, pageId?: string): Promise<{ errors: FieldErrors; message?: string }> {
+  const { limits } = await workspacePlan(businessId)
+  if (limits.paidCalls && limits.zoom && limits.bookingPages === null) return { errors: {} }
+  const [before] = pageId
+    ? await adminDb().select({ priceCents: bookingPagesTable.priceCents, locationType: bookingPagesTable.locationType, active: bookingPagesTable.active })
+      .from(bookingPagesTable).where(and(eq(bookingPagesTable.id, pageId), eq(bookingPagesTable.businessId, businessId)))
+    : []
+  const errors: FieldErrors = {}
+  if (!limits.paidCalls && d.priceCents !== null && d.priceCents !== before?.priceCents) errors.priceCents = UPGRADE_MESSAGES.paidCalls
+  if (!limits.zoom && d.locationType === 'zoom' && before?.locationType !== 'zoom') errors.locationType = UPGRADE_MESSAGES.zoom
+  const message = d.active && !before?.active ? await checkBookingPageLimit(businessId, pageId) ?? undefined : undefined
+  return { errors, message }
+}
+
 function dbError(code: string | undefined, raw: Record<string, string>): BookingPageState {
   if (code === '23505') return { errors: { slug: 'You already have a page with that link. Try another.' }, values: raw }
   return { message: 'We couldn’t save this page. Try again in a moment.', values: raw }
@@ -115,6 +135,8 @@ export async function createBookingPage(_prev: BookingPageState, formData: FormD
   const raw = { ...base, ...hosts.values }
   if (hosts.error) errors.host = hosts.error
   if (!parsed || hosts.error) return { errors, values: raw }
+  const limited = await planErrors(business.id, parsed)
+  if (limited.message || Object.keys(limited.errors).length) return { errors: limited.errors, message: limited.message, values: raw }
   const host = hosts.host ?? { id: membership.id, pool: [] }
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -139,6 +161,8 @@ export async function updateBookingPage(id: string, _prev: BookingPageState, for
   const raw = { ...base, ...hosts.values }
   if (hosts.error) errors.host = hosts.error
   if (!parsed || hosts.error) return { errors, values: raw }
+  const limited = await planErrors(business.id, parsed, id)
+  if (limited.message || Object.keys(limited.errors).length) return { errors: limited.errors, message: limited.message, values: raw }
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('booking_pages')

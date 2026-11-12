@@ -1,4 +1,7 @@
-import { LogOut } from 'lucide-react'
+import Link from 'next/link'
+import { LogOut, Sparkles } from 'lucide-react'
+import { workspacePlan } from '@/lib/billing/server'
+import { SUBSCRIPTION_PATH } from '@/lib/settings-paths'
 import { Logo } from '@/components/brand'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Avatar } from '@/components/ui/avatar'
@@ -14,13 +17,20 @@ import { BusinessSwitcher } from './business-switcher'
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, membership, business, workspaces } = await requireWorkspace()
   const showPricing = canSeePricing(membership.role)
-  const photo = await profilePhotoUrl(user.avatarPath)
+  const [photo, plan] = await Promise.all([profilePhotoUrl(user.avatarPath), workspacePlan(business.id)])
+  const showUpgrade = membership.role === 'owner' && plan.plan === 'free'
   return (
     <div className="flex min-h-svh">
       <aside className="bg-sidebar border-sidebar-border sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r p-3 md:flex">
         <div className="mb-4 px-1 pt-1"><Logo /></div>
         <BusinessSwitcher current={{ id: business.id, name: business.name, logoUrl: businessLogoUrl(business.logo_path) }} slug={business.slug} workspaces={workspaces} />
         <div className="mt-5 flex-1"><Nav showPricing={showPricing} /></div>
+        {showUpgrade && (
+          <Link href={SUBSCRIPTION_PATH} className="bg-primary/5 hover:bg-primary/10 border-primary/20 mb-2 flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs">
+            <Sparkles className="text-primary size-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1"><span className="font-medium">Free plan</span> · Upgrade for more</span>
+          </Link>
+        )}
         <div className="mb-2"><SettingsLink /></div>
         <div className="flex items-center gap-2 border-t pt-3">
           <Avatar name={user.fullName} src={photo} className="size-7" />

@@ -157,6 +157,7 @@ export function BookingPageForm({ action, defaults, businessSlug, submitLabel, p
           <select id="locationType" name="locationType" value={locationType} onChange={(ev) => setLocationType(ev.target.value)} className={selectClass}>
             {LOCATION_TYPES.filter((l) => l.value !== 'zoom' || zoomAvailable || defaults.locationType === 'zoom').map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
+          {e.locationType && <p className="text-destructive text-xs">{e.locationType}</p>}
         </div>
       </div>
       {locationType === 'zoom' ? (

@@ -14,6 +14,7 @@ import { canManageClients, canManagePayments } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 import { fieldErrors, type FieldErrors } from '@/lib/validation'
 import { requireWorkspace } from '@/lib/workspace'
+import { checkFeature } from '@/lib/billing/server'
 
 const clientsPath = '/app/clients'
 const switched = 'You switched businesses. Reopen the client in the correct business.'
@@ -53,6 +54,8 @@ export async function saveClient(businessId: string, clientId: string | null, _s
   if (business.id !== businessId) return { message: switched }
   if (!canManageClients(membership.role)) return { message: 'Only owners and administrators can save client details.' }
   if (clientId !== null && !uuid.safeParse(clientId).success) return { message: 'This client could not be found.' }
+  // New clients need a paid plan (D-072); existing ones stay editable after a downgrade.
+  if (clientId === null) { const blocked = await checkFeature(business.id, 'clients'); if (blocked) return { message: blocked } }
 
   const parsed = clientFields.safeParse({ name: text(form, 'name'), email: text(form, 'email').toLowerCase(), coachId: text(form, 'coachId') })
   if (!parsed.success) return { errors: fieldErrors(parsed.error) }
@@ -92,6 +95,8 @@ export async function saveClientPackage(businessId: string, clientId: string, re
   if (business.id !== businessId) return { message: switched }
   if (!canManagePayments(membership)) return { message: 'You need financial permission to assign a package.' }
   if (!uuid.safeParse(clientId).success || !uuid.safeParse(requestId).success) return { message: 'This client could not be found.' }
+  const blocked = await checkFeature(business.id, 'clients')
+  if (blocked) return { message: blocked }
 
   const parsed = assignmentFields.safeParse({ packageId: text(form, 'packageId'), packageVersion: text(form, 'packageVersion'), startsOn: text(form, 'startsOn') })
   if (!parsed.success) {
