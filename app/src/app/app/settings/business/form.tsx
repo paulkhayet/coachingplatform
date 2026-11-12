@@ -2,11 +2,11 @@
 
 import { startTransition, useActionState, useState } from 'react'
 import { BusinessMark } from '@/components/business-mark'
+import { ImageUpload } from '@/components/image-upload'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { imageFormData } from '@/lib/shrink-image'
 import type { WeeklyWindow } from '@/db/schema'
 import { DayRows, useDays } from '../../availability/forms'
 import { saveOpeningHours, type OpeningHoursState } from './actions'
@@ -86,37 +86,13 @@ export function BusinessLogoForm({ name, logoUrl, save }: {
   logoUrl: string | null
   save: (state: OpeningHoursState, form: FormData) => Promise<OpeningHoursState>
 }) {
-  const [state, action, pending] = useActionState(save, {})
-  const [problem, setProblem] = useState<string | null>(null)
-  const [preparing, setPreparing] = useState(false)
-  // The logo is shrunk in the browser first: server actions refuse bodies over 1 MB.
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const submitter = (event.nativeEvent as SubmitEvent).submitter
-    setProblem(null)
-    setPreparing(true)
-    const data = await imageFormData(event.currentTarget, submitter, 'logo', true)
-    setPreparing(false)
-    if (typeof data === 'string') setProblem(data)
-    else startTransition(() => action(data))
-  }
-  const busy = pending || preparing
   return (
-    <form onSubmit={submit} className="flex flex-wrap items-start gap-4">
-      <BusinessMark name={name} logoUrl={logoUrl} className="size-16 rounded-lg text-2xl" />
-      <div className="grid min-w-0 flex-1 gap-3">
-        <div className="grid gap-1.5">
-          <Label htmlFor="business-logo">Logo</Label>
-          <Input id="business-logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="business-logo-help" required />
-          <p id="business-logo-help" className="text-muted-foreground text-xs">A square JPG, PNG, or WebP works best. Shown on your booking pages.</p>
-        </div>
-        {problem ? <Alert variant="destructive"><AlertDescription>{problem}</AlertDescription></Alert> : <Feedback state={state} />}
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="outline" disabled={busy}>{busy ? 'Saving…' : 'Upload logo'}</Button>
-          {logoUrl && <Button type="submit" name="intent" value="remove" variant="ghost" formNoValidate disabled={busy}>Remove logo</Button>}
-        </div>
-      </div>
-    </form>
+    <div className="grid gap-1.5">
+      <p className="text-sm font-medium">Logo</p>
+      <ImageUpload preview={<BusinessMark name={name} logoUrl={logoUrl} className="size-16 rounded-lg text-2xl" />} rounded="lg"
+        field="logo" hasImage={Boolean(logoUrl)} save={save} keepAlpha label="logo"
+        hint="Click the logo or the button to choose an image. A square JPG, PNG, or WebP works best; it’s shown on your booking pages." />
+    </div>
   )
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
-import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
-import { imageFormData } from '@/lib/shrink-image'
+import { useActionState, useState } from 'react'
+import { ImageUpload } from '@/components/image-upload'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,40 +33,13 @@ export function ProfileNameForm({ name, email }: { name: string; email: string }
   )
 }
 
-export function ProfilePhotoForm({ save, hasPhoto }: {
+export function ProfilePhotoForm({ save, hasPhoto, preview }: {
   save: (state: ProfileState, form: FormData) => Promise<ProfileState>
   hasPhoto: boolean
+  preview: React.ReactNode
 }) {
-  const [state, action, pending] = useActionState(save, {})
-  const [problem, setProblem] = useState<string | null>(null)
-  const [preparing, setPreparing] = useState(false)
-  const formRef = useRef<HTMLFormElement>(null)
-  useEffect(() => { if (state.ok) formRef.current?.reset() }, [state])
-  // The photo is shrunk in the browser first: server actions refuse bodies over 1 MB, and phone
-  // photos are usually bigger, which used to crash the page.
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const submitter = (event.nativeEvent as SubmitEvent).submitter
-    setProblem(null)
-    setPreparing(true)
-    const data = await imageFormData(event.currentTarget, submitter, 'photo')
-    setPreparing(false)
-    if (typeof data === 'string') setProblem(data)
-    else startTransition(() => action(data))
-  }
-  const busy = pending || preparing
   return (
-    <form ref={formRef} onSubmit={submit} className="grid min-w-0 gap-3">
-      <div className="grid gap-1.5">
-        <Label htmlFor="profile-photo">Choose a photo</Label>
-        <Input id="profile-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="profile-photo-formats" required />
-        <p id="profile-photo-formats" className="text-muted-foreground text-xs">JPG, PNG, or WebP. Large photos are resized automatically.</p>
-      </div>
-      {problem ? <Alert variant="destructive"><AlertDescription>{problem}</AlertDescription></Alert> : <Feedback state={state} />}
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="outline" disabled={busy}>{busy ? 'Saving…' : 'Upload photo'}</Button>
-        {hasPhoto && <Button type="submit" name="intent" value="remove" variant="ghost" formNoValidate disabled={busy}>Remove photo</Button>}
-      </div>
-    </form>
+    <ImageUpload preview={preview} field="photo" hasImage={hasPhoto} save={save} label="photo"
+      hint="Click the photo or the button to choose an image. JPG, PNG, or WebP; large photos are resized automatically." />
   )
 }

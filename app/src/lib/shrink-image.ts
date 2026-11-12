@@ -5,20 +5,11 @@ const MAX_SIDE = 512
 /** What the profile-photo and logo actions accept (they check again on the server). */
 export const IMAGE_UPLOAD_MAX_BYTES = 750 * 1024
 
-/**
- * Builds the form data for an image form, with the chosen image shrunk to fit. Returns a message
- * instead when the image can't be used. A "remove" submit passes straight through.
- */
-export async function imageFormData(form: HTMLFormElement, submitter: HTMLElement | null, field: string, keepAlpha = false): Promise<FormData | string> {
-  const data = new FormData(form, submitter)
-  if (data.get('intent') === 'remove') return data
-  const file = data.get(field)
-  if (!(file instanceof File) || !file.size) return 'Choose an image first.'
+/** Checks a chosen image and shrinks it to fit the upload limit; returns a message when it can't be used. */
+export async function prepareImage(file: File, keepAlpha = false): Promise<File | string> {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return 'Choose a JPG, PNG, or WebP image.'
   const small = await shrinkImage(file, IMAGE_UPLOAD_MAX_BYTES, keepAlpha)
-  if (!small) return 'This image couldn’t be read. Try a different JPG, PNG, or WebP file.'
-  data.set(field, small)
-  return data
+  return small ?? 'This image couldn’t be read. Try a different JPG, PNG, or WebP file.'
 }
 
 function encode(canvas: HTMLCanvasElement, type: string, quality?: number) {

@@ -44,7 +44,7 @@ export default async function BusinessSettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-6">
           {error ? <p className="text-sm">Couldn’t load the business profile. Refresh the page to try again.</p> : owner ? <>
-            <BusinessLogoForm key={data?.logo_path ?? 'none'} name={business.name} logoUrl={logoUrl} save={saveBusinessLogo.bind(null, business.id, data?.logo_path ?? null)} />
+            <BusinessLogoForm name={business.name} logoUrl={logoUrl} save={saveBusinessLogo.bind(null, business.id, data?.logo_path ?? null)} />
             <div className="border-t pt-5">
               <BusinessProfileForm save={saveBusinessProfile.bind(null, business.id)}
                 initial={{ about: data?.about ?? null, websiteUrl: data?.website_url ?? null, contactEmail: data?.contact_email ?? null }} />

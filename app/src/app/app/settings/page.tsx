@@ -22,9 +22,9 @@ export default async function ProfileSettingsPage() {
       </Card>
       <Card>
         <CardHeader><CardTitle>Profile photo</CardTitle></CardHeader>
-        <CardContent className="grid items-start gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
-          <Avatar name={user.fullName} src={photo} className="size-16 text-lg" />
-          <ProfilePhotoForm save={saveProfilePhoto.bind(null, user.avatarPath)} hasPhoto={Boolean(user.avatarPath)} />
+        <CardContent>
+          <ProfilePhotoForm save={saveProfilePhoto.bind(null, user.avatarPath)} hasPhoto={Boolean(user.avatarPath)}
+            preview={<Avatar name={user.fullName} src={photo} className="size-16 text-lg" />} />
         </CardContent>
       </Card>
     </div>
