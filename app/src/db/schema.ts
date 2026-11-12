@@ -251,6 +251,8 @@ export const clientFiles = pgTable('client_files', {
   mimeType: text('mime_type').notNull(),
   sizeBytes: integer('size_bytes'),
   status: text('status', { enum: ['pending', 'ready'] }).notNull().default('pending'),
+  /** Visible to the client's guardians in the family portal (D-073). Off by default. */
+  sharedWithFamily: boolean('shared_with_family').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   foreignKey({ columns: [t.businessId, t.clientId], foreignColumns: [coachingClients.businessId, coachingClients.id], name: 'client_files_client_fk' }).onDelete('cascade'),
@@ -261,6 +263,40 @@ export const clientFiles = pgTable('client_files', {
   check('client_files_status', sql`${t.status} in ('pending', 'ready')`),
   check('client_files_size', sql`${t.sizeBytes} is null or ${t.sizeBytes} between 1 and 26214400`),
   check('client_files_path', sql`${t.path} = ${t.businessId}::text || '/' || ${t.clientId}::text || '/' || ${t.id}::text`),
+])
+
+/**
+ * A guardian's portal access to one client (D-073). Owners and administrators invite a guardian contact;
+ * the link carries a random token whose hash is stored here. Accepting links the signed-in account
+ * (`user_id`), which must use the invited email. Each switch limits what the guardian can see or do.
+ * Written only by the server.
+ */
+export const familyAccess = pgTable('family_access', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  guardianId: uuid('guardian_id').notNull().references(() => clientGuardians.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  userId: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  invitedBy: uuid('invited_by').references(() => profiles.id, { onDelete: 'set null' }),
+  invitedAt: timestamp('invited_at', { withTimezone: true }).notNull().defaultNow(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  canViewSessions: boolean('can_view_sessions').notNull().default(true),
+  canViewCredits: boolean('can_view_credits').notNull().default(true),
+  canReschedule: boolean('can_reschedule').notNull().default(true),
+  canBook: boolean('can_book').notNull().default(true),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId], foreignColumns: [coachingClients.businessId, coachingClients.id], name: 'family_access_client_fk' }).onDelete('cascade'),
+  uniqueIndex('family_access_guardian_key').on(t.guardianId),
+  uniqueIndex('family_access_token_key').on(t.tokenHash),
+  index('family_access_user_idx').on(t.userId),
+  index('family_access_client_idx').on(t.businessId, t.clientId),
+  index('family_access_invited_by_idx').on(t.invitedBy),
+  check('family_access_email', sql`${t.email} = lower(${t.email}) and char_length(${t.email}) between 3 and 254`),
+  check('family_access_accepted_user', sql`(${t.acceptedAt} is null) = (${t.userId} is null)`),
 ])
 
 /** Copy of the terms in force when staff assign a package to a client. */

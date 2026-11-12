@@ -2,13 +2,14 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, FileText, Loader2, Trash2, Upload } from 'lucide-react'
+import { Download, EyeOff, FileText, Loader2, Trash2, Upload, Users } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { CLIENT_FILE_ACCEPT, CLIENT_FILE_HINT, MAX_CLIENT_FILE_BYTES, clientFileType, formatFileSize } from '@/lib/clients/files'
 import { deleteClientFile, finishClientFileUpload, startClientFileUpload } from './file-actions'
+import { setFileShared } from './family-actions'
 
-export type ClientFileRow = { id: string; file_name: string; size_bytes: number; created_at: string; uploaded_by: string | null; uploader: string; canDelete: boolean }
+export type ClientFileRow = { id: string; file_name: string; size_bytes: number; created_at: string; uploaded_by: string | null; shared_with_family: boolean; uploader: string; canDelete: boolean }
 
 /** Sends the file straight to Storage with the one-time link (the same request supabase-js makes). */
 async function putFile(url: string, file: File, type: string) {
@@ -49,6 +50,15 @@ export function ClientFiles({ businessId, clientId, files, timezone }: { busines
     startTransition(() => router.refresh())
   }
 
+  async function toggleShared(file: ClientFileRow) {
+    setError(null)
+    setBusy(file.shared_with_family ? `Unsharing ${file.file_name}…` : `Sharing ${file.file_name}…`)
+    const result = await setFileShared(businessId, file.id, !file.shared_with_family)
+    setBusy(null)
+    if (result.message) setError(result.message)
+    startTransition(() => router.refresh())
+  }
+
   async function remove(file: ClientFileRow) {
     if (!window.confirm(`Delete “${file.file_name}”? This can’t be undone.`)) return
     setError(null)
@@ -69,8 +79,15 @@ export function ClientFiles({ businessId, clientId, files, timezone }: { busines
               <FileText className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <a href={`/app/files/${file.id}`} className="block truncate text-sm font-medium hover:underline">{file.file_name}</a>
-                <p className="text-muted-foreground text-xs">{formatFileSize(file.size_bytes)} · {date.format(new Date(file.created_at))} · {file.uploader}</p>
+                <p className="text-muted-foreground text-xs">{formatFileSize(file.size_bytes)} · {date.format(new Date(file.created_at))} · {file.uploader}
+                  {file.shared_with_family && <span className="text-primary font-medium"> · Shared with family</span>}</p>
               </div>
+              {file.canDelete && (
+                <Button variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => toggleShared(file)}
+                  aria-label={file.shared_with_family ? `Stop sharing ${file.file_name} with the family` : `Share ${file.file_name} with the family`}>
+                  {file.shared_with_family ? <EyeOff /> : <Users />} <span className="hidden sm:inline">{file.shared_with_family ? 'Unshare' : 'Share with family'}</span>
+                </Button>
+              )}
               <Button asChild variant="ghost" size="icon-sm" aria-label={`Download ${file.file_name}`}>
                 <a href={`/app/files/${file.id}`}><Download /></a>
               </Button>

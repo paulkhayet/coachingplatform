@@ -16,6 +16,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireWorkspace } from '@/lib/workspace'
 import { saveClient, saveClientPackage, saveGuardian } from '../actions'
 import { ClientFiles, type ClientFileRow } from '../client-files'
+import { inviteGuardianToPortal, revokeGuardianPortal, saveGuardianPermissions } from '../family-actions'
+import { GuardianPortal, type PortalAccessRow } from '../family-portal'
 import { CreditPeriod } from '../credit-period'
 import type { AssignmentRow, ClientRow, CreditBalanceRow, CreditEventRow, CreditPaymentRow, GuardianRow, PackageOption } from '../data'
 import { AssignPackageForm, ClientForm, GuardianForm } from '../forms'
@@ -44,10 +46,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const finance = canManagePayments(membership)
   const today = businessDate(business.timezone)
   const now = new Date().toISOString()
-  const [coaches, guardians, balances, events, assignments, payments, packages, sessions, files] = await Promise.all([
+  const [coaches, guardians, portal, balances, events, assignments, payments, packages, sessions, files] = await Promise.all([
     coachOptions(business.id),
     manager ? supabase.from('client_guardians').select('id, name, relationship, email, phone')
       .eq('business_id', business.id).eq('client_id', id).order('created_at').returns<GuardianRow[]>() : empty,
+    manager ? supabase.from('family_access').select('id, guardian_id, email, invited_at, expires_at, accepted_at, revoked_at, can_view_sessions, can_view_credits, can_reschedule, can_book')
+      .eq('business_id', business.id).eq('client_id', id).returns<(PortalAccessRow & { guardian_id: string })[]>() : empty,
     supabase.rpc('client_credit_balances', { p_business_id: business.id, p_client_id: id }).returns<CreditBalanceRow[]>(),
     supabase.from('client_credit_events').select('id, period_id, kind, credit_units, created_at')
       .eq('business_id', business.id).eq('client_id', id).order('created_at', { ascending: false }).limit(100).returns<CreditEventRow[]>(),
@@ -64,7 +68,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       supabase.from('bookings').select('id, title, starts_at, status, attended_at, credit_covered_at, unpaid_cancelled')
         .eq('business_id', business.id).eq('coaching_client_id', id).lt('starts_at', now).order('starts_at', { ascending: false }).limit(20).returns<SessionSummary[]>(),
     ]).then(([upcoming, past]) => ({ error: upcoming.error ?? past.error, upcoming: upcoming.data ?? [], past: past.data ?? [] })),
-    supabase.from('client_files').select('id, file_name, size_bytes, created_at, uploaded_by, uploader:profiles(full_name)')
+    supabase.from('client_files').select('id, file_name, size_bytes, created_at, uploaded_by, shared_with_family, uploader:profiles(full_name)')
       .eq('business_id', business.id).eq('client_id', id).eq('status', 'ready').order('created_at', { ascending: false }).limit(200)
       .returns<(Omit<ClientFileRow, 'uploader' | 'canDelete'> & { uploader: { full_name: string | null } | null })[]>(),
   ])
@@ -117,6 +121,15 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <div key={guardian.id} className="grid gap-2 border-b pb-3 text-sm">
                 <p className="font-medium break-words">{guardian.name}{guardian.relationship && <span className="text-muted-foreground font-normal"> · {guardian.relationship}</span>}</p>
                 <p className="text-muted-foreground break-words">{[guardian.email, guardian.phone].filter(Boolean).join(' · ')}</p>
+                {(() => {
+                  const access = (portal.data ?? []).find((a) => a.guardian_id === guardian.id) ?? null
+                  return (
+                    <GuardianPortal access={access} hasEmail={Boolean(guardian.email)}
+                      invite={inviteGuardianToPortal.bind(null, business.id, id, guardian.id)}
+                      revoke={access ? revokeGuardianPortal.bind(null, business.id, id, access.id) : null}
+                      savePermissions={access ? saveGuardianPermissions.bind(null, business.id, id, access.id) : null} />
+                  )
+                })()}
                 <details>
                   <summary className="cursor-pointer font-medium">Edit contact</summary>
                   <div className="mt-3"><GuardianForm action={saveGuardian.bind(null, business.id, id, guardian.id)} guardian={guardian} /></div>
@@ -164,7 +177,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       <Card className="gap-4">
         <CardHeader>
           <h2 className="font-semibold">Files</h2>
-          <CardDescription>Private to staff who can see this client. Families can’t see these yet.</CardDescription>
+          <CardDescription>Private to staff who can see this client, unless you share a file with the family portal.</CardDescription>
         </CardHeader>
         <CardContent>
           {files.error ? <Alert variant="destructive"><AlertDescription>Couldn’t load files. Refresh the page to try again.</AlertDescription></Alert>

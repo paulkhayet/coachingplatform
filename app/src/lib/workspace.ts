@@ -3,6 +3,7 @@ import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { familyLinks } from '@/lib/family/access'
 import type { MemberRole } from '@/db/schema'
 
 /** Remembers which business the person last switched to (D-057). Not a security boundary: every query is
@@ -51,7 +52,10 @@ export const requireWorkspace = cache(async (): Promise<Workspace> => {
   ])
   if (error) throw new Error(`Couldn't load your workspace: ${error.message}`)
   const rows = (data ?? []).filter((r) => r.business)
-  if (rows.length === 0) redirect('/onboarding')
+  if (rows.length === 0) {
+    // Parents and guardians with portal access (D-073) and no business of their own go to their portal.
+    redirect((await familyLinks(user.id)).length ? '/family' : '/onboarding')
+  }
   const chosen = (await cookies()).get(BUSINESS_COOKIE)?.value
   const row = rows.find((r) => r.business!.id === chosen) ?? rows[0]
   return {

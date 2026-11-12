@@ -97,13 +97,13 @@ export function SignInForm({ next, notice }: { next?: string; notice?: string })
 }
 
 /** `invite` is set when someone arrives from an invitation link: they join that business instead of creating one. */
-export function SignUpForm({ next, invite }: { next?: string; invite?: { businessName: string; email: string } }) {
+export function SignUpForm({ next, invite }: { next?: string; invite?: { businessName: string; email: string; description?: string } }) {
   const [state, action, pending] = useActionState<FormState, FormData>(signUp, {})
   return (
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="text-xl">Create your account</CardTitle>
-        <CardDescription>{invite ? `Then you’ll join ${invite.businessName}. Free for you.` : 'Then set up your coaching business. Free to start.'}</CardDescription>
+        <CardDescription>{invite ? (invite.description ?? `Then you’ll join ${invite.businessName}. Free for you.`) : 'Then set up your coaching business. Free to start.'}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         <GoogleSignIn next={next ?? '/onboarding'} />

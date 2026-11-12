@@ -130,6 +130,24 @@ export function teamInviteEmail(d: { businessName: string; inviterName: string; 
   }
 }
 
+/** D-073: a coaching business invites a parent or guardian to the family portal. */
+export function familyInviteEmail(d: { businessName: string; inviterName: string; clientName: string; url: string; expires: Date }): EmailMessage {
+  const until = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(d.expires)
+  return {
+    subject: `${d.businessName} invited you to follow ${d.clientName}’s coaching`,
+    ...render(
+      `Your family portal for ${d.businessName}`,
+      [
+        `${d.inviterName} at ${d.businessName} invited you to the family portal for ${d.clientName}.`,
+        'You’ll see upcoming sessions and meeting links, session credits and anything the coach shares with you. If you’re new to schedulefa.st, you’ll create a free account with this email first.',
+      ],
+      [['Business', d.businessName], ['Student', d.clientName]],
+      { label: 'Open the invitation', url: d.url },
+      `The link works once and expires on ${until}. If you weren’t expecting this, you can ignore it.`,
+    ),
+  }
+}
+
 /** D-067: a sales enquiry from the public contact form, sent to the schedulefa.st team. */
 export function contactRequestEmail(d: { name: string; email: string; organization: string; teamSize: string; message: string | null; plan: string | null }): EmailMessage {
   return {

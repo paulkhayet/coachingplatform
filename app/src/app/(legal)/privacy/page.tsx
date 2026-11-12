@@ -49,7 +49,8 @@ export default function PrivacyPage() {
         <li><strong>People who book a call:</strong> their name and email address, their time zone, the time they booked, their answers to the business’s questions, and an optional note. If a call is paid, the payment is made to the business through Stripe; we receive the payment’s status, not card details.</li>
         <li><strong>Clients and guardians</strong> that a business adds: names, email addresses, phone numbers, how a guardian is related to a client, and the coach assigned. Clients may be children; their details are entered by the business, usually as provided by a parent or guardian.</li>
         <li><strong>Coaching records</strong> a business keeps: packages assigned, session credits, sessions booked and attended, and payments the business records as received.</li>
-        <li><strong>Files</strong> a business uploads to a client’s record, such as worksheets or notes. They are private to the business’s staff who can see that client.</li>
+        <li><strong>Files</strong> a business uploads to a client’s record, such as worksheets or notes. They are private to the business’s staff who can see that client, unless the business chooses to share a file with the family.</li>
+        <li><strong>Family portal accounts:</strong> if a business invites a parent or guardian to its family portal, we store their account details (as for staff accounts) and which student they follow. They see only what the business allows, such as that student’s sessions, meeting links, credits and shared files.</li>
       </ul>
 
       <h3>Other</h3>
@@ -94,7 +95,8 @@ export default function PrivacyPage() {
       <p>
         Inside schedulefa.st, a business’s information is visible only to its active members, and roles limit what each person sees: for
         example, coaches see only the clients assigned to them, and guardian contacts and payment records are visible to owners and
-        administrators. A business’s public profile and booking pages can be seen by anyone with the link.
+        administrators. A parent or guardian the business invites to its family portal sees only the student they follow, and only what
+        the business allows. A business’s public profile and booking pages can be seen by anyone with the link.
       </p>
       <p>We use a small number of service providers that process information on our behalf, only to run schedulefa.st:</p>
       <ul>
@@ -132,8 +134,9 @@ export default function PrivacyPage() {
 
       <h2>Children</h2>
       <p>
-        schedulefa.st accounts are for adults who run or work for coaching businesses. Children do not have accounts and do not use
-        schedulefa.st directly. A business may keep records about students who are children, such as their name, sessions and files; that
+        schedulefa.st accounts are for adults: people who run or work for coaching businesses, and parents or guardians a business invites
+        to its family portal. Children under 13 do not have accounts and do not use schedulefa.st directly. A business may keep records
+        about students who are children, such as their name, sessions and files; that
         information is entered by the business, usually as provided by a parent or guardian, and the business is responsible for having the
         right to collect it, including any parental consent the law requires. A parent or guardian can ask the business, or us, to review or
         delete a child’s information.

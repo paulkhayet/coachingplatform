@@ -5,6 +5,7 @@ import * as schema from '@/db/schema'
 import { assignClientPackage, recordClientPayment } from '@/lib/clients/finance'
 import { cancelCoachingForDepartedHost, cancelUnpaidReservation, finishCoachingSession, moveCoachingSession, reserveCoachingSeries, reserveCoachingSession } from '@/lib/clients/sessions'
 import { acceptInvitation, findInvitation, hashToken, sendInvitation } from '@/lib/team/invitations'
+import { acceptFamilyInvite, revokeFamilyAccess, sendFamilyInvite, setFamilyPermissions } from '@/lib/family/invitations'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DB_URL, as, createUser, resetDatabase } from './helpers'
 
@@ -305,6 +306,74 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     await expect(as(sql, eleni, (tx) => tx`SELECT 1 FROM public.contact_requests`)).rejects.toThrow(/permission denied/)
     await expect(as(sql, null, (tx) => tx`INSERT INTO public.contact_requests (name, email, organization, team_size) VALUES ('x', 'x@x', 'x', 'x')`)).rejects.toThrow(/permission denied/)
     await expect(sql`INSERT INTO public.contact_requests (name, email, organization, team_size) VALUES (${'n'.repeat(200)}, 'a@b', 'c', 'd')`).rejects.toThrow(/contact_requests_lengths/)
+  })
+
+  it('shows a guardian only their own student, within their switches, after they accept (D-073)', async () => {
+    financeSql ??= postgres(DB_URL!, { max: 1, prepare: false, onnotice: () => {} })
+    const db = drizzle(financeSql, { schema })
+    const parent = await createUser(sql, 'family-parent@example.com', 'Family Parent')
+    const stranger = await createUser(sql, 'family-stranger@example.com', 'Family Stranger')
+    await sql`UPDATE auth.users SET email = 'family-parent@example.com' WHERE id = ${parent}`
+    const [client, otherClient] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.coaching_clients (business_id, name) VALUES (${willow}, 'Family Student'), (${willow}, 'Someone Else') RETURNING id`)
+    const [guardian] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.client_guardians (business_id, client_id, name, email) VALUES (${willow}, ${client.id}, 'Family Parent', 'Family-Parent@example.com') RETURNING id`)
+    const [pkg] = await sql<{ id: string }[]>`
+      INSERT INTO public.coaching_packages (business_id, name, kind, term_weeks, credit_units, price_cents, session_formats, updated_at)
+      VALUES (${willow}, 'Family Package', 'fixed', 4, 400, 40000, ${sql.json([{ name: 'Standard', durationMinutes: 60, creditUnits: 100 }])}, '2026-11-11T12:00:00Z') RETURNING id`
+    const actor = { businessId: willow, clientId: client.id, userId: eleni }
+    const periodId = await assignClientPackage(db, actor, { id: randomUUID(), packageId: pkg.id, packageVersion: '2026-11-11T12:00:00Z', startsOn: '2026-11-11' })
+    await recordClientPayment(db, actor, { id: randomUUID(), periodId, amountCents: 20000, method: 'check', receivedOn: '2026-11-11', reference: null })
+    const ids = [randomUUID(), randomUUID()]
+    await sql`
+      INSERT INTO public.client_files (id, business_id, client_id, file_name, path, mime_type, status, size_bytes, shared_with_family)
+      VALUES (${ids[0]}, ${willow}, ${client.id}, 'shared.pdf', ${`${willow}/${client.id}/${ids[0]}`}, 'application/pdf', 'ready', 10, true),
+             (${ids[1]}, ${willow}, ${client.id}, 'notes.pdf', ${`${willow}/${client.id}/${ids[1]}`}, 'application/pdf', 'ready', 10, false)`
+    const visibleTo = (user: string) => as(sql, user, async (tx) => ({
+      clients: (await tx`SELECT name FROM public.coaching_clients WHERE business_id = ${willow} ORDER BY name`).map((r) => r.name),
+      business: (await tx`SELECT name FROM public.businesses WHERE id = ${willow}`).length,
+      periods: (await tx`SELECT id FROM public.client_credit_periods WHERE client_id = ${client.id}`).length,
+      payments: (await tx`SELECT id FROM public.client_credit_payments WHERE client_id = ${client.id}`).length,
+      files: (await tx`SELECT file_name FROM public.client_files WHERE client_id = ${client.id}`).map((r) => r.file_name),
+    }))
+    const nothing = { clients: [], business: 0, periods: 0, payments: 0, files: [] }
+
+    // Invited but not accepted: nothing yet. Only the invited email can accept.
+    const sent = await sendFamilyInvite({ businessId: willow, guardianId: guardian.id, inviter: { id: eleni, name: 'Eleni Morgan', email: 'eleni@example.com' } }, db)
+    if ('error' in sent) throw new Error(sent.error)
+    const token = sent.url.split('/family/join/')[1]
+    expect(await visibleTo(parent)).toEqual(nothing)
+    expect(await acceptFamilyInvite({ token }, { id: stranger, email: 'family-stranger@example.com', emailConfirmed: true }, db)).toEqual({ ok: false, reason: 'wrong-email' })
+    expect(await acceptFamilyInvite({ token }, { id: parent, email: 'family-parent@example.com', emailConfirmed: true }, db)).toEqual({ ok: true, clientId: client.id })
+    expect(await acceptFamilyInvite({ token }, { id: parent, email: 'family-parent@example.com', emailConfirmed: true }, db)).toEqual({ ok: false, reason: 'gone' })
+
+    // Accepted: their student, the business, credits and shared files only. Never the other client.
+    expect(await visibleTo(parent)).toEqual({ clients: ['Family Student'], business: 1, periods: 1, payments: 1, files: ['shared.pdf'] })
+    expect(await visibleTo(stranger)).toEqual(nothing)
+    expect(await as(sql, parent, (tx) => tx`SELECT id FROM public.coaching_clients WHERE id = ${otherClient.id}`)).toEqual([])
+    expect(await as(sql, parent, (tx) => tx`SELECT id FROM public.client_guardians`)).toEqual([])
+    expect(await as(sql, parent, (tx) => tx`SELECT funded_units FROM public.client_credit_balances(${willow}, ${client.id})`)).toEqual([{ funded_units: 200 }])
+    expect(await as(sql, parent, (tx) => tx`SELECT email FROM public.family_access`)).toEqual([{ email: 'family-parent@example.com' }])
+    // Downloads follow the same rule: the shared file's stored object, never the private one.
+    await sql`INSERT INTO storage.objects (bucket_id, name) VALUES ('client-files', ${`${willow}/${client.id}/${ids[0]}`}), ('client-files', ${`${willow}/${client.id}/${ids[1]}`})`
+    expect(await as(sql, parent, (tx) => tx`SELECT name FROM storage.objects WHERE bucket_id = 'client-files' AND name LIKE ${`${willow}/${client.id}/%`}`))
+      .toEqual([{ name: `${willow}/${client.id}/${ids[0]}` }])
+
+    // Read-only: guardians can't change their access, their switches, or the student's record.
+    await expect(as(sql, parent, (tx) => tx`UPDATE public.family_access SET can_book = true`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, parent, (tx) => tx`SELECT token_hash FROM public.family_access`)).rejects.toThrow(/permission denied/)
+    expect(await as(sql, parent, (tx) => tx`UPDATE public.coaching_clients SET name = 'Changed' WHERE id = ${client.id} RETURNING id`)).toEqual([])
+
+    // Switching off credits hides credits and payments; turning access off hides everything.
+    const [access] = await sql<{ id: string }[]>`SELECT id FROM public.family_access WHERE guardian_id = ${guardian.id}`
+    await setFamilyPermissions(willow, access.id, { canViewSessions: true, canViewCredits: false, canReschedule: true, canBook: true }, db)
+    expect(await visibleTo(parent)).toMatchObject({ clients: ['Family Student'], periods: 0, payments: 0 })
+    expect(await revokeFamilyAccess(willow, access.id, db)).toBe(true)
+    expect(await visibleTo(parent)).toEqual(nothing)
+
+    // The guardian contact has to belong to the client the access is for.
+    await expect(sql`INSERT INTO public.family_access (business_id, client_id, guardian_id, email) VALUES (${willow}, ${otherClient.id}, ${guardian.id}, 'x@example.com')`)
+      .rejects.toThrow(/must belong to this client/)
   })
 
   it('holds funded credits for coaching and settles each session outcome once', async () => {

@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseKey, supabaseUrl } from '@/lib/env'
 
-const PROTECTED = ['/app', '/onboarding']
+const PROTECTED = ['/app', '/onboarding', '/family']
+// Invitation links must open for signed-out visitors, who then sign up or sign in from the page.
+const PUBLIC_UNDER_PROTECTED = ['/family/join/']
 
 /** Refreshes the Supabase session cookie on every request and keeps signed-out visitors out of the app. */
 export async function updateSession(request: NextRequest) {
@@ -23,7 +25,7 @@ export async function updateSession(request: NextRequest) {
   const signedIn = Boolean(data?.claims)
   const path = request.nextUrl.pathname
 
-  if (!signedIn && PROTECTED.some((p) => path === p || path.startsWith(`${p}/`))) {
+  if (!signedIn && PROTECTED.some((p) => path === p || path.startsWith(`${p}/`)) && !PUBLIC_UNDER_PROTECTED.some((p) => path.startsWith(p))) {
     const url = request.nextUrl.clone()
     url.pathname = '/sign-in'
     url.search = `?next=${encodeURIComponent(path)}`
