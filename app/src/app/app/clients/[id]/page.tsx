@@ -43,6 +43,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const manager = canManageClients(membership.role)
   const finance = canManagePayments(membership)
   const today = businessDate(business.timezone)
+  const now = new Date().toISOString()
   const [coaches, guardians, balances, events, assignments, payments, packages, sessions, files] = await Promise.all([
     coachOptions(business.id),
     manager ? supabase.from('client_guardians').select('id, name, relationship, email, phone')
@@ -56,8 +57,13 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       .eq('business_id', business.id).eq('client_id', id).order('recorded_at', { ascending: false }).limit(100).returns<CreditPaymentRow[]>() : empty,
     finance ? supabase.from('coaching_packages').select('id, name, kind, price_cents, credit_units, updated_at')
       .eq('business_id', business.id).is('archived_at', null).order('name').returns<PackageOption[]>() : empty,
-    supabase.from('bookings').select('id, title, starts_at, status, attended_at, credit_covered_at, unpaid_cancelled')
-      .eq('business_id', business.id).eq('coaching_client_id', id).order('starts_at', { ascending: false }).limit(30).returns<SessionSummary[]>(),
+    // Upcoming sessions soonest first, then the most recent past ones.
+    Promise.all([
+      supabase.from('bookings').select('id, title, starts_at, status, attended_at, credit_covered_at, unpaid_cancelled')
+        .eq('business_id', business.id).eq('coaching_client_id', id).gte('starts_at', now).order('starts_at').limit(30).returns<SessionSummary[]>(),
+      supabase.from('bookings').select('id, title, starts_at, status, attended_at, credit_covered_at, unpaid_cancelled')
+        .eq('business_id', business.id).eq('coaching_client_id', id).lt('starts_at', now).order('starts_at', { ascending: false }).limit(20).returns<SessionSummary[]>(),
+    ]).then(([upcoming, past]) => ({ error: upcoming.error ?? past.error, upcoming: upcoming.data ?? [], past: past.data ?? [] })),
     supabase.from('client_files').select('id, file_name, size_bytes, created_at, uploaded_by, uploader:profiles(full_name)')
       .eq('business_id', business.id).eq('client_id', id).eq('status', 'ready').order('created_at', { ascending: false }).limit(200)
       .returns<(Omit<ClientFileRow, 'uploader' | 'canDelete'> & { uploader: { full_name: string | null } | null })[]>(),
@@ -117,7 +123,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 </details>
               </div>
             ))}
-            <details>
+            {/* Keyed on the count so it closes again once a contact is saved. */}
+            <details key={guardians.data?.length ?? 0}>
               <summary className="cursor-pointer text-sm font-medium">Add guardian contact</summary>
               <div className="mt-3"><GuardianForm key={guardians.data?.length ?? 0} action={saveGuardian.bind(null, business.id, id, null)} /></div>
             </details>
@@ -125,26 +132,31 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </CardContent>
       </Card>}
 
-      {(sessions.error || Boolean(sessions.data?.length)) && <Card className="gap-4">
+      {(sessions.error || sessions.upcoming.length > 0 || sessions.past.length > 0) && <Card className="gap-4">
         <CardHeader><h2 className="font-semibold">Coaching sessions</h2></CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-5">
           {sessions.error ? <Alert variant="destructive"><AlertDescription>Couldn’t load coaching sessions.</AlertDescription></Alert> : (
-            <ul className="divide-y">
-              {(sessions.data ?? []).map((session) => (
-                <li key={session.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium break-words">{session.title}</p>
-                    <p className="text-muted-foreground text-xs">{sessionTime.format(new Date(session.starts_at))}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge tone={session.status === 'cancelled' ? 'neutral' : session.credit_covered_at ? 'success' : 'warning'}>
-                      {session.status === 'cancelled' ? (session.unpaid_cancelled ? 'Cancelled for nonpayment' : 'Cancelled') : session.attended_at ? 'Attended' : session.credit_covered_at ? 'Covered' : 'Payment needed'}
-                    </StatusBadge>
-                    <Button asChild variant="ghost" size="sm"><Link href={`/app/bookings/coaching/${session.id}`}>View session</Link></Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            ([['Upcoming', sessions.upcoming], ['Past', sessions.past]] as const).filter(([, list]) => list.length > 0).map(([label, list]) => (
+              <section key={label} className="grid gap-1" aria-label={`${label} sessions`}>
+                <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{label}</h3>
+                <ul className="divide-y">
+                  {list.map((session) => (
+                    <li key={session.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium break-words">{session.title}</p>
+                        <p className="text-muted-foreground text-xs">{sessionTime.format(new Date(session.starts_at))}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge tone={session.status === 'cancelled' ? 'neutral' : session.credit_covered_at ? 'success' : 'warning'}>
+                          {session.status === 'cancelled' ? (session.unpaid_cancelled ? 'Cancelled for nonpayment' : 'Cancelled') : session.attended_at ? 'Attended' : session.credit_covered_at ? 'Covered' : 'Payment needed'}
+                        </StatusBadge>
+                        <Button asChild variant="ghost" size="sm"><Link href={`/app/bookings/coaching/${session.id}`}>View session</Link></Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))
           )}
         </CardContent>
       </Card>}

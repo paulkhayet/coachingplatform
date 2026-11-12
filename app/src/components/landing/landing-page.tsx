@@ -6,7 +6,7 @@ import { planLimits } from '@/lib/billing/plans'
 import '@/app/landing.css'
 
 // The marketing home page (from the landing/ design). Copy describes what is live today; anything still in
-// development is labelled as coming next. Product images are the real screens (product-previews.tsx). Prices are planned, not charged (no billing is built yet).
+// development is labelled as coming next. Product images are the real screens (product-previews.tsx). Prices come from PAID_PLANS (D-072).
 
 function BrandMark({ className }: { className: string }) {
   return (
@@ -88,7 +88,8 @@ const faqs: [string, string][] = [
   ['Does it work with Google Calendar and Zoom?', 'Yes. Both connect to your own accounts: busy times on Google Calendar keep you from being double-booked, each booking is added to your calendar, and Zoom pages create a meeting for every booking. Both connections are opening to everyone as Google and Zoom finish reviewing our app; until then, any booking page can use your own meeting link.'],
   ['Is it for solo coaches or teams?', 'Both. Invite coaches and administrators, set business hours, and share a booking page across a group of coaches. If you work for more than one business, one account covers all of them, without double-booking.'],
   ['How do payments work?', 'Connect your own Stripe account and set a price on any booking page. Families pay by card when they book, the money goes to you, and refunds follow the cutoff you choose. schedulefa.st takes no fee on your coaching payments; Stripe’s standard processing fees apply.'],
-  ['What’s coming next?', 'Client records with packages and session credits, then intake, offers and e-signing, family portals, and AI-assisted follow-ups. Booking is the foundation the rest builds on.'],
+  ['Can I track packages and session credits?', 'Yes, on Solo and Team. Keep client and guardian records, sell fixed bundles or monthly plans, record payments, book sessions that use credits (weekly series too), track attendance and late cancellations, and keep files with each client.'],
+  ['What’s coming next?', 'Card payments and installments for packages, then family portals with homework and files, intake, offers and e-signing, and AI-assisted follow-ups.'],
 ]
 
 export function LandingPage() {
@@ -119,7 +120,7 @@ export function LandingPage() {
             <BookingsPreview />
           </div>
           <p className="preview-caption">The real schedulefa.st app, shown with sample data.</p>
-          <div className="coverage-strip" aria-label="What schedulefa.st does today"><span>Booking pages</span><span>Google Calendar</span><span>Zoom links</span><span>Stripe payments</span><span>Email reminders</span><span>Teams</span></div>
+          <div className="coverage-strip" aria-label="What schedulefa.st does today"><span>Booking pages</span><span>Google Calendar</span><span>Zoom links</span><span>Stripe payments</span><span>Email reminders</span><span>Teams</span><span>Clients & packages</span></div>
         </section>
 
         <section className="intro-section lp-container" id="platform">
@@ -158,14 +159,14 @@ export function LandingPage() {
           <article className="detail-block settings-block">
             <div className="section-kicker">COMING NEXT</div>
             <h2>The rest of your<br />business, next.</h2>
-            <p>Booking is the first step. We’re building out the rest of the client journey, one piece at a time.</p>
+            <p>Booking and client records are live. We’re building out the rest of the client journey, one piece at a time.</p>
             <div className="settings-demo">
               <div className="settings-title"><Icon id="layers" /><b>On the roadmap</b><span>In development</span></div>
-              <div><span>Client records, packages & session credits</span><b>Next</b></div>
+              <div><span>Card payments & installments for packages</span><b>Next</b></div>
+              <div><span>Family portals, homework & files</span><b>Planned</b></div>
               <div><span>Intake, offers & e-signing</span><b>Planned</b></div>
-              <div><span>Family portals</span><b>Planned</b></div>
               <div><span>AI-assisted follow-ups</span><b>Planned</b></div>
-              <div className="settings-note"><Icon id="check" /> Live today: booking pages, calendars, Zoom, payments, reminders and teams.</div>
+              <div className="settings-note"><Icon id="check" /> Live today: booking pages, calendars, Zoom, payments, reminders, teams, and clients with packages, credits and files.</div>
             </div>
           </article>
         </section>

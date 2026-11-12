@@ -21,7 +21,9 @@ export const metadata: Metadata = { title: 'Book coaching session' }
 export default async function BookCoachingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ period?: string }> }) {
   const { business, membership } = await requireWorkspace()
   const [{ id }, { period: periodId }] = await Promise.all([params, searchParams])
-  if (!z.uuid().safeParse(id).success || !periodId || !z.uuid().safeParse(periodId).success) notFound()
+  if (!z.uuid().safeParse(id).success) notFound()
+  // Sessions are booked from a credit period; without one, send staff to the client to choose it.
+  if (!periodId || !z.uuid().safeParse(periodId).success) redirect(`/app/clients/${id}`)
   if (!canManageClients(membership.role)) redirect(`/app/clients/${id}`)
 
   const supabase = await createClient()
@@ -34,7 +36,8 @@ export default async function BookCoachingPage({ params, searchParams }: { param
   if (client.error || balances.error || guardians.error) return <Alert variant="destructive"><AlertDescription>Couldn’t load the booking details. Refresh the page to try again.</AlertDescription></Alert>
   const periods: CreditBalanceRow[] = Array.isArray(balances.data) ? balances.data : []
   const period = periods.find((item) => item.id === periodId)
-  if (!client.data || !period) notFound()
+  if (!client.data) notFound()
+  if (!period) redirect(`/app/clients/${id}`)
   const { data: assignment, error } = await supabase.from('client_packages').select('id, terms').eq('id', period.client_package_id)
     .eq('business_id', business.id).eq('client_id', id).maybeSingle<AssignmentRow>()
   if (error || !assignment) return <Alert variant="destructive"><AlertDescription>Couldn’t load the package terms.</AlertDescription></Alert>
