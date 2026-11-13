@@ -3,7 +3,8 @@ import { bestYearlySaving, formatDollars, formatPlanPrice, monthlyDollars, planF
 
 describe('plans', () => {
   it('limits the free plan to one person, one page and free calls', () => {
-    expect(planLimits('free')).toEqual({ people: 1, bookingPages: 1, paidCalls: false, zoom: false, clients: false, reminders: false })
+    expect(planLimits('free')).toEqual({ people: 1, bookingPages: 1, paidCalls: false, zoom: false, clients: false, reminders: false, teamDashboard: false })
+    expect([planLimits('solo').teamDashboard, planLimits('team').teamDashboard]).toEqual([false, true])
     expect(planLimits('solo')).toMatchObject({ people: 1, bookingPages: null, paidCalls: true, clients: true, reminders: true })
     expect(planLimits('team', 4).people).toBe(4)
     expect(planLimits('team', 0).people).toBe(1)

@@ -50,9 +50,9 @@ function render(heading: string, paragraphs: string[], details: [string, string]
 ${brand ? brandHeader(brand) : ''}
 <h1 style="font-size:20px;margin:0 0 16px">${esc(heading)}</h1>
 ${paragraphs.map((p) => `<p style="font-size:15px;line-height:1.5;margin:0 0 12px">${esc(p)}</p>`).join('\n')}
-<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#fff;border:1px solid #e5e7eb;border-radius:8px">
+${details.length ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#fff;border:1px solid #e5e7eb;border-radius:8px">
 ${details.map(([k, v]) => `<tr><td style="padding:10px 14px;font-size:13px;color:#6b7280;width:110px;vertical-align:top">${esc(k)}</td><td style="padding:10px 14px;font-size:14px">${/^https?:\/\//.test(v) ? `<a href="${esc(v)}" style="color:#3f61ea">${esc(v)}</a>` : esc(v)}</td></tr>`).join('\n')}
-</table>
+</table>` : ''}
 ${action ? `<p style="margin:20px 0"><a href="${esc(action.url)}" style="background:#3f61ea;color:#fff;text-decoration:none;padding:10px 16px;border-radius:6px;font-size:14px;display:inline-block">${esc(action.label)}</a></p>` : ''}
 ${footer ? `<p style="font-size:12px;color:#6b7280;margin-top:24px">${esc(footer)}</p>` : ''}
 <p style="font-size:12px;color:#9ca3af;margin-top:24px">Sent by schedulefa.st, the scheduling software this business uses.</p>
@@ -185,6 +185,53 @@ export function familyInviteEmail(d: { businessName: string; logoUrl?: string | 
       { label: 'Open the invitation', url: d.url },
       `The link works once and expires on ${until}. If you weren’t expecting this, you can ignore it.`,
       { name: d.businessName, logoUrl: d.logoUrl },
+    ),
+  }
+}
+
+// ── Intake (D-074) ───────────────────────────────────────────────────────────────────────────────────
+
+/** To the family: we got your inquiry. */
+export function inquiryReceivedEmail(d: { businessName: string; logoUrl?: string | null; contactName: string; studentName: string; self: boolean }): EmailMessage {
+  return {
+    subject: `${d.businessName} got your inquiry`,
+    ...render(
+      `Thanks, ${d.contactName.split(' ')[0]}`,
+      [
+        `${d.businessName} received your inquiry${d.self ? '' : ` about coaching for ${d.studentName}`}.`,
+        'Someone from the team will be in touch about next steps. You don’t need to do anything else for now.',
+      ],
+      [],
+      undefined,
+      'Reply to this email if you’d like to add anything.',
+      { name: d.businessName, logoUrl: d.logoUrl },
+    ),
+  }
+}
+
+/** To the staff who handle intake: a new inquiry arrived. */
+export function newInquiryEmail(d: { businessName: string; contactName: string; contactEmail: string; studentName: string; subjects: string[]; goals: string | null; url: string }): EmailMessage {
+  const rows: [string, string][] = [['Student', d.studentName], ['Contact', `${d.contactName} <${d.contactEmail}>`]]
+  if (d.subjects.length) rows.push(['Subjects', d.subjects.join(', ')])
+  if (d.goals) rows.push(['Goals', d.goals.length > 300 ? `${d.goals.slice(0, 300)}…` : d.goals])
+  return {
+    subject: `New inquiry: ${d.studentName}`,
+    ...render(`New inquiry for ${d.businessName}`, [`${d.contactName} filled in your inquiry form.`], rows, { label: 'Open the inquiry', url: d.url }, 'Reply to this email to answer the family directly.'),
+  }
+}
+
+/** To the proposed coach: you've been asked to take a first call. */
+export function firstCallCoachEmail(d: { businessName: string; assignerName: string; studentName: string; subjects: string[]; url: string }): EmailMessage {
+  const rows: [string, string][] = [['Student', d.studentName]]
+  if (d.subjects.length) rows.push(['Subjects', d.subjects.join(', ')])
+  return {
+    subject: `First call: ${d.studentName}`,
+    ...render(
+      `You’ve been matched with ${d.studentName}`,
+      [`${d.assignerName} proposed you as the coach for this family at ${d.businessName}. You’ll take the first call; once it’s booked it appears in your bookings and calendar.`],
+      rows,
+      { label: 'See the inquiry', url: d.url },
+      'After the call, record how it went on the inquiry.',
     ),
   }
 }

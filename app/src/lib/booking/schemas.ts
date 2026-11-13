@@ -15,7 +15,9 @@ const minutes = (min: number, max: number, label: string) => z.coerce.number().i
 
 export const bookingPageSchema = z.object({
   title: z.string().trim().min(2, 'Give the page a name').max(80, 'Keep the name under 80 characters'),
-  slug: z.string().trim().toLowerCase().regex(PAGE_SLUG_PATTERN, 'Use lowercase letters, numbers and dashes, starting and ending with a letter or number'),
+  slug: z.string().trim().toLowerCase().regex(PAGE_SLUG_PATTERN, 'Use lowercase letters, numbers and dashes, starting and ending with a letter or number')
+    // /b/<business>/inquire is the inquiry form (D-074).
+    .refine((slug) => slug !== 'inquire', 'That link is used by your inquiry form. Choose another.'),
   description: z.string().trim().max(1000, 'Keep the description under 1,000 characters'),
   durationMinutes: minutes(5, 480, 'Length'),
   locationType: z.enum(['video_link', 'phone', 'in_person', 'zoom'], 'Choose where the call happens'),

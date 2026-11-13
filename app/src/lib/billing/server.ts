@@ -57,7 +57,7 @@ export async function activeMemberCount(businessId: string, db: Exec = adminDb()
 }
 
 /** Null when allowed; otherwise the message to show. */
-export async function checkFeature(businessId: string, feature: 'paidCalls' | 'zoom' | 'clients'): Promise<string | null> {
+export async function checkFeature(businessId: string, feature: 'paidCalls' | 'zoom' | 'clients' | 'teamDashboard'): Promise<string | null> {
   const { limits } = await workspacePlan(businessId)
   return limits[feature] ? null : UPGRADE_MESSAGES[feature]
 }

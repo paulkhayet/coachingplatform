@@ -2,8 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarCheck, CalendarClock, ContactRound, Home, Link2, Package, Settings, UsersRound } from 'lucide-react'
+import { CalendarCheck, CalendarClock, ContactRound, Home, Inbox, LayoutDashboard, Link2, Package, Settings, UsersRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+/** The team dashboard (D-074): everything for owners and administrators, their own inquiries for coaches. */
+const dashboardItems = {
+  full: { href: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  intake: { href: '/app/dashboard/intake', label: 'Inquiries', icon: Inbox },
+}
 
 const items = [
   { href: '/app', label: 'Today', icon: Home },
@@ -27,10 +33,13 @@ function NavLink({ item }: { item: { href: string; label: string; icon: typeof H
 }
 
 /** The main sections. On desktop Settings sits apart at the bottom of the sidebar; the mobile menu lists it last. */
-export function Nav({ showPricing = false, withSettings = false }: { showPricing?: boolean; withSettings?: boolean }) {
+export function Nav({ showPricing = false, withSettings = false, dashboard = null }: { showPricing?: boolean; withSettings?: boolean; dashboard?: 'full' | 'intake' | null }) {
+  const visible = items.filter((it) => showPricing || !it.pricing)
   return (
     <nav className="grid gap-0.5">
-      {items.filter((it) => showPricing || !it.pricing).map((it) => <NavLink key={it.href} item={it} />)}
+      <NavLink item={visible[0]} />
+      {dashboard && <NavLink item={dashboardItems[dashboard]} />}
+      {visible.slice(1).map((it) => <NavLink key={it.href} item={it} />)}
       {withSettings && <NavLink item={settings} />}
     </nav>
   )

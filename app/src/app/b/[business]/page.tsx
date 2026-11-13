@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Clock, Globe, Mail } from 'lucide-react'
+import { ArrowRight, Clock, Globe, Mail } from 'lucide-react'
 import { BusinessMark } from '@/components/business-mark'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { businessLogoUrl } from '@/lib/business-logo'
 import { listPublicPages } from '@/lib/booking/server'
+import { workspacePlan } from '@/lib/billing/server'
+import { publicIntake } from '@/lib/intake/server'
 
 export async function generateMetadata({ params }: { params: Promise<{ business: string }> }): Promise<Metadata> {
   const found = await listPublicPages((await params).business)
@@ -15,6 +17,9 @@ export async function generateMetadata({ params }: { params: Promise<{ business:
 export default async function BusinessBookingIndex({ params }: { params: Promise<{ business: string }> }) {
   const found = await listPublicPages((await params).business)
   if (!found) notFound()
+  // The inquiry form (D-074), when the business has it on and its plan includes it.
+  const intake = await publicIntake(found.business.slug)
+  const takesInquiries = Boolean(intake?.settings?.enabled) && (await workspacePlan(found.business.id)).limits.teamDashboard
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6">
       <div className="flex items-start gap-4">
@@ -34,11 +39,21 @@ export default async function BusinessBookingIndex({ params }: { params: Promise
               )}
             </div>
           )}
-          <p className="text-muted-foreground mt-1 text-sm">Choose what you’d like to book.</p>
+          {(found.pages.length > 0 || !takesInquiries) && <p className="text-muted-foreground mt-1 text-sm">Choose what you’d like to book.</p>}
         </div>
       </div>
+      {takesInquiries && (
+        <Link href={`/b/${found.business.slug}/inquire`}>
+          <Card className="hover:border-primary/50 border-primary/30 bg-primary/5 transition-colors">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">Ask about coaching <ArrowRight className="size-4" aria-hidden="true" /></CardTitle>
+              <CardDescription>Tell {found.business.name} what you’re looking for and they’ll get back to you. No account needed.</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+      )}
       {found.pages.length === 0 ? (
-        <p className="text-muted-foreground text-sm">There’s nothing to book here right now.</p>
+        !takesInquiries && <p className="text-muted-foreground text-sm">There’s nothing to book here right now.</p>
       ) : (
         <div className="grid gap-3">
           {found.pages.map((p) => (

@@ -34,13 +34,15 @@ export interface PlanLimits {
   clients: boolean
   /** Reminder emails to guests before their call (confirmations are sent on every plan). */
   reminders: boolean
+  /** The team dashboard (D-074): intake, assignments, the attention queue and finances. */
+  teamDashboard: boolean
 }
 
 /** What a workspace can do on each plan (D-072). Limits stop creating more; nothing existing breaks. */
 export function planLimits(plan: PlanId, seats = 1): PlanLimits {
-  if (plan === 'free') return { people: 1, bookingPages: 1, paidCalls: false, zoom: false, clients: false, reminders: false }
-  if (plan === 'solo') return { people: 1, bookingPages: null, paidCalls: true, zoom: true, clients: true, reminders: true }
-  return { people: Math.max(1, seats), bookingPages: null, paidCalls: true, zoom: true, clients: true, reminders: true }
+  if (plan === 'free') return { people: 1, bookingPages: 1, paidCalls: false, zoom: false, clients: false, reminders: false, teamDashboard: false }
+  if (plan === 'solo') return { people: 1, bookingPages: null, paidCalls: true, zoom: true, clients: true, reminders: true, teamDashboard: false }
+  return { people: Math.max(1, seats), bookingPages: null, paidCalls: true, zoom: true, clients: true, reminders: true, teamDashboard: true }
 }
 
 export const FREE_PLAN_SUMMARY = 'One person, one active booking page, free calls. Guests get confirmation emails; reminder emails are on Solo and Team.'
@@ -52,6 +54,7 @@ export const UPGRADE_MESSAGES = {
   zoom: 'Zoom meetings need the Solo or Team plan. Upgrade in Settings → Subscription.',
   clients: 'Clients, packages and files need the Solo or Team plan. Upgrade in Settings → Subscription.',
   people: 'Adding people needs the Team plan. Upgrade in Settings → Subscription.',
+  teamDashboard: 'The team dashboard needs the Team plan. Upgrade in Settings → Subscription.',
 } as const
 
 /** Dollars, without cents when whole: 10 → "10", 12.5 → "12.50". */

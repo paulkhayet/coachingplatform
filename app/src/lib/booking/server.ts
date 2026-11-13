@@ -281,6 +281,15 @@ export async function availableCoachingStarts(input: CoachingSlotInput & { day: 
   return coachingStartsInRange(input, from, to, now)
 }
 
+/** Open start times for one coach on one day in the business's time zone (D-074: a first call from an inquiry). */
+export async function availableMemberStarts(input: { coachId: string; durationMinutes: number; day: string; timezone: string }, now = new Date()) {
+  const [year, month, date] = input.day.split('-').map(Number)
+  const from = new Date(Math.max(zonedTime(year, month, date, 0, input.timezone).getTime(), now.getTime() + 1))
+  const to = new Date(Math.min(zonedTime(year, month, date, 1440, input.timezone).getTime() - 1, now.getTime() + MAX_LOOKAHEAD_DAYS * DAY_MS))
+  if (to < from) return { starts: [], calendarUnavailable: false }
+  return hostStarts({ durationMinutes: input.durationMinutes, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, minNoticeMinutes: 0 }, input.coachId, from, to, now)
+}
+
 /**
  * When a member is free for this business between `from` and `to` (D-058): the owner's team view.
  * Only free ranges come back, never what makes someone busy. Null if they haven't set hours.
@@ -437,7 +446,7 @@ export async function releaseHold(bookingId: string) {
 export async function confirmPaidCheckout(sessionId: string, paymentIntentId: string | null, db: Exec = adminDb()): Promise<{ confirmed?: string; refundLate?: { bookingId: string; paymentIntentId: string; account: string } }> {
   const [row] = await db
     .update(bookings)
-    .set({ status: 'confirmed', paymentStatus: 'paid', stripePaymentIntentId: paymentIntentId, holdExpiresAt: null })
+    .set({ status: 'confirmed', paymentStatus: 'paid', stripePaymentIntentId: paymentIntentId, holdExpiresAt: null, paidAt: new Date() })
     .where(and(eq(bookings.stripeCheckoutSessionId, sessionId), eq(bookings.status, 'pending_payment')))
     .returning({ id: bookings.id })
   if (row) return { confirmed: row.id }
@@ -450,8 +459,46 @@ export async function confirmPaidCheckout(sessionId: string, paymentIntentId: st
 
 /** Runs the follow-up of confirmPaidCheckout once its database change is committed. */
 export async function afterPaidCheckout(result: Awaited<ReturnType<typeof confirmPaidCheckout>>) {
-  if (result.confirmed) await afterConfirmed(result.confirmed)
+  if (result.confirmed) {
+    await afterConfirmed(result.confirmed)
+    await recordStripeFee(result.confirmed)
+  }
   if (result.refundLate) await refund(result.refundLate.bookingId, result.refundLate.paymentIntentId, result.refundLate.account)
+}
+
+/**
+ * Stores Stripe's fee for a paid call (D-074), read from the charge's balance transaction on the
+ * business's own account. Best effort: the booking stands whether or not the fee can be read, and the
+ * owner can fetch missing fees later from Finances. Returns whether a fee was saved.
+ */
+export async function recordStripeFee(bookingId: string) {
+  try {
+    const db = adminDb()
+    const [b] = await db.select({ intent: bookings.stripePaymentIntentId, account: bookings.stripeAccountId, fee: bookings.stripeFeeCents }).from(bookings).where(eq(bookings.id, bookingId)).limit(1)
+    if (!b?.intent || !b.account || b.fee !== null) return false
+    const intent = await stripe().paymentIntents.retrieve(b.intent, { expand: ['latest_charge.balance_transaction'] }, { stripeAccount: b.account })
+    const charge = typeof intent.latest_charge === 'object' ? intent.latest_charge : null
+    const transaction = charge && typeof charge.balance_transaction === 'object' ? charge.balance_transaction : null
+    if (!transaction) return false
+    await db.update(bookings).set({ stripeFeeCents: transaction.fee }).where(and(eq(bookings.id, bookingId), isNull(bookings.stripeFeeCents)))
+    return true
+  } catch (error) {
+    console.error('Reading the Stripe fee failed', error instanceof Error ? error.message : 'unknown error')
+    return false
+  }
+}
+
+/** Fills in missing payment dates and Stripe fees for a business's paid calls, a batch at a time (D-074). */
+export async function syncStripeFees(businessId: string, limit = 50) {
+  const db = adminDb()
+  const wasPaid = inArray(bookings.paymentStatus, ['paid', 'refunded', 'refund_failed'])
+  await db.update(bookings).set({ paidAt: sql`${bookings.createdAt}` }).where(and(eq(bookings.businessId, businessId), wasPaid, isNull(bookings.paidAt)))
+  const missing = await db.select({ id: bookings.id }).from(bookings)
+    .where(and(eq(bookings.businessId, businessId), wasPaid, isNull(bookings.stripeFeeCents), isNotNull(bookings.stripePaymentIntentId)))
+    .orderBy(bookings.createdAt).limit(limit + 1)
+  let saved = 0
+  for (const { id } of missing.slice(0, limit)) if (await recordStripeFee(id)) saved++
+  return { saved, failed: Math.min(missing.length, limit) - saved, more: missing.length > limit }
 }
 
 export async function expireCheckout(sessionId: string, db: Exec = adminDb()) {

@@ -27,6 +27,7 @@ export const metadata: Metadata = { title: 'Client' }
 const messages: Record<string, string> = {
   client: 'Client saved.', guardian: 'Guardian contact saved.', package: 'Package assigned.', payment: 'Payment recorded.',
   series: 'Selected weekly sessions booked. Credits are reserved.',
+  enrolled: 'Client created from the inquiry. Next, assign a package and invite the family to the portal.',
 }
 const empty = { data: [], error: null }
 type SessionSummary = { id: string; title: string; starts_at: string; status: string; attended_at: string | null; credit_covered_at: string | null; unpaid_cancelled: boolean }
@@ -44,6 +45,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   const manager = canManageClients(membership.role)
   const finance = canManagePayments(membership)
+  // Row-level security shows this to owners, administrators and the coach who was proposed for the family.
+  const { data: inquiry } = await supabase.from('inquiries').select('id, subjects, goals')
+    .eq('business_id', business.id).eq('client_id', id).maybeSingle<{ id: string; subjects: string[]; goals: string | null }>()
   const today = businessDate(business.timezone)
   const now = new Date().toISOString()
   const [coaches, guardians, portal, balances, events, assignments, payments, packages, sessions, files] = await Promise.all([
@@ -102,6 +106,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             <div><dt className="text-muted-foreground text-xs">Email</dt><dd className="mt-0.5 text-sm break-all">{client.email ?? 'No email on file'}</dd></div>
             <div><dt className="text-muted-foreground text-xs">Assigned coach</dt><dd className="mt-0.5 text-sm break-words">{coach}</dd></div>
           </dl>
+          {inquiry && <InquiryOrigin inquiry={inquiry} />}
           {manager && <details className="border-t pt-3">
             <summary className="cursor-pointer text-sm font-medium">Edit client details</summary>
             <div className="mt-3 max-w-md"><ClientForm action={saveClient.bind(null, business.id, id)} client={client} coaches={coaches} /></div>
@@ -212,6 +217,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </Card>}
         </>}
       </section>
+    </div>
+  )
+}
+
+/** D-074: a client who came through intake keeps a link to what the family first told the business. */
+function InquiryOrigin({ inquiry }: { inquiry: { id: string; subjects: string[]; goals: string | null } }) {
+  return (
+    <div className="bg-muted/40 grid gap-1 rounded-md border p-3 text-sm">
+      <p className="text-muted-foreground text-xs">From their inquiry</p>
+      {inquiry.subjects.length > 0 && <p><span className="text-muted-foreground">Subjects:</span> {inquiry.subjects.join(', ')}</p>}
+      {inquiry.goals && <p className="whitespace-pre-line"><span className="text-muted-foreground">Goals:</span> {inquiry.goals}</p>}
+      <Link href={`/app/dashboard/intake/${inquiry.id}`} className="text-primary justify-self-start text-sm hover:underline">See the inquiry and its history</Link>
     </div>
   )
 }

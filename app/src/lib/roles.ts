@@ -17,3 +17,7 @@ export const canManageCoachingPackages = canManagePayments
 export const canManageClients = (role: MemberRole) => role === 'owner' || role === 'admin'
 /** Owners and administrators choose who hosts a booking page, including shared pages (D-061; mirrors can_manage_booking_page). */
 export const canAssignHosts = (role: MemberRole) => role === 'owner' || role === 'admin'
+/** The team dashboard (D-074): intake, assignments and the attention queue are for owners and administrators. */
+export const canUseDashboard = (role: MemberRole) => role === 'owner' || role === 'admin'
+/** Revenue, profit and coach pay are the owner's alone. */
+export const canSeeFinances = (role: MemberRole) => role === 'owner'

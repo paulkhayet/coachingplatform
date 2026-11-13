@@ -13,10 +13,12 @@ import type { MemberRole } from '@/db/schema'
 import { freeTimes } from '@/lib/booking/server'
 import { zonedParts, zonedTime } from '@/lib/slots'
 import { InvitationActions, InviteForm, LeaveBusiness, RemoveMemberButton } from './forms'
+import { saveCoachProfile } from '../dashboard/assignments/actions'
+import { CoachProfileForm } from '../dashboard/assignments/forms'
 
 export const metadata: Metadata = { title: 'Team' }
 
-type Row = { id: string; user_id: string; role: MemberRole; status: string; title: string | null; coaches: boolean }
+type Row = { id: string; user_id: string; role: MemberRole; status: string; title: string | null; coaches: boolean; specialties: string[] }
 
 export default async function TeamPage() {
   const { business, user, membership } = await requireWorkspace()
@@ -24,7 +26,7 @@ export default async function TeamPage() {
   const isOwner = canManageTeam(membership.role)
   const supabase = await createClient()
   // Row-level security limits both queries to this business and its members.
-  const { data: members } = await supabase.from('memberships').select('id, user_id, role, status, title, coaches').eq('business_id', business.id).order('created_at').returns<Row[]>()
+  const { data: members } = await supabase.from('memberships').select('id, user_id, role, status, title, coaches, specialties').eq('business_id', business.id).order('created_at').returns<Row[]>()
   const ids = (members ?? []).map((m) => m.user_id)
   const { data: profiles } = ids.length ? await supabase.from('profiles').select('id, full_name, email').in('id', ids) : { data: [] }
   const byId = new Map((profiles ?? []).map((p) => [p.id as string, p as { full_name: string | null; email: string | null }]))
@@ -108,6 +110,18 @@ export default async function TeamPage() {
                 </ul>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+      {/* D-074: what a coach teaches feeds the match suggestions on the dashboard. */}
+      {membership.coaches && plan.limits.teamDashboard && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Your coaching subjects</CardTitle>
+            <CardDescription>{business.name} uses these to suggest you for new families.</CardDescription>
+          </CardHeader>
+          <CardContent className="max-w-xl">
+            <CoachProfileForm action={saveCoachProfile.bind(null, business.id, membership.id)} specialties={(members ?? []).find((m) => m.id === membership.id)?.specialties ?? []} maxClients={null} withLimit={false} />
           </CardContent>
         </Card>
       )}

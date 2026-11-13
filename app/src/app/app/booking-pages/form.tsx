@@ -211,7 +211,7 @@ export function BookingPageForm({ action, defaults, businessSlug, submitLabel, p
   )
 }
 
-function QuestionsEditor({ questions, onChange }: { questions: BookingQuestion[]; onChange: (q: BookingQuestion[]) => void }) {
+export function QuestionsEditor({ questions, onChange }: { questions: BookingQuestion[]; onChange: (q: BookingQuestion[]) => void }) {
   const update = (i: number, patch: Partial<BookingQuestion>) => onChange(questions.map((q, j) => (j === i ? { ...q, ...patch } : q)))
   return (
     <div className="grid gap-3">

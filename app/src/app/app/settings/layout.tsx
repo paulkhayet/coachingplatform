@@ -1,4 +1,4 @@
-import { canManageTeam } from '@/lib/roles'
+import { canManageTeam, canUseDashboard } from '@/lib/roles'
 import { requireWorkspace } from '@/lib/workspace'
 import { SettingsNav } from './nav'
 
@@ -12,7 +12,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       </header>
       {/* Section menu on the left from md up; a row of tabs above the content on phones. */}
       <div className="grid gap-6 md:grid-cols-[11rem_minmax(0,52rem)] md:gap-8">
-        <SettingsNav showSubscription={canManageTeam(membership.role)} />
+        <SettingsNav owner={canManageTeam(membership.role)} manager={canUseDashboard(membership.role)} />
         <div className="min-w-0">{children}</div>
       </div>
     </div>

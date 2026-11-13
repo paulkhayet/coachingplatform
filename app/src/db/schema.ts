@@ -1,4 +1,4 @@
-import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { authUsers } from 'drizzle-orm/supabase'
 
@@ -110,9 +110,17 @@ export const memberships = pgTable(
     // Administrators need explicit delegation for financial actions (P-02).
     financial: boolean('financial').notNull().default(false),
     title: text('title'),
+    // For matching families to coaches (D-074): subjects or tags, and how many clients they take (null = no limit).
+    specialties: text('specialties').array().notNull().default(sql`'{}'::text[]`),
+    maxClients: integer('max_clients'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('memberships_business_user_key').on(t.businessId, t.userId), index('memberships_user_idx').on(t.userId)],
+  (t) => [
+    uniqueIndex('memberships_business_user_key').on(t.businessId, t.userId),
+    index('memberships_user_idx').on(t.userId),
+    check('memberships_specialties', sql`cardinality(${t.specialties}) <= 30 and array_position(${t.specialties}, null) is null`),
+    check('memberships_max_clients', sql`${t.maxClients} is null or ${t.maxClients} between 0 and 1000`),
+  ],
 )
 
 /** An owner's invitation to join their business (D-060). The link carries a random token; only its SHA-256
@@ -576,8 +584,15 @@ export const bookings = pgTable(
     paymentReminderSentAt: timestamp('payment_reminder_sent_at', { withTimezone: true }),
     unpaidCancellationHours: integer('unpaid_cancellation_hours'),
     unpaidCancelled: boolean('unpaid_cancelled').notNull().default(false),
+    // Finances (D-074): when a paid call's money arrived, and Stripe's fee for it (null until fetched).
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    stripeFeeCents: integer('stripe_fee_cents'),
+    // A first call booked from an inquiry (D-074). A plain guest booking: no page and no client.
+    inquiryId: uuid('inquiry_id').references((): AnyPgColumn => inquiries.id, { onDelete: 'set null' }),
   },
   (t) => [
+    index('bookings_inquiry_idx').on(t.inquiryId),
+    check('bookings_stripe_fee', sql`${t.stripeFeeCents} is null or ${t.stripeFeeCents} >= 0`),
     foreignKey({ columns: [t.businessId, t.coachingClientId, t.creditPeriodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'bookings_credit_period_fk' }).onDelete('restrict'),
     uniqueIndex('bookings_checkout_session_key').on(t.stripeCheckoutSessionId),
     check('bookings_status', sql`${t.status} in ('pending_payment', 'confirmed', 'cancelled', 'expired')`),
@@ -754,6 +769,144 @@ export const contactRequests = pgTable(
   ],
 )
 
+// ── Team dashboard (D-074) ───────────────────────────────────────────────────────────────────────────
+
+export const PAY_METHODS = ['hourly', 'per_session', 'percent', 'salary'] as const
+export type PayMethod = (typeof PAY_METHODS)[number]
+/** Per-session pay for one session format, matched on the format's name (a coaching booking's title). */
+export interface PayFormatOverride {
+  formatName: string
+  amountCents: number
+}
+
+/**
+ * How a coach is paid (D-074), owner-only. One row per change: the latest `effective_from` on or before
+ * a session's date applies, so a new rate never rewrites past months.
+ */
+export const coachPayRates = pgTable('coach_pay_rates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  membershipId: uuid('membership_id').notNull().references(() => memberships.id, { onDelete: 'cascade' }),
+  effectiveFrom: date('effective_from').notNull(),
+  method: text('method').$type<PayMethod>().notNull(),
+  /** hourly: per hour. per_session: per session. salary: per month. */
+  amountCents: integer('amount_cents'),
+  /** percent: share of the session's delivered revenue, in basis points. */
+  percentBps: integer('percent_bps'),
+  formatOverrides: jsonb('format_overrides').$type<PayFormatOverride[]>().notNull().default([]),
+  /** Whether a late family cancellation that forfeits the credit still pays the coach. */
+  payForfeited: boolean('pay_forfeited').notNull().default(true),
+  createdBy: uuid('created_by').references(() => authUsers.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('coach_pay_rates_member_from_key').on(t.businessId, t.membershipId, t.effectiveFrom),
+  index('coach_pay_rates_membership_idx').on(t.membershipId),
+  index('coach_pay_rates_created_by_idx').on(t.createdBy),
+  check('coach_pay_rates_method', sql`${t.method} in ('hourly', 'per_session', 'percent', 'salary')`),
+  check('coach_pay_rates_amounts', sql`
+    (${t.method} = 'percent' and ${t.percentBps} is not null and ${t.percentBps} between 0 and 10000 and ${t.amountCents} is null)
+    or (${t.method} <> 'percent' and ${t.amountCents} is not null and ${t.amountCents} between 0 and 100000000 and ${t.percentBps} is null)`),
+  check('coach_pay_rates_overrides', sql`jsonb_typeof(${t.formatOverrides}) = 'array'
+    and (${t.method} = 'per_session' or jsonb_array_length(${t.formatOverrides}) = 0)`),
+])
+
+/** A business's public inquiry form (D-074). Owners and administrators edit it. */
+export const intakeSettings = pgTable('intake_settings', {
+  businessId: uuid('business_id').primaryKey().references(() => businesses.id, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(false),
+  intro: text('intro'),
+  questions: jsonb('questions').$type<BookingQuestion[]>().notNull().default([]),
+  /** Who gets new-inquiry emails. Null = every owner and administrator. */
+  notifyMembershipIds: uuid('notify_membership_ids').array(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check('intake_settings_intro', sql`char_length(${t.intro}) <= 1000`),
+  check('intake_settings_questions_array', sql`jsonb_typeof(${t.questions}) = 'array'`),
+  check('intake_settings_notify', sql`${t.notifyMembershipIds} is null or (cardinality(${t.notifyMembershipIds}) between 1 and 50 and array_position(${t.notifyMembershipIds}, null) is null)`),
+])
+
+export const INQUIRY_STAGES = ['new', 'matching', 'first_call', 'offer', 'enrolled', 'lost'] as const
+export type InquiryStage = (typeof INQUIRY_STAGES)[number]
+
+/**
+ * A family asking about coaching (D-074), from the public form or added by staff. It moves through
+ * fixed stages; enrolling creates the client and links it here so the history carries over.
+ */
+export const inquiries = pgTable('inquiries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  stage: text('stage').$type<InquiryStage>().notNull().default('new'),
+  contactName: text('contact_name').notNull(),
+  contactEmail: text('contact_email').notNull(),
+  contactPhone: text('contact_phone'),
+  /** How the contact relates to the student, e.g. Parent. "Self" for an adult student. */
+  relationship: text('relationship'),
+  studentName: text('student_name').notNull(),
+  studentGrade: text('student_grade'),
+  subjects: text('subjects').array().notNull().default(sql`'{}'::text[]`),
+  goals: text('goals'),
+  availabilityNotes: text('availability_notes'),
+  timezone: text('timezone'),
+  answers: jsonb('answers').$type<BookingAnswer[]>().notNull().default([]),
+  source: text('source').$type<'form' | 'staff'>().notNull(),
+  /** The staff member responsible for moving this along. */
+  ownerMembershipId: uuid('owner_membership_id').references(() => memberships.id, { onDelete: 'set null' }),
+  /** The coach proposed for this family; they take the first call. */
+  coachMembershipId: uuid('coach_membership_id').references(() => memberships.id, { onDelete: 'set null' }),
+  firstCallBookingId: uuid('first_call_booking_id').references(() => bookings.id, { onDelete: 'set null' }),
+  clientId: uuid('client_id'),
+  lostReason: text('lost_reason'),
+  nextAction: text('next_action'),
+  nextActionDue: date('next_action_due'),
+  stageChangedAt: timestamp('stage_changed_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId], foreignColumns: [coachingClients.businessId, coachingClients.id], name: 'inquiries_client_fk' }),
+  uniqueIndex('inquiries_business_id_key').on(t.businessId, t.id),
+  // An inquiry becomes one client, once.
+  uniqueIndex('inquiries_client_key').on(t.clientId).where(sql`${t.clientId} is not null`),
+  index('inquiries_stage_idx').on(t.businessId, t.stage, t.stageChangedAt),
+  index('inquiries_client_idx').on(t.businessId, t.clientId),
+  index('inquiries_coach_idx').on(t.coachMembershipId),
+  index('inquiries_owner_idx').on(t.ownerMembershipId),
+  index('inquiries_first_call_idx').on(t.firstCallBookingId),
+  index('inquiries_email_idx').on(t.businessId, t.contactEmail, t.createdAt),
+  check('inquiries_stage', sql`${t.stage} in ('new', 'matching', 'first_call', 'offer', 'enrolled', 'lost')`),
+  check('inquiries_source', sql`${t.source} in ('form', 'staff')`),
+  check('inquiries_enrolled_client', sql`(${t.stage} = 'enrolled') = (${t.clientId} is not null)`),
+  check('inquiries_lost_reason', sql`${t.stage} <> 'lost' or ${t.lostReason} is not null`),
+  check('inquiries_contact', sql`char_length(btrim(${t.contactName})) between 1 and 120
+    and ${t.contactEmail} = lower(${t.contactEmail}) and char_length(${t.contactEmail}) between 3 and 254
+    and char_length(${t.contactPhone}) <= 40 and char_length(${t.relationship}) <= 80`),
+  check('inquiries_student', sql`char_length(btrim(${t.studentName})) between 2 and 100 and char_length(${t.studentGrade}) <= 40`),
+  check('inquiries_subjects', sql`cardinality(${t.subjects}) <= 20 and array_position(${t.subjects}, null) is null`),
+  check('inquiries_lengths', sql`char_length(${t.goals}) <= 2000 and char_length(${t.availabilityNotes}) <= 1000
+    and char_length(${t.timezone}) <= 64 and char_length(${t.lostReason}) <= 300 and char_length(${t.nextAction}) <= 200`),
+  check('inquiries_answers_array', sql`jsonb_typeof(${t.answers}) = 'array'`),
+])
+
+export const INQUIRY_EVENT_KINDS = ['created', 'stage', 'assigned', 'note', 'first_call_booked', 'first_call_outcome', 'converted'] as const
+export type InquiryEventKind = (typeof INQUIRY_EVENT_KINDS)[number]
+
+/** An inquiry's timeline. Append-only; stage and assignment changes are logged by a database trigger. */
+export const inquiryEvents = pgTable('inquiry_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  inquiryId: uuid('inquiry_id').notNull(),
+  /** Null for the public form. */
+  actorId: uuid('actor_id').references(() => profiles.id, { onDelete: 'set null' }),
+  kind: text('kind').$type<InquiryEventKind>().notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.inquiryId], foreignColumns: [inquiries.businessId, inquiries.id], name: 'inquiry_events_inquiry_fk' }).onDelete('cascade'),
+  index('inquiry_events_inquiry_idx').on(t.businessId, t.inquiryId, t.createdAt),
+  index('inquiry_events_actor_idx').on(t.actorId),
+  check('inquiry_events_kind', sql`${t.kind} in ('created', 'stage', 'assigned', 'note', 'first_call_booked', 'first_call_outcome', 'converted')`),
+  check('inquiry_events_data', sql`jsonb_typeof(${t.data}) = 'object' and char_length(${t.data}::text) <= 8000`),
+])
+
 export type Business = typeof businesses.$inferSelect
 export type Membership = typeof memberships.$inferSelect
 export type Invitation = typeof invitations.$inferSelect
@@ -765,3 +918,7 @@ export type MembershipAvailability = typeof membershipAvailability.$inferSelect
 export type MemberRole = (typeof memberRole.enumValues)[number]
 export type BookingPage = typeof bookingPages.$inferSelect
 export type Booking = typeof bookings.$inferSelect
+export type CoachPayRate = typeof coachPayRates.$inferSelect
+export type IntakeSettings = typeof intakeSettings.$inferSelect
+export type Inquiry = typeof inquiries.$inferSelect
+export type InquiryEvent = typeof inquiryEvents.$inferSelect

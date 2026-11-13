@@ -6,6 +6,7 @@ import { assignClientPackage, recordClientPayment } from '@/lib/clients/finance'
 import { cancelCoachingForDepartedHost, cancelUnpaidReservation, finishCoachingSession, moveCoachingSession, reserveCoachingSeries, reserveCoachingSession } from '@/lib/clients/sessions'
 import { acceptInvitation, findInvitation, hashToken, sendInvitation } from '@/lib/team/invitations'
 import { acceptFamilyInvite, revokeFamilyAccess, sendFamilyInvite, setFamilyPermissions } from '@/lib/family/invitations'
+import { MAX_INQUIRIES_PER_BUSINESS_PER_HOUR, addInquiry, addInquiryNote, assignInquiry, convertInquiry, moveInquiry, recordFirstCallOutcome, reserveFirstCall, setNextAction, submitInquiry } from '@/lib/intake/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DB_URL, as, createUser, resetDatabase } from './helpers'
 
@@ -374,6 +375,240 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     // The guardian contact has to belong to the client the access is for.
     await expect(sql`INSERT INTO public.family_access (business_id, client_id, guardian_id, email) VALUES (${willow}, ${otherClient.id}, ${guardian.id}, 'x@example.com')`)
       .rejects.toThrow(/must belong to this client/)
+  })
+
+  describe('team dashboard (D-074)', () => {
+    let db: ReturnType<typeof drizzle<typeof schema>>
+    let admin: string
+    let coachA: string
+    let coachB: string
+    let coachAMember: string
+    let coachBMember: string
+    let adminMember: string
+    let ownerMember: string
+    const family = { contactName: 'Dana Reed', contactEmail: 'dana.reed@example.com', contactPhone: '555 0100', relationship: 'Parent', studentName: 'Maya Reed', studentGrade: '9', subjects: ['Algebra', 'SAT Math'], goals: 'Catch up before finals', availabilityNotes: '', timezone: 'America/Chicago' }
+
+    beforeAll(async () => {
+      financeSql ??= postgres(DB_URL!, { max: 1, prepare: false, onnotice: () => {} })
+      db = drizzle(financeSql, { schema })
+      admin = await createUser(sql, 'dash-admin@example.com', 'Dash Admin')
+      coachA = await createUser(sql, 'dash-coach-a@example.com', 'Coach Ana')
+      coachB = await createUser(sql, 'dash-coach-b@example.com', 'Coach Ben')
+      const member = async (user: string, role: string, coaches: boolean) =>
+        (await sql<{ id: string }[]>`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${user}, ${role}, ${coaches}) RETURNING id`)[0].id
+      adminMember = await member(admin, 'admin', false)
+      coachAMember = await member(coachA, 'coach', true)
+      coachBMember = await member(coachB, 'coach', true)
+      ownerMember = (await sql<{ id: string }[]>`SELECT id FROM public.memberships WHERE business_id = ${willow} AND user_id = ${eleni}`)[0].id
+    })
+
+    it('keeps coach pay to the owner alone', async () => {
+      const [rate] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+        INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents, created_by)
+        VALUES (${willow}, ${coachAMember}, '2026-01-01', 'hourly', 4000, ${eleni}) RETURNING id`)
+      expect(await as(sql, eleni, (tx) => tx`SELECT method, amount_cents FROM public.coach_pay_rates WHERE id = ${rate.id}`)).toEqual([{ method: 'hourly', amount_cents: 4000 }])
+      // Administrators and coaches, including the coach the rate is about, read nothing.
+      for (const user of [admin, coachA, coachB, outsider]) expect(await as(sql, user, (tx) => tx`SELECT id FROM public.coach_pay_rates`)).toEqual([])
+      await expect(as(sql, null, (tx) => tx`SELECT id FROM public.coach_pay_rates`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, admin, (tx) => tx`
+        INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents, created_by) VALUES (${willow}, ${coachAMember}, '2026-02-01', 'hourly', 9900, ${admin})`)).rejects.toThrow(/row-level security/)
+      expect(await as(sql, admin, (tx) => tx`UPDATE public.coach_pay_rates SET amount_cents = 1 WHERE id = ${rate.id} RETURNING id`)).toEqual([])
+      expect(await as(sql, coachA, (tx) => tx`DELETE FROM public.coach_pay_rates WHERE id = ${rate.id} RETURNING id`)).toEqual([])
+      // The owner can't file a rate under someone else's name, for another business's member, or in an impossible shape.
+      await expect(as(sql, eleni, (tx) => tx`
+        INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents, created_by) VALUES (${willow}, ${coachAMember}, '2026-03-01', 'hourly', 1, ${admin})`)).rejects.toThrow(/row-level security/)
+      const [other] = await sql<{ id: string }[]>`SELECT id FROM public.memberships WHERE user_id = ${outsider} AND business_id <> ${willow} LIMIT 1`
+      await expect(as(sql, eleni, (tx) => tx`
+        INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents, created_by) VALUES (${willow}, ${other.id}, '2026-03-01', 'hourly', 1, ${eleni})`)).rejects.toThrow(/Choose someone from this business/)
+      await expect(as(sql, eleni, (tx) => tx`
+        INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents, percent_bps, created_by) VALUES (${willow}, ${coachAMember}, '2026-03-01', 'percent', 100, 4000, ${eleni})`)).rejects.toThrow(/coach_pay_rates_amounts/)
+      await expect(as(sql, eleni, (tx) => tx`
+        INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents, format_overrides, created_by)
+        VALUES (${willow}, ${coachAMember}, '2026-03-01', 'hourly', 100, ${sql.json([{ formatName: 'Standard', amountCents: 1 }])}, ${eleni})`)).rejects.toThrow(/coach_pay_rates_overrides/)
+      await expect(as(sql, eleni, (tx) => tx`
+        INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents, created_by) VALUES (${willow}, ${coachAMember}, '2026-01-01', 'hourly', 5000, ${eleni})`)).rejects.toThrow(/coach_pay_rates_member_from_key/)
+    })
+
+    it('stops a salary on the day someone leaves the team', async () => {
+      const leaver = await createUser(sql, 'dash-leaver@example.com', 'Salaried Leaver')
+      const [m] = await sql<{ id: string }[]>`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${leaver}, 'coach', true) RETURNING id`
+      await sql`INSERT INTO public.coach_pay_rates (business_id, membership_id, effective_from, method, amount_cents) VALUES
+        (${willow}, ${m.id}, '2026-01-01', 'salary', 300000), (${willow}, ${m.id}, '2099-01-01', 'salary', 400000)`
+      await as(sql, eleni, (tx) => tx`UPDATE public.memberships SET status = 'inactive' WHERE id = ${m.id}`)
+      const rates = await sql`SELECT effective_from = (now() AT TIME ZONE 'America/New_York')::date AS today, method, amount_cents FROM public.coach_pay_rates WHERE membership_id = ${m.id} ORDER BY effective_from`
+      expect(rates).toEqual([{ today: false, method: 'salary', amount_cents: 300000 }, { today: true, method: 'salary', amount_cents: 0 }])
+      // Someone paid by the hour needs no closing entry: no sessions, no pay.
+      await as(sql, eleni, (tx) => tx`UPDATE public.memberships SET status = 'inactive' WHERE id = ${coachBMember}`)
+      expect(await sql`SELECT 1 FROM public.coach_pay_rates WHERE membership_id = ${coachBMember}`).toEqual([])
+      await sql`UPDATE public.memberships SET status = 'active' WHERE id = ${coachBMember}`
+    })
+
+    it('takes public inquiries only through the server, when the form is on, at a limited rate', async () => {
+      await expect(as(sql, null, (tx) => tx`SELECT id FROM public.inquiries`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, null, (tx) => tx`
+        INSERT INTO public.inquiries (business_id, contact_name, contact_email, student_name, source) VALUES (${willow}, 'Bot', 'bot@example.com', 'Bot Student', 'form')`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, null, (tx) => tx`SELECT business_id FROM public.intake_settings`)).rejects.toThrow(/permission denied/)
+      expect(await submitInquiry(db, willow, family, [])).toEqual({ closed: true })
+
+      // Coaches can't see or switch on the form; administrators can.
+      await expect(as(sql, coachA, (tx) => tx`INSERT INTO public.intake_settings (business_id, enabled) VALUES (${willow}, true)`)).rejects.toThrow(/row-level security/)
+      await as(sql, admin, (tx) => tx`INSERT INTO public.intake_settings (business_id, enabled, intro) VALUES (${willow}, true, 'Tell us about your student.')`)
+      expect(await as(sql, coachA, (tx) => tx`SELECT enabled FROM public.intake_settings`)).toEqual([])
+      expect(await as(sql, eleni, (tx) => tx`SELECT enabled FROM public.intake_settings`)).toEqual([{ enabled: true }])
+
+      const first = await submitInquiry(db, willow, family, [{ questionId: 'abc123', label: 'How did you hear about us?', value: 'A friend' }])
+      expect(first).toHaveProperty('id')
+      expect(await sql`SELECT kind, actor_id, data FROM public.inquiry_events WHERE inquiry_id = ${(first as { id: string }).id}`).toEqual([{ kind: 'created', actor_id: null, data: { source: 'form' } }])
+      await submitInquiry(db, willow, { ...family, studentName: 'Leo Reed' }, [])
+      await submitInquiry(db, willow, { ...family, studentName: 'Ivy Reed' }, [])
+      expect(await submitInquiry(db, willow, { ...family, studentName: 'One Too Many' }, [])).toEqual({ limited: 'email' })
+      expect(await submitInquiry(db, willow, { ...family, contactEmail: 'someone.else@example.com' }, [])).toHaveProperty('id')
+      // Lower-cased on the way in, so the limit can't be dodged with capitals.
+      expect(await submitInquiry(db, willow, { ...family, contactEmail: 'Dana.Reed@Example.com' }, [])).toEqual({ limited: 'email' })
+      await sql`INSERT INTO public.inquiries (business_id, contact_name, contact_email, student_name, source)
+        SELECT ${willow}, 'Flood', 'flood' || n || '@example.com', 'Flood Student', 'form' FROM generate_series(1, ${MAX_INQUIRIES_PER_BUSINESS_PER_HOUR}) n`
+      expect(await submitInquiry(db, willow, { ...family, contactEmail: 'late@example.com' }, [])).toEqual({ limited: 'business' })
+      await sql`DELETE FROM public.inquiries WHERE contact_name = 'Flood'`
+    })
+
+    it('shows inquiries to owners and administrators, and to a coach only when they are proposed', async () => {
+      const [inquiry] = await sql<{ id: string }[]>`SELECT id FROM public.inquiries WHERE business_id = ${willow} AND student_name = 'Maya Reed'`
+      const visible = (user: string) => as(sql, user, (tx) => tx`SELECT id FROM public.inquiries WHERE id = ${inquiry.id}`)
+      expect(await visible(eleni)).toEqual([{ id: inquiry.id }])
+      expect(await visible(admin)).toEqual([{ id: inquiry.id }])
+      for (const user of [coachA, coachB, outsider]) expect(await visible(user)).toEqual([])
+      // A parent with family portal access is signed in, but isn't staff: nothing.
+      const [parent] = await sql<{ id: string }[]>`SELECT id FROM auth.users WHERE email = 'family-parent@example.com'`
+      expect(parent).toBeDefined()
+      expect(await as(sql, parent.id, (tx) => tx`SELECT id FROM public.inquiries`)).toEqual([])
+      expect(await as(sql, parent.id, (tx) => tx`SELECT id FROM public.inquiry_events`)).toEqual([])
+      expect(await as(sql, parent.id, (tx) => tx`SELECT id FROM public.coach_pay_rates`)).toEqual([])
+
+      // An administrator proposes Ana through the API: the trigger validates and logs it under their name.
+      await expect(as(sql, admin, (tx) => tx`UPDATE public.inquiries SET coach_membership_id = ${adminMember} WHERE id = ${inquiry.id}`)).rejects.toThrow(/Choose an active coach/)
+      await expect(as(sql, admin, (tx) => tx`UPDATE public.inquiries SET owner_membership_id = ${coachAMember} WHERE id = ${inquiry.id}`)).rejects.toThrow(/owner or administrator/)
+      await as(sql, admin, (tx) => tx`UPDATE public.inquiries SET coach_membership_id = ${coachAMember}, owner_membership_id = ${adminMember}, stage = 'matching' WHERE id = ${inquiry.id}`)
+      expect(await sql`SELECT kind, actor_id, data FROM public.inquiry_events WHERE inquiry_id = ${inquiry.id} AND kind <> 'created' ORDER BY kind`).toEqual([
+        { kind: 'assigned', actor_id: admin, data: { ownerFrom: null, ownerTo: adminMember, coachFrom: null, coachTo: coachAMember } },
+        { kind: 'stage', actor_id: admin, data: { from: 'new', to: 'matching' } },
+      ])
+      expect(await visible(coachA)).toEqual([{ id: inquiry.id }])
+      expect(await visible(coachB)).toEqual([])
+      expect(await as(sql, coachA, (tx) => tx`SELECT student_name FROM public.inquiries`)).toEqual([{ student_name: 'Maya Reed' }])
+
+      // The proposed coach can read it and its timeline, but can't move it, reassign it or delete it.
+      expect(await as(sql, coachA, (tx) => tx`UPDATE public.inquiries SET stage = 'offer' WHERE id = ${inquiry.id} RETURNING id`)).toEqual([])
+      expect(await as(sql, coachA, (tx) => tx`UPDATE public.inquiries SET coach_membership_id = null WHERE id = ${inquiry.id} RETURNING id`)).toEqual([])
+      expect(await as(sql, coachA, (tx) => tx`DELETE FROM public.inquiries WHERE id = ${inquiry.id} RETURNING id`)).toEqual([])
+      expect((await as(sql, coachA, (tx) => tx`SELECT kind FROM public.inquiry_events WHERE inquiry_id = ${inquiry.id}`)).length).toBe(3)
+      expect(await as(sql, coachB, (tx) => tx`SELECT kind FROM public.inquiry_events`)).toEqual([])
+      const note = (user: string, kind: string, actor = user) => as(sql, user, (tx) => tx`
+        INSERT INTO public.inquiry_events (business_id, inquiry_id, actor_id, kind, data) VALUES (${willow}, ${inquiry.id}, ${actor}, ${kind}, ${sql.json({ text: 'Spoke to mum.' })}) RETURNING kind`)
+      expect(await note(coachA, 'note')).toEqual([{ kind: 'note' }])
+      await expect(note(coachA, 'stage')).rejects.toThrow(/row-level security/)
+      await expect(note(coachA, 'note', admin)).rejects.toThrow(/row-level security/)
+      await expect(note(coachB, 'note')).rejects.toThrow(/row-level security/)
+      await expect(note(outsider, 'note')).rejects.toThrow(/row-level security/)
+      expect(await note(admin, 'note')).toEqual([{ kind: 'note' }])
+      await expect(note(admin, 'converted')).rejects.toThrow(/row-level security/)
+      // The timeline is append-only for everyone.
+      await expect(as(sql, eleni, (tx) => tx`UPDATE public.inquiry_events SET data = '{}'`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, eleni, (tx) => tx`DELETE FROM public.inquiry_events`)).rejects.toThrow(/permission denied/)
+
+      // Enrolling is the server's job: through the API nobody can attach a client or claim the stage.
+      const [client] = await sql<{ id: string }[]>`SELECT id FROM public.coaching_clients WHERE business_id = ${willow} LIMIT 1`
+      await expect(as(sql, eleni, (tx) => tx`UPDATE public.inquiries SET client_id = ${client.id} WHERE id = ${inquiry.id}`)).rejects.toThrow(/permission denied/)
+      await expect(as(sql, eleni, (tx) => tx`UPDATE public.inquiries SET stage = 'enrolled' WHERE id = ${inquiry.id}`)).rejects.toThrow(/inquiries_enrolled_client/)
+      await expect(as(sql, eleni, (tx) => tx`UPDATE public.inquiries SET stage = 'lost' WHERE id = ${inquiry.id}`)).rejects.toThrow(/inquiries_lost_reason/)
+      await expect(as(sql, eleni, (tx) => tx`
+        INSERT INTO public.inquiries (business_id, contact_name, contact_email, student_name, source) VALUES (${willow}, 'Faked', 'faked@example.com', 'Faked Form', 'form')`)).rejects.toThrow(/row-level security/)
+      await expect(as(sql, outsider, (tx) => tx`
+        INSERT INTO public.inquiries (business_id, contact_name, contact_email, student_name, source) VALUES (${willow}, 'Out', 'out@example.com', 'Out Sider', 'staff')`)).rejects.toThrow(/row-level security/)
+    })
+
+    it('runs intake changes as checked transactions that keep the timeline', async () => {
+      const owner = { businessId: willow, userId: eleni }
+      await expect(addInquiry(db, { businessId: willow, userId: coachA }, family)).rejects.toThrow(/Only owners and administrators/)
+      await expect(addInquiry(db, { businessId: willow, userId: outsider }, family)).rejects.toThrow(/no longer have access/)
+      const id = await addInquiry(db, owner, { ...family, contactEmail: 'walk.in@example.com', studentName: 'Sam Walker', relationship: 'Self', contactName: 'Sam Walker' })
+      expect(await sql`SELECT stage, source, owner_membership_id FROM public.inquiries WHERE id = ${id}`).toEqual([{ stage: 'new', source: 'staff', owner_membership_id: ownerMember }])
+      expect(await sql`SELECT kind, actor_id FROM public.inquiry_events WHERE inquiry_id = ${id}`).toEqual([{ kind: 'created', actor_id: eleni }])
+
+      // Proposing a coach for a new inquiry starts matching, and reports the change for the email.
+      expect(await assignInquiry(db, owner, id, { coachId: coachAMember })).toEqual({ newCoachId: coachAMember })
+      expect(await assignInquiry(db, owner, id, { coachId: coachAMember })).toEqual({ newCoachId: null })
+      expect(await sql`SELECT stage, coach_membership_id FROM public.inquiries WHERE id = ${id}`).toEqual([{ stage: 'matching', coach_membership_id: coachAMember }])
+      await expect(assignInquiry(db, owner, id, { coachId: adminMember })).rejects.toThrow(/Choose an active coach/)
+      await expect(assignInquiry(db, { businessId: willow, userId: coachA }, id, { coachId: coachBMember })).rejects.toThrow(/Only owners and administrators/)
+
+      await expect(moveInquiry(db, owner, id, 'lost')).rejects.toThrow(/Choose why/)
+      await moveInquiry(db, owner, id, 'lost', { lostReason: 'Price' })
+      await expect(assignInquiry(db, owner, id, { coachId: coachBMember })).rejects.toThrow(/closed/)
+      await expect(convertInquiry(db, owner, id)).rejects.toThrow(/Reopen it/)
+      await moveInquiry(db, owner, id, 'matching')
+      expect(await sql`SELECT stage, lost_reason FROM public.inquiries WHERE id = ${id}`).toEqual([{ stage: 'matching', lost_reason: null }])
+
+      // The first call: a plain guest booking with the proposed coach, linked both ways.
+      const soon = new Date(Date.now() + 3 * 86_400_000)
+      const call = { startsAt: soon, durationMinutes: 30, locationType: 'video_link' as const, locationDetail: 'https://meet.example.com/first' }
+      await expect(reserveFirstCall(db, { businessId: willow, userId: coachA }, id, call)).rejects.toThrow(/Only owners and administrators/)
+      await expect(reserveFirstCall(db, owner, id, { ...call, startsAt: new Date(Date.now() - 60_000) })).rejects.toThrow(/in the future/)
+      const bookingId = await reserveFirstCall(db, owner, id, call)
+      expect(await sql`SELECT title, status, guest_name, guest_email, host_membership_id, inquiry_id, booking_page_id, coaching_client_id, payment_status FROM public.bookings WHERE id = ${bookingId}`).toEqual([{
+        title: 'First call', status: 'confirmed', guest_name: 'Sam Walker', guest_email: 'walk.in@example.com', host_membership_id: coachAMember, inquiry_id: id,
+        booking_page_id: null, coaching_client_id: null, payment_status: 'not_required' }])
+      expect(await sql`SELECT stage, first_call_booking_id FROM public.inquiries WHERE id = ${id}`).toEqual([{ stage: 'first_call', first_call_booking_id: bookingId }])
+      await expect(reserveFirstCall(db, owner, id, { ...call, startsAt: new Date(soon.getTime() + 86_400_000) })).rejects.toThrow(/already booked/)
+      // A second family can't be given the same coach at the same time: the database refuses the overlap.
+      const other = await addInquiry(db, owner, { ...family, contactEmail: 'second@example.com', studentName: 'Second Student' })
+      await assignInquiry(db, owner, other, { coachId: coachAMember })
+      await expect(reserveFirstCall(db, owner, other, call)).rejects.toThrow(/just taken/)
+      // The link can't be pointed at a booking that isn't this inquiry's call.
+      await expect(sql`UPDATE public.inquiries SET first_call_booking_id = ${bookingId} WHERE id = ${other}`).rejects.toThrow(/booking made for this inquiry/)
+
+      // The outcome: the coach who took the call, or a manager; not another coach.
+      await expect(recordFirstCallOutcome(db, { businessId: willow, userId: coachB }, id, 'good_fit', null)).rejects.toThrow(/proposed coach/)
+      await expect(addInquiryNote(db, { businessId: willow, userId: coachB }, id, 'Not mine')).rejects.toThrow(/proposed coach/)
+      await recordFirstCallOutcome(db, { businessId: willow, userId: coachA }, id, 'good_fit', 'Keen to start.')
+      await addInquiryNote(db, { businessId: willow, userId: coachA }, id, 'Prefers evenings.')
+      await setNextAction(db, owner, id, 'Send pricing', '2026-12-01')
+      await moveInquiry(db, owner, id, 'offer')
+
+      // Enrolling: one client, no guardian for a student who wrote in themself, history linked. Once.
+      const clientId = await convertInquiry(db, owner, id)
+      expect(await sql`SELECT name, email, coach_membership_id FROM public.coaching_clients WHERE id = ${clientId}`).toEqual([{ name: 'Sam Walker', email: 'walk.in@example.com', coach_membership_id: coachAMember }])
+      expect(await sql`SELECT 1 FROM public.client_guardians WHERE client_id = ${clientId}`).toEqual([])
+      expect(await sql`SELECT stage, client_id, next_action FROM public.inquiries WHERE id = ${id}`).toEqual([{ stage: 'enrolled', client_id: clientId, next_action: null }])
+      await expect(convertInquiry(db, owner, id)).rejects.toThrow(/already enrolled/)
+      await expect(moveInquiry(db, owner, id, 'offer')).rejects.toThrow(/already enrolled/)
+      // Even the server can't undo or repoint an enrolment, and the same client can't be claimed twice.
+      await expect(sql`UPDATE public.inquiries SET stage = 'offer', client_id = null WHERE id = ${id}`).rejects.toThrow(/already enrolled as a client/)
+      await expect(sql`UPDATE public.inquiries SET stage = 'enrolled', client_id = ${clientId} WHERE id = ${other}`).rejects.toThrow(/inquiries_client_key/)
+      expect(await as(sql, eleni, (tx) => tx`DELETE FROM public.inquiries WHERE id = ${id} RETURNING id`)).toEqual([])
+      expect((await sql`SELECT kind FROM public.inquiry_events WHERE inquiry_id = ${id} ORDER BY created_at, kind`).map((e) => e.kind)).toEqual([
+        'created', 'assigned', 'stage', 'stage', 'stage', 'first_call_booked', 'stage', 'first_call_outcome', 'note', 'stage', 'converted', 'stage'])
+      // The coach keeps seeing the family they were matched with, now as their client.
+      expect(await as(sql, coachA, (tx) => tx`SELECT id FROM public.inquiries WHERE id = ${id}`)).toEqual([{ id }])
+      expect(await as(sql, coachB, (tx) => tx`SELECT id FROM public.inquiries WHERE id = ${id}`)).toEqual([])
+
+      // A family inquiry brings its contact along as the guardian.
+      const familyClient = await convertInquiry(db, owner, other)
+      expect(await sql`SELECT name, relationship, email, phone FROM public.client_guardians WHERE client_id = ${familyClient}`).toEqual([{ name: 'Dana Reed', relationship: 'Parent', email: 'second@example.com', phone: '555 0100' }])
+      expect(await sql`SELECT email FROM public.coaching_clients WHERE id = ${familyClient}`).toEqual([{ email: null }])
+      await sql`UPDATE public.bookings SET status = 'cancelled', cancelled_at = now(), cancelled_by = 'business' WHERE id = ${bookingId}`
+    })
+
+    it('validates coach subjects and keeps them editable only by the owner through the API', async () => {
+      await expect(sql`UPDATE public.memberships SET specialties = ${sql.array(['ok', ''])} WHERE id = ${coachAMember}`).rejects.toThrow(/1 to 40 characters/)
+      await expect(sql`UPDATE public.memberships SET specialties = ${sql.array(['x'.repeat(41)])} WHERE id = ${coachAMember}`).rejects.toThrow(/1 to 40 characters/)
+      await expect(sql`UPDATE public.memberships SET max_clients = -1 WHERE id = ${coachAMember}`).rejects.toThrow(/memberships_max_clients/)
+      expect(await as(sql, admin, (tx) => tx`UPDATE public.memberships SET max_clients = 3 WHERE id = ${coachAMember} RETURNING id`)).toEqual([])
+      expect(await as(sql, coachA, (tx) => tx`UPDATE public.memberships SET specialties = ${sql.array(['Algebra'])} WHERE id = ${coachAMember} RETURNING id`)).toEqual([])
+      expect(await as(sql, eleni, (tx) => tx`UPDATE public.memberships SET specialties = ${sql.array(['Algebra', 'SAT Math'])}, max_clients = 8 WHERE id = ${coachAMember} RETURNING max_clients`)).toEqual([{ max_clients: 8 }])
+      // Later tests count Willow's team.
+      await sql`DELETE FROM public.inquiries WHERE business_id = ${willow} AND client_id IS NULL`
+      await sql`UPDATE public.memberships SET status = 'inactive' WHERE id IN (${adminMember}, ${coachAMember}, ${coachBMember})`
+    })
   })
 
   it('holds funded credits for coaching and settles each session outcome once', async () => {
