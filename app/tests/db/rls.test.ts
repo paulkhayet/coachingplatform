@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import * as schema from '@/db/schema'
 import { assignClientPackage, recordClientPayment } from '@/lib/clients/finance'
-import { cancelCoachingForDepartedHost, cancelUnpaidReservation, finishCoachingSession, moveCoachingSession, reserveCoachingSeries, reserveCoachingSession } from '@/lib/clients/sessions'
+import { cancelCoachingForDepartedHost, cancelUnpaidReservation, familyBookingContext, familyCanMove, finishCoachingSession, moveCoachingSession, reserveCoachingSeries, reserveCoachingSession } from '@/lib/clients/sessions'
+import { familyCancellationOutcome } from '@/lib/clients/session-policy'
 import { acceptInvitation, findInvitation, hashToken, sendInvitation } from '@/lib/team/invitations'
 import { acceptFamilyInvite, revokeFamilyAccess, sendFamilyInvite, setFamilyPermissions } from '@/lib/family/invitations'
 import { CardPaymentError, applyPackageRefund, cancelPaymentRequest, createPaymentRequest, findPaymentRequest, recordCardPayment } from '@/lib/clients/card-payments'
@@ -833,6 +834,84 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     expect(await as(sql, eleni, (tx) => tx`SELECT funded_units, reserved_units, unpaid_reserved_units, used_units, forfeited_units
       FROM client_credit_balances(${business.id}, ${client.id})`))
       .toEqual([{ funded_units: 300, reserved_units: 200, unpaid_reserved_units: 0, used_units: 100, forfeited_units: 0 }])
+  })
+
+  it('lets a guardian book, move and cancel within their switches and the package rules (D-073 slices 2–3)', async () => {
+    financeSql ??= postgres(DB_URL!, { max: 1, prepare: false, onnotice: () => {} })
+    const db = drizzle(financeSql, { schema })
+    const coachUser = await createUser(sql, 'portal-coach@example.com', 'Portal Coach')
+    const otherCoachUser = await createUser(sql, 'portal-other@example.com', 'Portal Other')
+    const parent = await createUser(sql, 'portal-parent@example.com', 'Portal Parent')
+    const [coach, otherCoach] = await sql<{ id: string }[]>`
+      INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${coachUser}, 'coach', true), (${willow}, ${otherCoachUser}, 'coach', true) RETURNING id`
+    const [client] = await sql<{ id: string }[]>`INSERT INTO public.coaching_clients (business_id, name, coach_membership_id) VALUES (${willow}, 'Portal Student', ${coach.id}) RETURNING id`
+    const [guardian] = await sql<{ id: string }[]>`
+      INSERT INTO public.client_guardians (business_id, client_id, name, email) VALUES (${willow}, ${client.id}, 'Portal Parent', 'portal-parent@example.com') RETURNING id`
+    const [pkg] = await sql<{ id: string }[]>`
+      INSERT INTO public.coaching_packages (business_id, name, kind, term_weeks, credit_units, price_cents, session_formats, cancellation_notice_hours, late_cancellation, updated_at)
+      VALUES (${willow}, 'Portal Package', 'fixed', 12, 1200, 120000,
+        ${sql.json([{ name: 'Standard', durationMinutes: 60, creditUnits: 100 }, { name: 'Long', durationMinutes: 120, creditUnits: 200 }])}, 24, 'forfeit', '2026-11-11T12:00:00Z') RETURNING id`
+    const actor = { businessId: willow, clientId: client.id, userId: eleni }
+    const periodId = await assignClientPackage(db, actor, { id: randomUUID(), packageId: pkg.id, packageVersion: '2026-11-11T12:00:00Z', startsOn: '2026-11-11' })
+    await recordClientPayment(db, actor, { id: randomUUID(), periodId, amountCents: 20000, method: 'check', receivedOn: '2026-11-11', reference: null })
+    const [access] = await sql<{ id: string }[]>`
+      INSERT INTO public.family_access (business_id, client_id, guardian_id, email, user_id, accepted_at, can_book, can_reschedule)
+      VALUES (${willow}, ${client.id}, ${guardian.id}, 'portal-parent@example.com', ${parent}, now(), false, false) RETURNING id`
+    const family = { businessId: willow, userId: parent, family: true as const }
+    const scope = { ...family, clientId: client.id, periodId }
+    const now = new Date('2026-11-11T12:00:00Z')
+    const details = { coachId: coach.id, formatIndex: 0, locationType: 'phone' as const, locationDetail: 'Coach calls the family', contact: 'none', noticeHours: null, lateCancellation: null }
+
+    // The switches are off: nothing to book.
+    await expect(familyBookingContext(db, family, client.id, now)).rejects.toThrow(/Booking from the portal isn’t turned on/)
+    await expect(reserveCoachingSession(db, scope, { ...details, id: randomUUID(), startsAt: new Date('2026-11-14T16:00:00Z') }, now)).rejects.toThrow(/isn’t turned on/)
+    await sql`UPDATE public.family_access SET can_book = true WHERE id = ${access.id}`
+    expect(await familyBookingContext(db, family, client.id, now)).toEqual({ reason: expect.stringMatching(/coach books the first session/) })
+
+    // The coach books the first session; the family books more like it, from paid credits only.
+    const first = { ...details, id: randomUUID(), startsAt: new Date('2026-11-12T16:00:00Z') }
+    await reserveCoachingSession(db, { ...actor, periodId }, first, now)
+    const context = await familyBookingContext(db, family, client.id, now)
+    expect(context).toMatchObject({ coachId: coach.id, locationType: 'phone', locationDetail: 'Coach calls the family', noticeHours: 24, lateCancellation: 'forfeit',
+      periods: [{ id: periodId, availableUnits: 100, formats: [{ index: 0, name: 'Standard', durationMinutes: 60, creditUnits: 100 }] }] })
+    await expect(reserveCoachingSession(db, scope, { ...details, id: randomUUID(), coachId: otherCoach.id, startsAt: new Date('2026-11-14T16:00:00Z') }, now)).rejects.toThrow(/student’s coach/)
+    await expect(reserveCoachingSession(db, scope, { ...details, id: randomUUID(), startsAt: new Date('2026-11-11T20:00:00Z') }, now)).rejects.toThrow(/at least 12 hours/)
+    await expect(reserveCoachingSeries(db, scope, { ...details, id: randomUUID(), starts: [new Date('2026-11-14T16:00:00Z'), new Date('2026-11-21T16:00:00Z')] }, now)).rejects.toThrow(/one session at a time/)
+    await expect(reserveCoachingSession(db, scope, { ...details, id: randomUUID(), formatIndex: 1, startsAt: new Date('2026-11-14T16:00:00Z') }, now)).rejects.toThrow(/funded credits/)
+    const booked = { ...details, id: randomUUID(), startsAt: new Date('2026-11-14T16:00:00Z') }
+    expect(await reserveCoachingSession(db, scope, booked, now)).toEqual({ id: booked.id, coveredIds: [booked.id], created: true })
+    // The confirmation goes to the guardian who booked, and the session uses the package's rule.
+    expect(await sql`SELECT guest_email, credit_notice_hours, credit_late_cancellation, host_membership_id FROM public.bookings WHERE id = ${booked.id}`)
+      .toEqual([{ guest_email: 'portal-parent@example.com', credit_notice_hours: 24, credit_late_cancellation: 'forfeit', host_membership_id: coach.id }])
+    expect(await familyBookingContext(db, family, client.id, now)).toEqual({ reason: expect.stringMatching(/no paid credits left/) })
+    await expect(reserveCoachingSession(db, scope, { ...details, id: randomUUID(), startsAt: new Date('2026-11-15T16:00:00Z') }, now)).rejects.toThrow(/funded credits/)
+
+    // Moving needs its own switch, and closes 24 hours before (the package's notice, longer than 12).
+    const newStart = new Date('2026-11-14T18:00:00Z')
+    await expect(moveCoachingSession(db, family, booked.id, booked.startsAt, newStart, now)).rejects.toThrow(/Changing sessions from the portal isn’t turned on/)
+    await sql`UPDATE public.family_access SET can_reschedule = true WHERE id = ${access.id}`
+    const tooLate = new Date('2026-11-13T20:00:00Z')
+    expect(familyCanMove({ startsAt: booked.startsAt, creditNoticeHours: 24 }, tooLate)).toBe(false)
+    await expect(moveCoachingSession(db, family, booked.id, booked.startsAt, newStart, tooLate)).rejects.toThrow(/too close to the session/)
+    await expect(moveCoachingSession(db, family, booked.id, booked.startsAt, new Date('2026-11-11T22:00:00Z'), now)).rejects.toThrow(/at least 12 hours/)
+    expect(await moveCoachingSession(db, family, booked.id, booked.startsAt, newStart, now)).toMatchObject({ startsAt: newStart })
+
+    // Families only cancel, as the guest, under the late rule they were shown.
+    const late = new Date('2026-11-14T10:00:00Z')
+    await expect(finishCoachingSession(db, family, booked.id, { action: 'attend' }, new Date('2026-11-14T19:01:00Z'))).rejects.toThrow()
+    await expect(finishCoachingSession(db, family, booked.id, { action: 'cancel', by: 'business' }, late)).rejects.toThrow()
+    expect(familyCancellationOutcome({ startsAt: newStart, creditNoticeHours: 24, creditLateCancellation: 'forfeit', creditCoveredAt: now }, late)).toBe('forfeited')
+    expect(familyCancellationOutcome({ startsAt: newStart, creditNoticeHours: 24, creditLateCancellation: 'forfeit', creditCoveredAt: now }, now)).toBe('released')
+    await expect(finishCoachingSession(db, family, booked.id, { action: 'cancel', by: 'guest', expectedOutcome: 'released' }, late)).rejects.toThrow(/notice cutoff/)
+    expect(await finishCoachingSession(db, family, booked.id, { action: 'cancel', by: 'guest', expectedOutcome: 'forfeited' }, late))
+      .toMatchObject({ status: 'cancelled', cancelledBy: 'guest', creditCancellationOutcome: 'forfeited' })
+
+    // Once revoked, nothing works; staff still manage the student as before.
+    await sql`UPDATE public.family_access SET revoked_at = now() WHERE id = ${access.id}`
+    await expect(moveCoachingSession(db, family, first.id, first.startsAt, new Date('2026-11-12T18:00:00Z'), now)).rejects.toThrow(/isn’t turned on/)
+    await expect(familyBookingContext(db, family, client.id, now)).rejects.toThrow(/isn’t turned on/)
+    expect(await moveCoachingSession(db, actor, first.id, first.startsAt, new Date('2026-11-12T18:00:00Z'), now)).toMatchObject({ startsAt: new Date('2026-11-12T18:00:00Z') })
+    await sql`UPDATE public.memberships SET status = 'inactive' WHERE user_id IN (${coachUser}, ${otherCoachUser})` // later tests count Willow's team
   })
 
   it('validates new businesses', async () => {

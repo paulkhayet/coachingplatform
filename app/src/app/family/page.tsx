@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { CalendarClock, Download, ExternalLink, FileText, MapPin, Phone, Video } from 'lucide-react'
+import Link from 'next/link'
+import { CalendarClock, CalendarPlus, Download, ExternalLink, FileText, MapPin, Phone, Video } from 'lucide-react'
 import { BusinessMark } from '@/components/business-mark'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { StatusBadge } from '@/components/ui/badge'
@@ -21,7 +22,7 @@ export const dynamic = 'force-dynamic'
 
 const isUrl = (value: string | null) => Boolean(value && /^https?:\/\//i.test(value))
 
-function SessionRow({ s, timeZone, upcoming }: { s: FamilySession; timeZone: string; upcoming: boolean }) {
+function SessionRow({ s, timeZone, upcoming, canChange }: { s: FamilySession; timeZone: string; upcoming: boolean; canChange?: boolean }) {
   const day = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric' })
   const time = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' })
   const covered = Boolean(s.credit_covered_at)
@@ -34,7 +35,7 @@ function SessionRow({ s, timeZone, upcoming }: { s: FamilySession; timeZone: str
         <p className="text-muted-foreground text-xs">{time.format(new Date(s.starts_at))} – {time.format(new Date(s.ends_at))}</p>
       </div>
       <div className="grid min-w-0 flex-1 gap-1">
-        <p className="text-sm font-medium">{s.title}</p>
+        <p className="text-sm font-medium"><Link href={`/family/sessions/${s.id}`} className="hover:underline">{s.title}</Link></p>
         <div className="flex flex-wrap items-center gap-1.5">
           {cancelled ? <StatusBadge tone="neutral">{s.unpaid_cancelled ? 'Cancelled for nonpayment' : 'Cancelled'}</StatusBadge>
             : s.attended_at ? <StatusBadge tone="success">Attended</StatusBadge>
@@ -47,6 +48,9 @@ function SessionRow({ s, timeZone, upcoming }: { s: FamilySession; timeZone: str
       </div>
       {upcoming && !cancelled && covered && isUrl(s.location_detail) && (
         <Button asChild size="sm"><a href={s.location_detail!} target="_blank" rel="noreferrer"><Video /> Join</a></Button>
+      )}
+      {upcoming && !cancelled && canChange && (
+        <Button asChild size="sm" variant="outline"><Link href={`/family/sessions/${s.id}`}>Change</Link></Button>
       )}
     </li>
   )
@@ -70,14 +74,17 @@ function StudentCard({ student }: { student: FamilyStudent }) {
       {link.can_view_sessions && (
         <Card className="gap-4">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="size-4" /> Sessions</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="size-4" /> Sessions</CardTitle>
+              {link.can_book && <Button asChild size="sm"><Link href={`/family/book/${client.id}`}><CalendarPlus /> Book a session</Link></Button>}
+            </div>
             <CardDescription>Times are in {business.name}’s time zone ({zone}).</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
             {student.upcoming.length ? (
               <section aria-label="Upcoming sessions">
                 <h3 className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">Upcoming</h3>
-                <ul className="divide-y">{student.upcoming.map((s) => <SessionRow key={s.id} s={s} timeZone={tz} upcoming />)}</ul>
+                <ul className="divide-y">{student.upcoming.map((s) => <SessionRow key={s.id} s={s} timeZone={tz} upcoming canChange={link.can_reschedule} />)}</ul>
               </section>
             ) : <p className="text-muted-foreground text-sm">No upcoming sessions.</p>}
             {student.past.length > 0 && (
@@ -88,6 +95,10 @@ function StudentCard({ student }: { student: FamilyStudent }) {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {!link.can_view_sessions && link.can_book && (
+        <Button asChild className="justify-self-start"><Link href={`/family/book/${client.id}`}><CalendarPlus /> Book a session</Link></Button>
       )}
 
       {link.can_view_credits && (
@@ -143,8 +154,9 @@ function StudentCard({ student }: { student: FamilyStudent }) {
   )
 }
 
-export default async function FamilyHome() {
-  const user = (await getUser())!
+export default async function FamilyHome({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const [user, { status }] = await Promise.all([getUser(), searchParams])
+  if (!user) return null
   const [links, invites] = await Promise.all([familyLinks(user.id), user.email_confirmed_at && user.email ? openFamilyInvitesFor(user.email) : []])
   const students = (await Promise.all(links.map(loadFamilyStudent))).filter((s): s is FamilyStudent => Boolean(s))
   const first = (user.user_metadata?.full_name as string | undefined)?.split(' ')[0]
@@ -154,6 +166,7 @@ export default async function FamilyHome() {
         <h1 className="text-2xl font-semibold tracking-tight">{first ? `Hi ${first}` : 'Your family portal'}</h1>
         <p className="text-muted-foreground mt-1 text-sm">Sessions, meeting links and credits for the students you follow.</p>
       </div>
+      {status === 'booked' && <Alert variant="success"><AlertDescription>Booked. You’ll get a confirmation email.</AlertDescription></Alert>}
       {invites.length > 0 && (
         <Card>
           <CardHeader><CardTitle className="text-base">New invitations</CardTitle></CardHeader>
@@ -177,7 +190,7 @@ export default async function FamilyHome() {
       )}
       {students.map((s) => <StudentCard key={s.link.id} student={s} />)}
       {students.some((s) => s.business.contact_email) && (
-        <p className="text-muted-foreground flex items-center gap-1.5 text-xs"><ExternalLink className="size-3.5" /> Need to change something? Contact the coaching business; rescheduling from here is coming soon.</p>
+        <p className="text-muted-foreground flex items-center gap-1.5 text-xs"><ExternalLink className="size-3.5" /> For anything else, contact the coaching business directly.</p>
       )}
     </div>
   )

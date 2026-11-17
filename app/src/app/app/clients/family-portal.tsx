@@ -88,7 +88,7 @@ export function GuardianPortal({ access, hasEmail, invite, revoke, savePermissio
                 <input type="checkbox" name={field} defaultChecked={access[column]} className="accent-primary size-4" /> {text}
               </label>
             ))}
-            <p className="text-muted-foreground text-xs">Rescheduling and booking from the portal are coming soon; these switches will apply when they arrive.</p>
+            <p className="text-muted-foreground text-xs">Families book only with the student’s coach, from paid credits, at least 12 hours ahead. They can move or cancel until 12 hours before a session, or the package’s notice if longer; late cancellations follow the package’s rule.</p>
             <Message state={permState} />
             <Button type="submit" size="sm" variant="outline" className="justify-self-start" disabled={busy}>{saving ? 'Saving…' : 'Save'}</Button>
           </form>
