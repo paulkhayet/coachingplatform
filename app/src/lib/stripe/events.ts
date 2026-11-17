@@ -6,6 +6,7 @@ import { stripeAccounts, stripeEvents } from '@/db/schema'
 import { accountFields } from '@/lib/payments'
 import { afterPaidCheckout, confirmPaidCheckout, expireCheckout } from '@/lib/booking/server'
 import { syncStripeSubscription } from '@/lib/billing/server'
+import { PACKAGE_METADATA_KIND, applyPackageCheckout, applyPackageInvoice, applyPackageRefund, applyPackageSubscription } from '@/lib/clients/card-payments'
 import { stripe } from '@/lib/stripe/server'
 
 /** Work to do after the event's database changes are committed (emails, calendar), at most once. */
@@ -55,14 +56,20 @@ async function applyEvent(tx: Tx, event: Stripe.Event): Promise<AfterCommit> {
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
-      // A business's schedulefa.st plan (D-072): only on our own account, never a connected one.
-      if (event.account) return
+      // On a business's account: a family's instalment plan for a package (D-076).
+      if (event.account) {
+        await applyPackageSubscription(tx, event.data.object)
+        return
+      }
+      // A business's schedulefa.st plan (D-072): only on our own account.
       // Read it fresh: the event's shape follows the endpoint's API version, not this SDK's.
       await syncStripeSubscription(await stripe().subscriptions.retrieve(event.data.object.id), tx)
       return
     }
     case 'checkout.session.completed': {
       const session = event.data.object
+      // A family paid for a package on the business's account (D-076).
+      if (event.account && session.metadata?.kind === PACKAGE_METADATA_KIND) return applyPackageCheckout(tx, session, event.account)
       if (session.mode === 'subscription') {
         // Plan checkout on our own account: record the new subscription straight away.
         if (event.account || !session.subscription) return
@@ -96,6 +103,17 @@ async function applyEvent(tx: Tx, event: Stripe.Event): Promise<AfterCommit> {
         .update(stripeAccounts)
         .set({ disconnectedAt: sql`now()`, chargesEnabled: false, payoutsEnabled: false, updatedAt: sql`now()` })
         .where(eq(stripeAccounts.stripeAccountId, event.account))
+      return
+    }
+    case 'invoice.paid': {
+      // An instalment of a family's package plan (D-076). Our own Billing invoices need nothing here.
+      if (!event.account) return
+      return applyPackageInvoice(tx, event.data.object, event.account)
+    }
+    case 'charge.refunded': {
+      // A refund made in the business's Stripe Dashboard: note it on the package payment, if it was one.
+      if (!event.account) return
+      await applyPackageRefund(tx, event.data.object)
       return
     }
     default:

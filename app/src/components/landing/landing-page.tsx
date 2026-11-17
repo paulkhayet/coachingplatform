@@ -97,7 +97,7 @@ const faqs: [string, string][] = [
   ['What’s in the team dashboard?', 'On Team, owners and administrators get an inquiry form for your website, a board that follows each family from first contact to enrolled, coach suggestions based on subjects, free time and workload, and a list of what needs attention. Owners also see revenue, coach pay, Stripe fees and profit, with a pay report to export for payroll.'],
   ['Can parents see their child’s sessions?', 'Yes, on Solo and Team. Invite a parent or guardian to the family portal and they see their student’s upcoming sessions and meeting links, credits and what’s owed, and any files you share. You choose what each family can see, and families never pay for an account.'],
   ['How do payments work?', 'Connect your own Stripe account and set a price on any booking page. Families pay by card when they book, the money goes to you, and refunds follow the cutoff you choose. schedulefa.st takes no fee on your coaching payments; Stripe’s standard processing fees apply.'],
-  ['Can I track packages and session credits?', 'Yes, on Solo and Team. Keep client and guardian records, sell fixed bundles or monthly plans, record payments, book sessions that use credits (weekly series too), track attendance and late cancellations, and keep files with each client.'],
+  ['Can I track packages and session credits?', 'Yes, on Solo and Team. Keep client and guardian records, sell fixed bundles or monthly plans, send families a link to pay by card (in full or in installments), record offline payments, book sessions that use credits (weekly series too), track attendance and late cancellations, and keep files with each client.'],
   ['What’s coming next?', 'Card payments and installments for packages, then families rescheduling and booking from their credits in the portal, offers and e-signing, homework, and AI-assisted follow-ups.'],
 ]
 
@@ -171,11 +171,11 @@ export function LandingPage() {
             <p>Booking, clients, the family portal and the team dashboard are live. We’re building out the rest of the client journey, one piece at a time.</p>
             <div className="settings-demo">
               <div className="settings-title"><Icon id="layers" /><b>On the roadmap</b><span>In development</span></div>
-              <div><span>Card payments & installments for packages</span><b>Next</b></div>
               <div><span>Families rescheduling & booking from credits</span><b>Next</b></div>
+              <div><span>Automatic monthly package renewals</span><b>Planned</b></div>
               <div><span>Offers & e-signing</span><b>Planned</b></div>
               <div><span>Homework & AI-assisted follow-ups</span><b>Planned</b></div>
-              <div className="settings-note"><Icon id="check" /> Live today: booking pages, calendars, Zoom, payments, reminders, teams, clients with packages and credits, the family portal, and the team dashboard with intake and finances.</div>
+              <div className="settings-note"><Icon id="check" /> Live today: booking pages, calendars, Zoom, payments, reminders, teams, clients with packages and credits paid by card or in installments, the family portal, and the team dashboard.</div>
             </div>
           </article>
         </section>

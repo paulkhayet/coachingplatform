@@ -6,6 +6,7 @@ import { assignClientPackage, recordClientPayment } from '@/lib/clients/finance'
 import { cancelCoachingForDepartedHost, cancelUnpaidReservation, finishCoachingSession, moveCoachingSession, reserveCoachingSeries, reserveCoachingSession } from '@/lib/clients/sessions'
 import { acceptInvitation, findInvitation, hashToken, sendInvitation } from '@/lib/team/invitations'
 import { acceptFamilyInvite, revokeFamilyAccess, sendFamilyInvite, setFamilyPermissions } from '@/lib/family/invitations'
+import { CardPaymentError, applyPackageRefund, cancelPaymentRequest, createPaymentRequest, findPaymentRequest, recordCardPayment } from '@/lib/clients/card-payments'
 import { MAX_INQUIRIES_PER_BUSINESS_PER_HOUR, addInquiry, addInquiryNote, assignInquiry, convertInquiry, moveInquiry, recordFirstCallOutcome, reserveFirstCall, setNextAction, submitInquiry } from '@/lib/intake/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { DB_URL, as, createUser, resetDatabase } from './helpers'
@@ -375,6 +376,97 @@ describe.skipIf(!DB_URL)('row-level security', () => {
     // The guardian contact has to belong to the client the access is for.
     await expect(sql`INSERT INTO public.family_access (business_id, client_id, guardian_id, email) VALUES (${willow}, ${otherClient.id}, ${guardian.id}, 'x@example.com')`)
       .rejects.toThrow(/must belong to this client/)
+  })
+
+  it('takes card payments for packages once, within the price, and keeps links and fees from families (D-076)', async () => {
+    financeSql ??= postgres(DB_URL!, { max: 1, prepare: false, onnotice: () => {} })
+    const db = drizzle(financeSql, { schema })
+    const parent = await createUser(sql, 'card-parent@example.com', 'Card Parent')
+    const coachUser = await createUser(sql, 'card-coach@example.com', 'Card Coach')
+    const adminUser = await createUser(sql, 'card-admin@example.com', 'Card Admin')
+    const [coach] = await sql<{ id: string }[]>`INSERT INTO public.memberships (business_id, user_id, role, coaches) VALUES (${willow}, ${coachUser}, 'coach', true) RETURNING id`
+    await sql`INSERT INTO public.memberships (business_id, user_id, role, financial) VALUES (${willow}, ${adminUser}, 'admin', false)`
+    const [client] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.coaching_clients (business_id, name, coach_membership_id) VALUES (${willow}, 'Card Student', ${coach.id}) RETURNING id`)
+    const [guardian] = await as(sql, eleni, (tx) => tx<{ id: string }[]>`
+      INSERT INTO public.client_guardians (business_id, client_id, name, email) VALUES (${willow}, ${client.id}, 'Card Parent', 'Card-Parent@example.com') RETURNING id`)
+    const [pkg] = await sql<{ id: string }[]>`
+      INSERT INTO public.coaching_packages (business_id, name, kind, term_weeks, credit_units, price_cents, installment_count, installment_cadence, session_formats, updated_at)
+      VALUES (${willow}, 'Card Package', 'fixed', 12, 1200, 100000, 3, 'monthly', ${sql.json([{ name: 'Standard', durationMinutes: 60, creditUnits: 100 }])}, '2026-11-11T12:00:00Z') RETURNING id`
+    const actor = { businessId: willow, clientId: client.id, userId: eleni }
+    const periodId = await assignClientPackage(db, actor, { id: randomUUID(), packageId: pkg.id, packageVersion: '2026-11-11T12:00:00Z', startsOn: '2026-11-11' })
+
+    // Only staff trusted with money can send a payment link; the link is shown once and only its hash kept.
+    const input = { clientId: client.id, periodId, contact: { guardianId: guardian.id }, invite: true, allowInstalments: true, stripeAccountId: 'acct_test' }
+    await expect(createPaymentRequest(db, { businessId: willow, userId: coachUser }, input)).rejects.toThrow(CardPaymentError)
+    await expect(createPaymentRequest(db, { businessId: willow, userId: adminUser }, input)).rejects.toThrow(/financial permission/)
+    await expect(createPaymentRequest(db, { businessId: willow, userId: eleni }, { ...input, contact: 'client' })).rejects.toThrow(/Add an email address to the client/)
+    const link = await createPaymentRequest(db, { businessId: willow, userId: eleni }, input)
+    expect(link.sentTo).toBe('card-parent@example.com')
+    const token = link.url.split('/pay/')[1]
+    const [row] = await sql<{ token_hash: string; invite_guardian_id: string }[]>`SELECT token_hash, invite_guardian_id FROM public.client_payment_requests WHERE id = ${link.id}`
+    expect(row.token_hash).toBe(hashToken(token))
+    expect(row.invite_guardian_id).toBe(guardian.id)
+    const page = await findPaymentRequest(token, db)
+    expect(page).toMatchObject({ status: 'open', remainingCents: 100000, paidCents: 0 })
+    expect(page!.options.map((o) => o.kind)).toEqual(['full', 'instalments'])
+    expect(await findPaymentRequest('x'.repeat(43), db)).toBeNull()
+
+    // Owners and administrators can see links but never their token; coaches, families and visitors see nothing.
+    expect(await as(sql, adminUser, (tx) => tx`SELECT id, sent_to FROM public.client_payment_requests WHERE id = ${link.id}`)).toEqual([{ id: link.id, sent_to: 'card-parent@example.com' }])
+    await expect(as(sql, eleni, (tx) => tx`SELECT token_hash FROM public.client_payment_requests`)).rejects.toThrow(/permission denied/)
+    expect(await as(sql, coachUser, (tx) => tx`SELECT id FROM public.client_payment_requests`)).toEqual([])
+    expect(await as(sql, parent, (tx) => tx`SELECT id FROM public.client_payment_requests`)).toEqual([])
+    await expect(as(sql, null, (tx) => tx`SELECT id FROM public.client_payment_requests`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, eleni, (tx) => tx`UPDATE public.client_payment_requests SET allow_instalments = false`)).rejects.toThrow(/permission denied/)
+    await expect(as(sql, eleni, (tx) => tx`
+      INSERT INTO public.client_payment_requests (business_id, client_id, period_id, token_hash) VALUES (${willow}, ${client.id}, ${periodId}, 'x')`)).rejects.toThrow(/permission denied/)
+    // A link can only invite a guardian of the same client.
+    const [other] = await sql<{ id: string }[]>`SELECT id FROM public.client_guardians WHERE client_id <> ${client.id} LIMIT 1`
+    await expect(sql`UPDATE public.client_payment_requests SET invite_guardian_id = ${other.id} WHERE id = ${link.id}`).rejects.toThrow(/must belong to this client/)
+
+    // The first instalment funds a third of the credits; the same Stripe payment never records twice.
+    await sql`UPDATE public.client_payment_requests SET stripe_account_id = 'acct_test', stripe_subscription_id = 'sub_card1', plan_instalments = 3, plan_cadence = 'monthly', plan_status = 'active' WHERE id = ${link.id}`
+    const pay = (amountCents: number, ids: { pi?: string; inv?: string }) => db.transaction((tx) => recordCardPayment(tx, {
+      requestId: link.id, amountCents, paymentIntentId: ids.pi ?? null, invoiceId: ids.inv ?? null, paidAt: new Date('2026-11-12T20:00:00Z') }))
+    const first = await pay(33334, { pi: 'pi_card1', inv: 'in_card1' })
+    expect(first).toMatchObject({ amountCents: 33334, overpaidCents: 0, remainingCents: 66666, fullyPaid: false, firstPayment: true })
+    expect(await pay(33334, { pi: 'pi_card1', inv: 'in_card1' })).toBeNull()
+    expect(await pay(33334, { inv: 'in_card1' })).toBeNull()
+    expect(await sql`SELECT amount_cents, method, reference, received_on::text FROM public.client_credit_payments WHERE request_id = ${link.id}`)
+      .toEqual([{ amount_cents: 33334, method: 'card', reference: 'Instalment 1 of 3', received_on: '2026-11-12' }])
+    expect(await as(sql, eleni, (tx) => tx`SELECT funded_units, paid_cents FROM public.client_credit_balances(${willow}, ${client.id}) WHERE id = ${periodId}`)).toEqual([{ funded_units: 400, paid_cents: 33334 }])
+    expect((await findPaymentRequest(token, db))?.status).toBe('plan')
+
+    // Nothing is ever recorded beyond the price: the excess is reported so it can be refunded.
+    await recordClientPayment(db, actor, { id: randomUUID(), periodId, amountCents: 50000, method: 'check', receivedOn: '2026-11-13', reference: null })
+    const last = await pay(33333, { pi: 'pi_card2', inv: 'in_card2' })
+    expect(last).toMatchObject({ amountCents: 16666, overpaidCents: 16667, remainingCents: 0, fullyPaid: true, paymentIntentId: 'pi_card2' })
+    expect(await pay(33333, { pi: 'pi_card3', inv: 'in_card3' })).toMatchObject({ paymentId: null, amountCents: 0, overpaidCents: 33333, fullyPaid: true })
+    expect(await as(sql, eleni, (tx) => tx`SELECT funded_units, paid_cents FROM public.client_credit_balances(${willow}, ${client.id}) WHERE id = ${periodId}`)).toEqual([{ funded_units: 1200, paid_cents: 100000 }])
+    await sql`UPDATE public.client_payment_requests SET plan_status = 'completed' WHERE id = ${link.id}`
+    expect((await findPaymentRequest(token, db))?.status).toBe('paid')
+
+    // A refund in Stripe is noted on the payment (never more than was recorded); funded credits stay.
+    await db.transaction((tx) => applyPackageRefund(tx, { payment_intent: 'pi_card2', amount_refunded: 33333 } as Parameters<typeof applyPackageRefund>[1]))
+    expect(await sql`SELECT refunded_cents, refunded_at IS NOT NULL AS noted FROM public.client_credit_payments WHERE stripe_payment_intent_id = 'pi_card2'`).toEqual([{ refunded_cents: 16666, noted: true }])
+
+    // Card rows need a Stripe id, offline rows can't have one, and staff can't write either through the API.
+    await expect(sql`INSERT INTO public.client_credit_payments (id, business_id, client_id, period_id, amount_cents, method, received_on) VALUES (${randomUUID()}, ${willow}, ${client.id}, ${periodId}, 1, 'card', '2026-11-13')`).rejects.toThrow(/client_credit_payments_card/)
+    await expect(sql`INSERT INTO public.client_credit_payments (id, business_id, client_id, period_id, amount_cents, method, received_on, stripe_payment_intent_id) VALUES (${randomUUID()}, ${willow}, ${client.id}, ${periodId}, 1, 'cash', '2026-11-13', 'pi_x')`).rejects.toThrow(/client_credit_payments_card/)
+
+    // Families who can see payments see the card payment, but not Stripe's fee.
+    await sql`UPDATE public.client_credit_payments SET stripe_fee_cents = 1000 WHERE stripe_payment_intent_id = 'pi_card1'`
+    await sql`INSERT INTO public.family_access (business_id, client_id, guardian_id, email, user_id, accepted_at) VALUES (${willow}, ${client.id}, ${guardian.id}, 'card-parent@example.com', ${parent}, now())`
+    expect((await as(sql, parent, (tx) => tx`SELECT method, amount_cents FROM public.client_credit_payments WHERE client_id = ${client.id} AND method = 'card'`)).length).toBe(2)
+    await expect(as(sql, parent, (tx) => tx`SELECT stripe_fee_cents FROM public.client_credit_payments`)).rejects.toThrow(/permission denied/)
+
+    // A paid package takes no new links; turning a link off is once, and only for staff trusted with money.
+    await expect(createPaymentRequest(db, { businessId: willow, userId: eleni }, { ...input, contact: null, invite: false })).rejects.toThrow(/nothing left to pay/)
+    await expect(cancelPaymentRequest(db, { businessId: willow, userId: coachUser }, link.id)).rejects.toThrow(/financial permission/)
+    await cancelPaymentRequest(db, { businessId: willow, userId: eleni }, link.id)
+    await expect(cancelPaymentRequest(db, { businessId: willow, userId: eleni }, link.id)).rejects.toThrow(/already turned off/)
+    await sql`DELETE FROM public.memberships WHERE user_id IN (${coachUser}, ${adminUser})` // later tests count Willow's team
   })
 
   describe('team dashboard (D-074)', () => {

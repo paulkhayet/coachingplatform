@@ -185,8 +185,10 @@ export async function loadFinanceFacts(business: { id: string; timezone: string 
       .from(bookings).where(and(eq(bookings.businessId, business.id), inArray(bookings.status, ['confirmed', 'cancelled']),
         or(gte(bookings.endsAt, since), gte(bookings.paidAt, since), gte(bookings.cancelledAt, since)))),
     loadPeriods(business.id),
-    db.select({ id: clientCreditPayments.id, periodId: clientCreditPayments.periodId, amountCents: clientCreditPayments.amountCents, receivedOn: clientCreditPayments.receivedOn, method: clientCreditPayments.method })
-      .from(clientCreditPayments).where(and(eq(clientCreditPayments.businessId, business.id), gte(clientCreditPayments.receivedOn, localDay(since, business.timezone)))),
+    db.select({ id: clientCreditPayments.id, periodId: clientCreditPayments.periodId, amountCents: clientCreditPayments.amountCents, receivedOn: clientCreditPayments.receivedOn, method: clientCreditPayments.method,
+      feeCents: clientCreditPayments.stripeFeeCents, refundedCents: clientCreditPayments.refundedCents, refundedAt: clientCreditPayments.refundedAt })
+      .from(clientCreditPayments).where(and(eq(clientCreditPayments.businessId, business.id),
+        or(gte(clientCreditPayments.receivedOn, localDay(since, business.timezone)), gte(clientCreditPayments.refundedAt, since)))),
     db.select().from(coachPayRates).where(eq(coachPayRates.businessId, business.id)),
     allMemberNames(business.id),
   ])

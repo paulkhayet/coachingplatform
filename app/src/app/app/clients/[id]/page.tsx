@@ -9,6 +9,8 @@ import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { formatCents } from '@/lib/booking/policy'
+import { paymentAccount } from '@/lib/booking/server'
+import { isStripeConfigured } from '@/lib/stripe/server'
 import { businessDate } from '@/lib/clients/credits'
 import { formatCredits } from '@/lib/coaching-packages'
 import { canManageClients, canManagePayments } from '@/lib/roles'
@@ -18,8 +20,8 @@ import { saveClient, saveClientPackage, saveGuardian } from '../actions'
 import { ClientFiles, type ClientFileRow } from '../client-files'
 import { inviteGuardianToPortal, revokeGuardianPortal, saveGuardianPermissions } from '../family-actions'
 import { GuardianPortal, type PortalAccessRow } from '../family-portal'
-import { CreditPeriod } from '../credit-period'
-import type { AssignmentRow, ClientRow, CreditBalanceRow, CreditEventRow, CreditPaymentRow, GuardianRow, PackageOption } from '../data'
+import { CreditPeriod, type CardSetup } from '../credit-period'
+import type { AssignmentRow, ClientRow, CreditBalanceRow, CreditEventRow, CreditPaymentRow, GuardianRow, PackageOption, PaymentLinkRow } from '../data'
 import { AssignPackageForm, ClientForm, GuardianForm } from '../forms'
 
 export const metadata: Metadata = { title: 'Client' }
@@ -27,7 +29,7 @@ export const metadata: Metadata = { title: 'Client' }
 const messages: Record<string, string> = {
   client: 'Client saved.', guardian: 'Guardian contact saved.', package: 'Package assigned.', payment: 'Payment recorded.',
   series: 'Selected weekly sessions booked. Credits are reserved.',
-  enrolled: 'Client created from the inquiry. Next, assign a package and invite the family to the portal.',
+  enrolled: 'Client created from the inquiry. Next, assign a package and send the family a payment link; they can be invited to the portal once they’ve paid.',
 }
 const empty = { data: [], error: null }
 type SessionSummary = { id: string; title: string; starts_at: string; status: string; attended_at: string | null; credit_covered_at: string | null; unpaid_cancelled: boolean }
@@ -50,6 +52,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     .eq('business_id', business.id).eq('client_id', id).maybeSingle<{ id: string; subjects: string[]; goals: string | null }>()
   const today = businessDate(business.timezone)
   const now = new Date().toISOString()
+  // Card payments (D-076): links sent for this client's packages, and whether Stripe can take payments now.
+  const [links, stripeAccount] = finance ? await Promise.all([
+    supabase.from('client_payment_requests').select('id, period_id, sent_to, created_at, cancelled_at, invite_guardian_id, invited_at, plan_instalments, plan_cadence, plan_status')
+      .eq('business_id', business.id).eq('client_id', id).order('created_at', { ascending: false }).limit(50).returns<PaymentLinkRow[]>(),
+    isStripeConfigured ? paymentAccount(business.id) : null,
+  ]) : [{ data: [] as PaymentLinkRow[] }, null]
   const [coaches, guardians, portal, balances, events, assignments, payments, packages, sessions, files] = await Promise.all([
     coachOptions(business.id),
     manager ? supabase.from('client_guardians').select('id, name, relationship, email, phone')
@@ -61,7 +69,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       .eq('business_id', business.id).eq('client_id', id).order('created_at', { ascending: false }).limit(100).returns<CreditEventRow[]>(),
     manager ? supabase.from('client_packages').select('id, terms')
       .eq('business_id', business.id).eq('client_id', id).returns<AssignmentRow[]>() : empty,
-    manager ? supabase.from('client_credit_payments').select('id, period_id, amount_cents, method, received_on, reference')
+    manager ? supabase.from('client_credit_payments').select('id, period_id, amount_cents, method, received_on, reference, refunded_cents')
       .eq('business_id', business.id).eq('client_id', id).order('recorded_at', { ascending: false }).limit(100).returns<CreditPaymentRow[]>() : empty,
     finance ? supabase.from('coaching_packages').select('id, name, kind, price_cents, credit_units, updated_at')
       .eq('business_id', business.id).is('archived_at', null).order('name').returns<PackageOption[]>() : empty,
@@ -88,6 +96,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     id: pkg.id, version: pkg.updated_at, name: `${pkg.name} · ${formatCents(pkg.price_cents)}${pkg.kind === 'monthly' ? '/month' : ''} · ${formatCredits(pkg.credit_units)}`,
   }))
   const termsByAssignment = new Map((assignments.data ?? []).map((row) => [row.id, row.terms]))
+  const portalByGuardian = new Map((portal.data ?? []).map((row) => [row.guardian_id, row]))
+  const card = (periodId: string): CardSetup | undefined => finance ? {
+    ready: Boolean(stripeAccount),
+    contacts: [
+      ...(guardians.data ?? []).filter((g) => g.email).map((g) => {
+        const access = portalByGuardian.get(g.id)
+        return { value: g.id, label: `${g.name}${g.relationship ? ` (${g.relationship})` : ''} · ${g.email}`, guardian: true, hasPortal: Boolean(access?.accepted_at && !access.revoked_at) }
+      }),
+      ...(client.email ? [{ value: 'client', label: `${client.name} · ${client.email}`, guardian: false, hasPortal: false }] : []),
+    ],
+    links: (links.data ?? []).filter((l) => l.period_id === periodId),
+  } : undefined
   const periods = Array.isArray(balances.data) ? balances.data : []
   const creditError = balances.error || !Array.isArray(balances.data) || events.error || assignments.error || payments.error
   const sessionTime = new Intl.DateTimeFormat('en-US', { timeZone: business.timezone, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
@@ -201,7 +221,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               events={(events.data ?? []).filter((event) => event.period_id === period.id)}
               payments={(payments.data ?? []).filter((payment) => payment.period_id === period.id)}
               canBook={manager} allowAdvance={business.allow_advance_reservations} canRecord={finance}
-              businessId={business.id} clientId={id} today={today} timezone={business.timezone} />
+              businessId={business.id} clientId={id} today={today} timezone={business.timezone} card={card(period.id)} />
           ))}
           {!periods.length && <p className="text-muted-foreground text-sm">No coaching package has been assigned.</p>}
           {finance && <Card className="gap-4">

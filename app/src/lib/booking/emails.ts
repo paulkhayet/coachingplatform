@@ -189,6 +189,57 @@ export function familyInviteEmail(d: { businessName: string; logoUrl?: string | 
   }
 }
 
+// ── Package payments (D-076) ─────────────────────────────────────────────────────────────────────────
+
+const usd = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100)
+
+/** To the family: a link to pay for a package by card. */
+export function paymentRequestEmail(d: { businessName: string; logoUrl?: string | null; studentName: string; packageName: string; amountCents: number; instalments: string | null; url: string; senderName: string }): EmailMessage {
+  const rows: [string, string][] = [['Package', d.packageName], ['Student', d.studentName], ['Amount due', usd(d.amountCents)]]
+  if (d.instalments) rows.push(['Or pay in', d.instalments])
+  return {
+    subject: `Payment for ${d.studentName}’s ${d.packageName}`,
+    ...render(
+      `Pay for ${d.packageName}`,
+      [`${d.senderName} at ${d.businessName} sent you a link to pay for ${d.studentName}’s coaching by card.`],
+      rows,
+      { label: 'Pay securely', url: d.url },
+      'Payments go straight to the business through Stripe. Reply to this email with any questions.',
+      { name: d.businessName, logoUrl: d.logoUrl },
+    ),
+  }
+}
+
+/** To the family: we got your payment. */
+export function packageReceiptEmail(d: { businessName: string; logoUrl?: string | null; studentName: string; packageName: string; amountCents: number; remainingCents: number; nextLine: string | null }): EmailMessage {
+  const rows: [string, string][] = [['Package', d.packageName], ['Student', d.studentName], ['Paid', usd(d.amountCents)], ['Still to pay', d.remainingCents > 0 ? usd(d.remainingCents) : 'Nothing: it’s paid in full']]
+  if (d.nextLine) rows.push(['Next payment', d.nextLine])
+  return {
+    subject: `Payment received: ${d.packageName}`,
+    ...render(
+      `Thank you`,
+      [`${d.businessName} received your payment for ${d.studentName}’s ${d.packageName}.`, 'Stripe sends a separate card receipt.'],
+      rows,
+      undefined,
+      'Reply to this email to reach the business.',
+      { name: d.businessName, logoUrl: d.logoUrl },
+    ),
+  }
+}
+
+/** To the staff member who sent the link: the family paid. */
+export function packagePaidStaffEmail(d: { studentName: string; packageName: string; amountCents: number; remainingCents: number; url: string }): EmailMessage {
+  return {
+    subject: `${d.studentName} paid ${usd(d.amountCents)}`,
+    ...render(
+      `${d.studentName}’s family paid by card`,
+      [d.remainingCents > 0 ? `${usd(d.remainingCents)} is still to pay on ${d.packageName}.` : `${d.packageName} is paid in full.`, 'The credits are funded and ready to book.'],
+      [['Package', d.packageName], ['Paid', usd(d.amountCents)]],
+      { label: 'Open the client', url: d.url },
+    ),
+  }
+}
+
 // ── Intake (D-074) ───────────────────────────────────────────────────────────────────────────────────
 
 /** To the family: we got your inquiry. */

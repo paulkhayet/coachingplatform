@@ -186,6 +186,21 @@ describe('summary', () => {
     expect(s.byCoach.find((c) => c.coachId === 'ben')?.lines).toMatchObject([{ kind: 'kept_call', revenueCents: 5000, payCents: 0 }])
     expect(s.coachPayCents).toBe(0)
   })
+  it('counts card package payments with their Stripe fee, and refunds when they happen (D-076)', () => {
+    const payments = [
+      { id: 'card1', periodId: 'p1', amountCents: 40000, receivedOn: '2026-11-05', method: 'card', feeCents: 1190, refundedCents: 10000, refundedAt: new Date('2026-12-02T18:00:00Z') },
+      { id: 'card2', periodId: 'p1', amountCents: 20000, receivedOn: '2026-11-06', method: 'card', feeCents: null },
+      { id: 'cash1', periodId: 'p1', amountCents: 5000, receivedOn: '2026-11-07', method: 'cash' },
+    ]
+    const nov = summarize(facts({ sessions: [], payments }), november)
+    expect(nov.cash).toMatchObject({ packagesCents: 65000, refundsCents: 0 })
+    expect(nov.feesCents).toBe(1190)
+    expect(nov.feesMissing).toBe(1)
+    expect(nov.transactions.map((t) => [t.detail, t.feeCents])).toEqual([['Eight-week bundle · card', 1190], ['Eight-week bundle · card', null], ['Eight-week bundle · cash', null]])
+    const dec = summarize(facts({ sessions: [], payments, now: new Date('2026-12-20T20:00:00Z') }), periodOf('2026-12-01', '2026-12-31', LA))
+    expect(dec.cash).toMatchObject({ packagesCents: 0, refundsCents: 10000, netCents: -10000 })
+    expect(dec.transactions).toMatchObject([{ type: 'Refund', amountCents: -10000, day: '2026-12-02' }])
+  })
   it('counts paid calls with no fee on record instead of guessing', () => {
     const s = summarize(facts({ sessions: [call({ stripeFeeCents: null }), call({ id: 'c2' })] }), november)
     expect(s.feesCents).toBe(175)

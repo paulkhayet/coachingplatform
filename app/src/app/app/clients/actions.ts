@@ -10,6 +10,7 @@ import { parseDollars } from '@/lib/booking/policy'
 import { syncCoachingConfirmations } from '@/lib/booking/server'
 import { businessDate } from '@/lib/clients/credits'
 import { assignClientPackage, ClientFinanceError, recordClientPayment } from '@/lib/clients/finance'
+import { stopPaidPlans } from '@/lib/clients/card-payments'
 import { canManageClients, canManagePayments } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 import { fieldErrors, type FieldErrors } from '@/lib/validation'
@@ -132,6 +133,8 @@ export async function saveOfflinePayment(businessId: string, clientId: string, p
       after(() => syncCoachingConfirmations(coveredIds))
       revalidatePath('/app/bookings', 'layout')
     }
+    // If that paid the package off, a card instalment plan on it must stop charging (D-076).
+    after(() => stopPaidPlans({ businessId, clientId, periodId }))
   } catch (error) {
     if (!(error instanceof ClientFinanceError)) console.error('Could not record offline payment', error instanceof Error ? error.name : 'unknown error')
     return { message: error instanceof ClientFinanceError ? error.message : 'The payment could not be recorded. Try again.' }

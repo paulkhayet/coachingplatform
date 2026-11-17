@@ -7,8 +7,11 @@ import type { AssignedPackageTerms } from '@/db/schema'
 import { formatCents } from '@/lib/booking/policy'
 import { availableCreditUnits, availablePurchasedUnits, formatClientDate, formatServicePeriod } from '@/lib/clients/credits'
 import { formatCredits } from '@/lib/coaching-packages'
+import { cardOptions, describeInstalments, MIN_CARD_CENTS } from '@/lib/clients/card-plan'
 import { saveOfflinePayment } from './actions'
-import { paymentMethodLabels, type CreditBalanceRow, type CreditEventRow, type CreditPaymentRow } from './data'
+import { cancelPaymentLink, sendPaymentLink } from './card-actions'
+import { CancelLinkButton, PaymentLinkForm, type CardContact } from './card-forms'
+import { paymentLabel, type CreditBalanceRow, type CreditEventRow, type CreditPaymentRow, type PaymentLinkRow } from './data'
 import { OfflinePaymentForm } from './forms'
 
 const eventLabels: Record<CreditEventRow['kind'], string> = {
@@ -16,9 +19,16 @@ const eventLabels: Record<CreditEventRow['kind'], string> = {
   used: 'Credits used', forfeited: 'Credits forfeited', expired: 'Credits expired',
 }
 
-export function CreditPeriod({ period, terms, events, payments, canBook, allowAdvance, canRecord, businessId, clientId, today, timezone }: {
+/** Card payments for this period (D-076): whether Stripe can take them, who to send a link to, and links sent. */
+export interface CardSetup {
+  ready: boolean
+  contacts: CardContact[]
+  links: PaymentLinkRow[]
+}
+
+export function CreditPeriod({ period, terms, events, payments, canBook, allowAdvance, canRecord, businessId, clientId, today, timezone, card }: {
   period: CreditBalanceRow; terms?: AssignedPackageTerms; events: CreditEventRow[]; payments: CreditPaymentRow[];
-  canBook: boolean; allowAdvance: boolean; canRecord: boolean; businessId: string; clientId: string; today: string; timezone: string;
+  canBook: boolean; allowAdvance: boolean; canRecord: boolean; businessId: string; clientId: string; today: string; timezone: string; card?: CardSetup;
 }) {
   const ended = today >= period.ends_on
   const upcoming = today < period.starts_on
@@ -34,6 +44,9 @@ export function CreditPeriod({ period, terms, events, payments, canBook, allowAd
     { label: ended ? 'Remaining paid' : 'Paid and available', units: available },
   ]
   const formatActivityDate = new Intl.DateTimeFormat('en-US', { timeZone: timezone, dateStyle: 'medium' })
+  const plan = terms ? cardOptions({ terms, paidCents: paid, allowInstalments: true }).find((o) => o.kind === 'instalments') : undefined
+  const liveLinks = (card?.links ?? []).filter((l) => !l.cancelled_at && (l.plan_status === 'active' || l.plan_status === 'past_due' || (!l.plan_status && remaining > 0)))
+  const refunded = payments.reduce((sum, p) => sum + p.refunded_cents, 0)
 
   return (
     <Card className="gap-4">
@@ -65,6 +78,40 @@ export function CreditPeriod({ period, terms, events, payments, canBook, allowAd
             <span className="text-foreground font-medium">{formatCents(paid)} received</span> · {formatCents(remaining)} remaining of {formatCents(terms.priceCents)}
           </p>
         )}
+        {refunded > 0 && <p className="text-warning text-sm">{formatCents(refunded)} was refunded in Stripe. The credits it paid for are still funded; adjust with the family if needed.</p>}
+        {canRecord && card && liveLinks.length > 0 && (
+          <ul className="grid gap-2">
+            {liveLinks.map((link) => {
+              const live = link.plan_status === 'active' || link.plan_status === 'past_due'
+              const paidCount = payments.filter((p) => p.method === 'card' && p.reference?.startsWith('Instalment')).length
+              return (
+                <li key={link.id} className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    {live
+                      ? <p className="font-medium">Paying in {link.plan_cadence} instalments: {paidCount} of {link.plan_instalments} paid{link.plan_status === 'past_due' && <span className="text-destructive font-normal"> · last payment failed, Stripe is retrying</span>}</p>
+                      : <p className="font-medium">Payment link waiting</p>}
+                    <p className="text-muted-foreground text-xs">{link.sent_to ? `Sent to ${link.sent_to}` : 'Shared by hand'} on {formatActivityDate.format(new Date(link.created_at))}{link.invite_guardian_id ? (link.invited_at ? ' · family portal invitation sent' : ' · family portal invitation goes out when they pay') : ''}</p>
+                  </div>
+                  <CancelLinkButton action={cancelPaymentLink.bind(null, businessId, clientId, link.id)} plan={live} />
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        {canRecord && card && remaining >= MIN_CARD_CENTS && !liveLinks.some((l) => l.plan_status === 'active' || l.plan_status === 'past_due') && (
+          <details className="rounded-lg border px-3 py-2.5">
+            <summary className="cursor-pointer text-sm font-medium">Get paid by card</summary>
+            <div className="mt-3 grid gap-3">
+              {card.ready ? (
+                <>
+                  <p className="text-muted-foreground text-sm">The family pays {formatCents(remaining)} on a secure Stripe page{plan ? ', or in instalments' : ''}. Credits are funded as soon as each payment arrives.</p>
+                  <PaymentLinkForm key={remaining} action={sendPaymentLink.bind(null, businessId, clientId, period.id)} contacts={card.contacts}
+                    instalments={plan?.kind === 'instalments' ? describeInstalments(plan, formatCents) : null} />
+                </>
+              ) : <p className="text-muted-foreground text-sm">Connect Stripe in <Link href="/app/settings/payments" className="text-primary hover:underline">Settings → Payments</Link> to take card payments.</p>}
+            </div>
+          </details>
+        )}
         {canRecord && remaining > 0 && (
           <details className="rounded-lg border px-3 py-2.5">
             <summary className="cursor-pointer text-sm font-medium">Record offline payment</summary>
@@ -94,7 +141,7 @@ export function CreditPeriod({ period, terms, events, payments, canBook, allowAd
               {payments.map((payment) => (
                 <li key={payment.id} className="flex flex-wrap justify-between gap-2 py-2">
                   <div className="min-w-0">
-                    <p>{paymentMethodLabels[payment.method]}</p>
+                    <p>{paymentLabel(payment.method)}{payment.refunded_cents > 0 && <span className="text-warning text-xs"> · {formatCents(payment.refunded_cents)} refunded</span>}</p>
                     <p className="text-muted-foreground text-xs break-words">{formatClientDate(payment.received_on)}{payment.reference && ` · ${payment.reference}`}</p>
                   </div>
                   <span className="font-medium tabular-nums">{formatCents(payment.amount_cents)}</span>

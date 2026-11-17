@@ -225,6 +225,13 @@
       "when": 1794518331250,
       "tag": "0031_team_dashboard",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794943082772,
+      "tag": "0032_package_card_payments",
+      "breakpoints": true
     }
   ]
 }

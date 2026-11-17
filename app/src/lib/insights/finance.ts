@@ -147,6 +147,10 @@ export interface PaymentFact {
   /** YYYY-MM-DD, as the business recorded it. */
   receivedOn: string
   method: string
+  /** Card payments (D-076): Stripe's fee (null until read), and any refund made in Stripe afterwards. */
+  feeCents?: number | null
+  refundedCents?: number
+  refundedAt?: Date | null
 }
 
 export interface PayRate {
@@ -377,13 +381,24 @@ export function summarize(facts: FinanceFacts, period: Period): FinanceSummary {
   }
 
   for (const pay of facts.payments) {
-    if (pay.receivedOn < period.fromDay || pay.receivedOn > period.toDay) continue
     const p = periods.get(pay.periodId)
+    const who = p?.clientName ?? 'Client'
+    const coachLabel = coachName(p?.clientCoachId ?? null)
+    // A refund made in Stripe counts when it happened, like a refunded call.
+    if (pay.refundedCents && pay.refundedAt && within(pay.refundedAt, period)) {
+      cash.refundsCents += pay.refundedCents
+      if (p?.clientCoachId) coach(p.clientCoachId).cashCents -= pay.refundedCents
+      transactions.push({ at: pay.refundedAt, day: localDay(pay.refundedAt, timeZone), who, coach: coachLabel, type: 'Refund', detail: `${p?.packageName ?? 'Package'} · card`, amountCents: -pay.refundedCents, feeCents: null })
+    }
+    if (pay.receivedOn < period.fromDay || pay.receivedOn > period.toDay) continue
     cash.packagesCents += pay.amountCents
     if (p?.clientCoachId) coach(p.clientCoachId).cashCents += pay.amountCents
+    const card = pay.method === 'card'
+    if (card && pay.feeCents === null) feesMissing++
+    else if (card && pay.feeCents) feesCents += pay.feeCents
     const day = parseDay(pay.receivedOn)
-    transactions.push({ at: zonedTime(day.year, day.month, day.day, 12 * 60, timeZone), day: pay.receivedOn, who: p?.clientName ?? 'Client', coach: coachName(p?.clientCoachId ?? null),
-      type: 'Package payment', detail: `${p?.packageName ?? 'Package'} · ${pay.method.replace('_', ' ')}`, amountCents: pay.amountCents, feeCents: null })
+    transactions.push({ at: zonedTime(day.year, day.month, day.day, 12 * 60, timeZone), day: pay.receivedOn, who, coach: coachLabel,
+      type: 'Package payment', detail: `${p?.packageName ?? 'Package'} · ${pay.method.replace('_', ' ')}`, amountCents: pay.amountCents, feeCents: card ? pay.feeCents ?? null : null })
   }
   cash.collectedCents = cash.callsCents + cash.packagesCents
   cash.netCents = cash.collectedCents - cash.refundsCents

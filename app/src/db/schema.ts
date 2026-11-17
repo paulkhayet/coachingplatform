@@ -353,23 +353,82 @@ export const clientCreditPeriods = pgTable('client_credit_periods', {
 ])
 
 export const OFFLINE_PAYMENT_METHODS = ['cash', 'check', 'bank_transfer', 'other'] as const
+/** Offline methods are recorded by staff; `card` only by the server, from Stripe (D-076). */
+export const PAYMENT_METHODS = [...OFFLINE_PAYMENT_METHODS, 'card'] as const
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
+
+/**
+ * A link a family uses to pay for a package by card (D-076). Staff create it for one credit period; the
+ * link carries a random token whose hash is stored. Paying in instalments makes a Stripe subscription
+ * on the business's account, recorded here, which stops after the last instalment. Written only by the
+ * server; owners and administrators can read everything but the token hash.
+ */
+export const clientPaymentRequests = pgTable('client_payment_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  businessId: uuid('business_id').notNull(),
+  clientId: uuid('client_id').notNull(),
+  periodId: uuid('period_id').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  /** Where the link was emailed, if anywhere. */
+  sentTo: text('sent_to'),
+  /** A guardian contact to invite to the family portal once a payment arrives (D-014). */
+  inviteGuardianId: uuid('invite_guardian_id').references(() => clientGuardians.id, { onDelete: 'set null' }),
+  invitedAt: timestamp('invited_at', { withTimezone: true }),
+  allowInstalments: boolean('allow_instalments').notNull().default(true),
+  createdBy: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  /** Instalments: the Stripe subscription on the business's account, how many payments, and how it stands. */
+  stripeAccountId: text('stripe_account_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  planInstalments: integer('plan_instalments'),
+  planCadence: text('plan_cadence').$type<'weekly' | 'monthly'>(),
+  planStatus: text('plan_status').$type<'active' | 'past_due' | 'canceled' | 'completed'>(),
+}, (t) => [
+  foreignKey({ columns: [t.businessId, t.clientId, t.periodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'client_payment_requests_period_fk' }).onDelete('cascade'),
+  uniqueIndex('client_payment_requests_token_key').on(t.tokenHash),
+  uniqueIndex('client_payment_requests_subscription_key').on(t.stripeSubscriptionId),
+  index('client_payment_requests_period_idx').on(t.businessId, t.clientId, t.periodId),
+  index('client_payment_requests_guardian_idx').on(t.inviteGuardianId),
+  index('client_payment_requests_created_by_idx').on(t.createdBy),
+  check('client_payment_requests_sent_to', sql`${t.sentTo} is null or (${t.sentTo} = lower(${t.sentTo}) and char_length(${t.sentTo}) between 3 and 254)`),
+  check('client_payment_requests_plan', sql`
+    (${t.stripeSubscriptionId} is null and ${t.planInstalments} is null and ${t.planCadence} is null and ${t.planStatus} is null)
+    or (${t.stripeSubscriptionId} is not null and ${t.stripeAccountId} is not null and ${t.planInstalments} between 2 and 24
+      and ${t.planCadence} in ('weekly', 'monthly') and ${t.planStatus} in ('active', 'past_due', 'canceled', 'completed'))`),
+])
+
 export const clientCreditPayments = pgTable('client_credit_payments', {
   id: uuid('id').primaryKey(),
   businessId: uuid('business_id').notNull(),
   clientId: uuid('client_id').notNull(),
   periodId: uuid('period_id').notNull(),
   amountCents: integer('amount_cents').notNull(),
-  method: text('method').$type<(typeof OFFLINE_PAYMENT_METHODS)[number]>().notNull(),
+  method: text('method').$type<PaymentMethod>().notNull(),
   receivedOn: date('received_on').notNull(),
   reference: text('reference'),
   recordedBy: uuid('recorded_by').references(() => authUsers.id, { onDelete: 'set null' }),
   recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+  // Card payments (D-076): the link it came through, Stripe's ids (one per payment, so a payment is
+  // never recorded twice), Stripe's fee, and anything refunded in Stripe afterwards.
+  requestId: uuid('request_id').references(() => clientPaymentRequests.id, { onDelete: 'set null' }),
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+  stripeInvoiceId: text('stripe_invoice_id'),
+  stripeFeeCents: integer('stripe_fee_cents'),
+  refundedCents: integer('refunded_cents').notNull().default(0),
+  refundedAt: timestamp('refunded_at', { withTimezone: true }),
 }, (t) => [
+  uniqueIndex('client_credit_payments_payment_intent_key').on(t.stripePaymentIntentId),
+  uniqueIndex('client_credit_payments_invoice_key').on(t.stripeInvoiceId),
+  index('client_credit_payments_request_idx').on(t.requestId),
+  check('client_credit_payments_card', sql`(${t.method} = 'card') = (${t.stripePaymentIntentId} is not null or ${t.stripeInvoiceId} is not null)`),
+  check('client_credit_payments_fee', sql`${t.stripeFeeCents} is null or ${t.stripeFeeCents} >= 0`),
+  check('client_credit_payments_refunded', sql`${t.refundedCents} between 0 and ${t.amountCents} and (${t.refundedCents} = 0) = (${t.refundedAt} is null)`),
   foreignKey({ columns: [t.businessId, t.clientId, t.periodId], foreignColumns: [clientCreditPeriods.businessId, clientCreditPeriods.clientId, clientCreditPeriods.id], name: 'client_credit_payments_period_fk' }).onDelete('cascade'),
   index('client_credit_payments_period_idx').on(t.businessId, t.clientId, t.periodId),
   index('client_credit_payments_actor_idx').on(t.recordedBy),
   check('client_credit_payments_amount', sql`${t.amountCents} between 1 and 100000000`),
-  check('client_credit_payments_method', sql`${t.method} in ('cash', 'check', 'bank_transfer', 'other')`),
+  check('client_credit_payments_method', sql`${t.method} in ('cash', 'check', 'bank_transfer', 'other', 'card')`),
   check('client_credit_payments_reference', sql`char_length(${t.reference}) <= 200`),
 ])
 
@@ -922,3 +981,4 @@ export type CoachPayRate = typeof coachPayRates.$inferSelect
 export type IntakeSettings = typeof intakeSettings.$inferSelect
 export type Inquiry = typeof inquiries.$inferSelect
 export type InquiryEvent = typeof inquiryEvents.$inferSelect
+export type ClientPaymentRequest = typeof clientPaymentRequests.$inferSelect

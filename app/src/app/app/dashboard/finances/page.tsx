@@ -111,7 +111,7 @@ export default async function FinancesPage({ searchParams }: { searchParams: Pro
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Tile label="Paid ahead, not yet delivered" value={money(prepaidCents(facts.periods))} hint="Package money for sessions still to come. As of today." />
         <Tile label="Owed by families" value={money(owedCents(facts.periods))} hint="Unpaid balances on packages. As of today." />
-        <Tile label="Refunds" value={money(current.cash.refundsCents)} hint="Refunded calls in this period." />
+        <Tile label="Refunds" value={money(current.cash.refundsCents)} hint="Calls and package payments refunded in this period." />
         {basis === 'delivered'
           ? <Tile label="Cash in" value={money(current.cash.collectedCents)} hint={`${money(current.cash.callsCents)} calls · ${money(current.cash.packagesCents)} packages`} />
           : <Tile label="Revenue delivered" value={money(current.delivered.revenueCents)} hint={`${money(current.delivered.callsCents)} calls · ${money(current.delivered.coachingCents)} sessions`} />}

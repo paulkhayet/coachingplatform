@@ -24,6 +24,15 @@ export type CreditBalanceRow = {
   paid_cents: number | null
 }
 export type CreditEventRow = { id: string; period_id: string; kind: 'funded' | 'reserved' | 'released' | 'used' | 'forfeited' | 'expired'; credit_units: number; created_at: string }
-export type CreditPaymentRow = { id: string; period_id: string; amount_cents: number; method: 'cash' | 'check' | 'bank_transfer' | 'other'; received_on: string; reference: string | null }
+export type OfflineMethod = 'cash' | 'check' | 'bank_transfer' | 'other'
+export type CreditPaymentRow = { id: string; period_id: string; amount_cents: number; method: OfflineMethod | 'card'; received_on: string; reference: string | null; refunded_cents: number }
 
-export const paymentMethodLabels: Record<CreditPaymentRow['method'], string> = { cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer', other: 'Other offline payment' }
+/** Methods staff can record by hand. Card payments come from Stripe (D-076). */
+export const paymentMethodLabels: Record<OfflineMethod, string> = { cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer', other: 'Other offline payment' }
+export const paymentLabel = (method: CreditPaymentRow['method']) => (method === 'card' ? 'Card' : paymentMethodLabels[method])
+
+/** A payment link for a credit period (D-076), as staff see it. The link itself is shown once, when sent. */
+export type PaymentLinkRow = {
+  id: string; period_id: string; sent_to: string | null; created_at: string; cancelled_at: string | null; invite_guardian_id: string | null; invited_at: string | null
+  plan_instalments: number | null; plan_cadence: 'weekly' | 'monthly' | null; plan_status: 'active' | 'past_due' | 'canceled' | 'completed' | null
+}
