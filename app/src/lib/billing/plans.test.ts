@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bestYearlySaving, formatDollars, formatPlanPrice, monthlyDollars, planFromLookupKey, planLimits, priceLookupKey, yearlyDollars } from './plans'
+import { MAX_TEAM_SEATS, bestYearlySaving, formatDollars, formatPlanPrice, monthlyDollars, planFromLookupKey, planLimits, planTotalCents, priceLookupKey, teamSeats, yearlyDollars } from './plans'
 
 describe('plans', () => {
   it('limits the free plan to one person, one page and free calls', () => {
@@ -8,6 +8,20 @@ describe('plans', () => {
     expect(planLimits('solo')).toMatchObject({ people: 1, bookingPages: null, paidCalls: true, clients: true, reminders: true })
     expect(planLimits('team', 4).people).toBe(4)
     expect(planLimits('team', 0).people).toBe(1)
+  })
+
+  it('bills Team for the size the owner chooses, never fewer than the people on the team', () => {
+    expect(teamSeats('5', 2)).toBe(5)
+    expect(teamSeats(' 3 ', 1)).toBe(3)
+    expect(teamSeats('2', 4)).toBe(4)
+    expect(teamSeats(9999, 1)).toBe(MAX_TEAM_SEATS)
+    expect(teamSeats('0', 1)).toBeNull()
+    expect(teamSeats('2.5', 1)).toBeNull()
+    expect(teamSeats('', 1)).toBeNull()
+    expect(teamSeats(null, 1)).toBeNull()
+    expect(planTotalCents('team', 'year', 5)).toBe(5 * 18000)
+    expect(planTotalCents('team', 'month', 0)).toBe(1700)
+    expect(planTotalCents('solo', 'year', 5)).toBe(12000)
   })
 
   it('round-trips Stripe lookup keys and ignores others', () => {

@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { activeMemberCount, ensureCustomer, ensurePrice, syncStripeSubscription, workspacePlan } from '@/lib/billing/server'
+import { teamSeats } from '@/lib/billing/plans'
 import { siteUrl } from '@/lib/env'
 import { canManageTeam } from '@/lib/roles'
 import { SUBSCRIPTION_PATH } from '@/lib/settings-paths'
@@ -33,6 +34,9 @@ export async function startCheckout(businessId: string, form: FormData) {
   if (current.plan !== 'free') redirect(`${SUBSCRIPTION_PATH}?error=already`)
   const people = await activeMemberCount(businessId)
   if (parsed.data.plan === 'solo' && people > 1) redirect(`${SUBSCRIPTION_PATH}?error=solo-team`)
+  // Team: the owner chooses how many people to pay for (at least everyone already on the team).
+  const seats = parsed.data.plan === 'team' ? teamSeats(form.get('seats'), people) : 1
+  if (seats === null) redirect(`${SUBSCRIPTION_PATH}?error=seats`)
 
   let url: string | null = null
   try {
@@ -42,7 +46,7 @@ export async function startCheckout(businessId: string, form: FormData) {
       mode: 'subscription',
       customer,
       client_reference_id: business.id,
-      line_items: [{ price, quantity: parsed.data.plan === 'team' ? Math.max(1, people) : 1 }],
+      line_items: [{ price, quantity: seats }],
       subscription_data: { metadata: { business_id: business.id } },
       metadata: { business_id: business.id },
       allow_promotion_codes: true,
@@ -67,6 +71,11 @@ export async function changePlan(businessId: string, form: FormData) {
   if (current.plan === parsed.data.plan && current.interval === parsed.data.interval) redirect(SUBSCRIPTION_PATH)
   const people = await activeMemberCount(businessId)
   if (parsed.data.plan === 'solo' && people > 1) redirect(`${SUBSCRIPTION_PATH}?error=solo-team`)
+  // Moving to Team uses the size chosen; staying on Team (a yearly/monthly switch) keeps the seats paid for.
+  const seats = parsed.data.plan !== 'team' ? 1
+    : current.plan === 'team' ? Math.max(current.seats, people)
+    : teamSeats(form.get('seats'), people)
+  if (seats === null) redirect(`${SUBSCRIPTION_PATH}?error=seats`)
 
   let ok = false
   try {
@@ -74,7 +83,7 @@ export async function changePlan(businessId: string, form: FormData) {
     const item = sub.items.data[0]
     const price = await ensurePrice(parsed.data.plan, parsed.data.interval)
     const updated = await stripe().subscriptions.update(sub.id, {
-      items: [{ id: item.id, price, quantity: parsed.data.plan === 'team' ? Math.max(1, people) : 1 }],
+      items: [{ id: item.id, price, quantity: seats }],
       // Invoice the difference now (an upgrade is charged today; a downgrade leaves a credit).
       proration_behavior: 'always_invoice',
       // Switching back to a plan clears a pending cancellation.
@@ -87,6 +96,33 @@ export async function changePlan(businessId: string, form: FormData) {
   }
   revalidatePath('/app', 'layout')
   redirect(ok ? `${SUBSCRIPTION_PATH}?changed=1` : `${SUBSCRIPTION_PATH}?error=change`)
+}
+
+/**
+ * Changes how many people a Team subscription pays for. Never below the people already on the team.
+ * More seats are charged now, prorated; fewer leave a credit on the next bill.
+ */
+export async function changeSeats(businessId: string, form: FormData) {
+  await ownerWorkspace(businessId)
+  const current = await workspacePlan(businessId)
+  if (current.source !== 'stripe' || current.plan !== 'team' || !current.stripeSubscriptionId) redirect(`${SUBSCRIPTION_PATH}?error=no-subscription`)
+  const people = await activeMemberCount(businessId)
+  const seats = teamSeats(form.get('seats'), people)
+  if (seats === null) redirect(`${SUBSCRIPTION_PATH}?error=seats`)
+  if (seats === current.seats) redirect(SUBSCRIPTION_PATH)
+
+  let ok = false
+  try {
+    const sub = await stripe().subscriptions.retrieve(current.stripeSubscriptionId)
+    const item = sub.items.data[0]
+    const updated = await stripe().subscriptions.update(sub.id, { items: [{ id: item.id, quantity: seats }], proration_behavior: 'always_invoice' })
+    await syncStripeSubscription(updated)
+    ok = true
+  } catch (error) {
+    console.error('Could not change Team seats', error instanceof Error ? error.message : 'unknown error')
+  }
+  revalidatePath('/app', 'layout')
+  redirect(ok ? `${SUBSCRIPTION_PATH}?seats=${seats}` : `${SUBSCRIPTION_PATH}?error=change`)
 }
 
 /** Stripe's portal, set up for cards, invoices, billing details and cancelling (not plan changes). */

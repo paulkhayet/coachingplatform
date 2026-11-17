@@ -20,6 +20,24 @@ export function planFromLookupKey(key: string | null | undefined): { plan: PaidP
   return m ? { plan: m[1] as PaidPlan, interval: m[2] as BillingInterval } : null
 }
 
+/** The most people a Team subscription can be bought for in the app (workspace_subscriptions allows 1,000). */
+export const MAX_TEAM_SEATS = 500
+
+/**
+ * How many Team seats to bill: what the owner chose, but never fewer than the people already on the team
+ * (everyone on a Team counts, D-072) and always a whole number in range. Null when the input isn't a number.
+ */
+export function teamSeats(chosen: unknown, people: number): number | null {
+  const n = typeof chosen === 'string' ? Number(chosen.trim()) : typeof chosen === 'number' ? chosen : Number.NaN
+  if (!Number.isInteger(n) || n < 1) return null
+  return Math.min(MAX_TEAM_SEATS, Math.max(n, people, 1))
+}
+
+/** The bill for a plan, in cents: Team is per person; Solo is one price. */
+export function planTotalCents(plan: PaidPlan, interval: BillingInterval, seats = 1) {
+  return PAID_PLANS[plan].cents[interval] * (PAID_PLANS[plan].perPerson ? Math.max(1, seats) : 1)
+}
+
 /** Stripe statuses that keep paid features on. Past due keeps them while Stripe retries the card. */
 export const PAID_STATUSES = new Set(['active', 'trialing', 'past_due'])
 

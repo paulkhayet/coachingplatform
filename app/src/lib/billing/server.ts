@@ -171,7 +171,11 @@ export async function refreshWorkspaceSubscription(businessId: string) {
   if (current) await syncStripeSubscription(current)
 }
 
-/** Team is billed per person: keep the subscription's quantity equal to the active team. */
+/**
+ * Team is billed per seat (D-072, D-075). The owner chooses how many seats to pay for; when the team
+ * grows past that, a seat is added automatically (charged, prorated) so nobody is blocked from joining.
+ * Seats are never removed automatically: the owner lowers them in Settings → Subscription.
+ */
 export async function syncSeats(businessId: string) {
   try {
     const plan = await adminDb().select().from(workspaceSubscriptions)
@@ -181,7 +185,7 @@ export async function syncSeats(businessId: string) {
     const people = Math.max(1, await activeMemberCount(businessId))
     const sub = await stripe().subscriptions.retrieve(row.stripeSubscriptionId)
     const item = sub.items.data[0]
-    if (!item || item.quantity === people) return
+    if (!item || (item.quantity ?? 1) >= people) return
     const updated = await stripe().subscriptions.update(sub.id, { items: [{ id: item.id, quantity: people }], proration_behavior: 'always_invoice' })
     await syncStripeSubscription(updated)
   } catch (error) {

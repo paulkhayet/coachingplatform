@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { MARK_VIEWBOX, MarkPaths } from '@/components/brand'
 import { PricingPlans, SiteNav, WorkflowTabs, type FlowTab, type Plan } from './interactive'
-import { BookingPagePreview, BookingsPreview, ConfirmationPreview, PaymentsPreview, TeamPreview } from './product-previews'
+import { BookingPagePreview, BookingsPreview, ConfirmationPreview, IntakePreview, PaymentsPreview, TeamPreview } from './product-previews'
 import { planLimits } from '@/lib/billing/plans'
 import '@/app/landing.css'
 
@@ -71,6 +71,12 @@ const flows: FlowTab[] = [
     summary: 'Owner, administrator and coach roles, and each coach’s free times. Shared booking pages send each call to a free coach, spread evenly.',
     panel: <TeamPreview />,
   },
+  {
+    id: 'flow-intake',
+    title: 'From inquiry to enrolled.',
+    summary: 'Families fill in your inquiry form. Follow each one from first contact to enrolled, with a coach suggested for every family and nothing left waiting.',
+    panel: <IntakePreview />,
+  },
 ]
 
 // Names and prices come from PAID_PLANS in lib/billing/plans.ts, which is what Stripe charges (D-072);
@@ -78,8 +84,8 @@ const flows: FlowTab[] = [
 const freeLimits = planLimits('free')
 const plans: Plan[] = [
   { id: 'free', icon: 'sparkles', description: 'Try it out and take your first bookings.', seats: freeLimits.people === 1 ? 'Just you' : `Up to ${freeLimits.people} people`, includes: [`${freeLimits.bookingPages} active booking page${freeLimits.bookingPages === 1 ? '' : 's'} & custom questions`, 'Free calls, no charge to families', 'Google Calendar sync', freeLimits.reminders ? 'Email confirmations & reminders' : 'Email confirmations'] },
-  { id: 'solo', icon: 'home', description: 'Everything a solo coaching business needs.', seats: 'Just you', includes: ['Unlimited booking pages & custom questions', 'Paid calls, Google Calendar & Zoom', 'Clients, packages, credits & files', 'Email confirmations & reminders 24 hours before'] },
-  { id: 'team', icon: 'people', description: 'For coaching and tutoring teams of any size.', featured: 'FOR GROWING TEAMS', seats: 'Priced per person on your team', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Business hours & team free times'] },
+  { id: 'solo', icon: 'home', description: 'Everything a solo coaching business needs.', seats: 'Just you', includes: ['Unlimited booking pages & custom questions', 'Paid calls, Google Calendar & Zoom', 'Clients, packages, credits & files', 'Family portal for parents', 'Email confirmations & reminders 24 hours before'] },
+  { id: 'team', icon: 'people', description: 'For coaching and tutoring teams of any size.', featured: 'FOR GROWING TEAMS', seats: 'Choose your team size · priced per person', includes: ['Everything in Solo', 'Owner, administrator & coach roles', 'Shared booking pages & fair assignment', 'Inquiry form & intake board', 'Coach matching & team workload', 'Finances: revenue, coach pay & profit'] },
 ]
 
 const faqs: [string, string][] = [
@@ -87,9 +93,12 @@ const faqs: [string, string][] = [
   ['Do families need an account?', 'No. They book with their name and email, answer any questions you add, and get a private link to reschedule or cancel.'],
   ['Does it work with Google Calendar and Zoom?', 'Yes. Both connect to your own accounts: busy times on Google Calendar keep you from being double-booked, each booking is added to your calendar, and Zoom pages create a meeting for every booking. Both connections are opening to everyone as Google and Zoom finish reviewing our app; until then, any booking page can use your own meeting link.'],
   ['Is it for solo coaches or teams?', 'Both. Invite coaches and administrators, set business hours, and share a booking page across a group of coaches. If you work for more than one business, one account covers all of them, without double-booking.'],
+  ['How does Team pricing work?', 'You choose how many people to pay for when you upgrade, priced per person. Everyone with a login counts: you, administrators and coaches; families never do. If your team grows past what you pay for, a seat is added automatically, and you can change your team size any time in Settings.'],
+  ['What’s in the team dashboard?', 'On Team, owners and administrators get an inquiry form for your website, a board that follows each family from first contact to enrolled, coach suggestions based on subjects, free time and workload, and a list of what needs attention. Owners also see revenue, coach pay, Stripe fees and profit, with a pay report to export for payroll.'],
+  ['Can parents see their child’s sessions?', 'Yes, on Solo and Team. Invite a parent or guardian to the family portal and they see their student’s upcoming sessions and meeting links, credits and what’s owed, and any files you share. You choose what each family can see, and families never pay for an account.'],
   ['How do payments work?', 'Connect your own Stripe account and set a price on any booking page. Families pay by card when they book, the money goes to you, and refunds follow the cutoff you choose. schedulefa.st takes no fee on your coaching payments; Stripe’s standard processing fees apply.'],
   ['Can I track packages and session credits?', 'Yes, on Solo and Team. Keep client and guardian records, sell fixed bundles or monthly plans, record payments, book sessions that use credits (weekly series too), track attendance and late cancellations, and keep files with each client.'],
-  ['What’s coming next?', 'Card payments and installments for packages, then family portals with homework and files, intake, offers and e-signing, and AI-assisted follow-ups.'],
+  ['What’s coming next?', 'Card payments and installments for packages, then families rescheduling and booking from their credits in the portal, offers and e-signing, homework, and AI-assisted follow-ups.'],
 ]
 
 export function LandingPage() {
@@ -120,7 +129,7 @@ export function LandingPage() {
             <BookingsPreview />
           </div>
           <p className="preview-caption">The real schedulefa.st app, shown with sample data.</p>
-          <div className="coverage-strip" aria-label="What schedulefa.st does today"><span>Booking pages</span><span>Google Calendar</span><span>Zoom links</span><span>Stripe payments</span><span>Email reminders</span><span>Teams</span><span>Clients & packages</span></div>
+          <div className="coverage-strip" aria-label="What schedulefa.st does today"><span>Booking pages</span><span>Google Calendar</span><span>Zoom links</span><span>Stripe payments</span><span>Email reminders</span><span>Teams</span><span>Clients & packages</span><span>Family portal</span><span>Team dashboard</span></div>
         </section>
 
         <section className="intro-section lp-container" id="platform">
@@ -135,7 +144,7 @@ export function LandingPage() {
           <div className="benefit-row">
             <div><span className="benefit-number">01</span><h3>Booking pages your way</h3><p>Free or paid calls, your own questions, buffers, minimum notice and a booking window. One coach, or any available coach from a group.</p></div>
             <div><span className="benefit-number">02</span><h3>Calendars and links, handled</h3><p>Busy times on Google Calendar block bookings, each booking lands on your calendar, and Zoom pages get their own meeting link.</p></div>
-            <div><span className="benefit-number">03</span><h3>Built for teams</h3><p>Invite coaches and administrators, set business hours, and let people who work for several businesses use one account.</p></div>
+            <div><span className="benefit-number">03</span><h3>Built for teams</h3><p>Invite coaches and administrators, match new families to the right coach, and see what each coach brings in and is paid.</p></div>
           </div>
         </section>
 
@@ -159,14 +168,14 @@ export function LandingPage() {
           <article className="detail-block settings-block">
             <div className="section-kicker">COMING NEXT</div>
             <h2>The rest of your<br />business, next.</h2>
-            <p>Booking and client records are live. We’re building out the rest of the client journey, one piece at a time.</p>
+            <p>Booking, clients, the family portal and the team dashboard are live. We’re building out the rest of the client journey, one piece at a time.</p>
             <div className="settings-demo">
               <div className="settings-title"><Icon id="layers" /><b>On the roadmap</b><span>In development</span></div>
               <div><span>Card payments & installments for packages</span><b>Next</b></div>
-              <div><span>Family portals, homework & files</span><b>Planned</b></div>
-              <div><span>Intake, offers & e-signing</span><b>Planned</b></div>
-              <div><span>AI-assisted follow-ups</span><b>Planned</b></div>
-              <div className="settings-note"><Icon id="check" /> Live today: booking pages, calendars, Zoom, payments, reminders, teams, and clients with packages, credits and files.</div>
+              <div><span>Families rescheduling & booking from credits</span><b>Next</b></div>
+              <div><span>Offers & e-signing</span><b>Planned</b></div>
+              <div><span>Homework & AI-assisted follow-ups</span><b>Planned</b></div>
+              <div className="settings-note"><Icon id="check" /> Live today: booking pages, calendars, Zoom, payments, reminders, teams, clients with packages and credits, the family portal, and the team dashboard with intake and finances.</div>
             </div>
           </article>
         </section>
@@ -176,7 +185,7 @@ export function LandingPage() {
             <div className="pricing-heading">
               <div className="section-kicker">SIMPLE PRICING</div>
               <h2>Start free.<br />Grow with your team.</h2>
-              <p>Free for one person with one booking page and free calls.<br />Upgrade for paid calls, Zoom, clients and packages, and your whole team.</p>
+              <p>Free for one person with one booking page and free calls.<br />Upgrade for paid calls, Zoom, clients and the family portal, or Team for your whole team and its dashboard.</p>
             </div>
             <PricingPlans plans={plans} />
             <p className="pricing-footnote">Prices in USD. Cancel any time and keep your plan until the end of the period you paid for.<br />schedulefa.st takes no fee on your coaching payments. Stripe’s standard processing fees apply.</p>

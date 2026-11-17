@@ -14,8 +14,8 @@ import { canManageTeam } from '@/lib/roles'
 import { billingCustomer } from '@/lib/stripe/billing'
 import { isStripeConfigured, stripeLivemode } from '@/lib/stripe/server'
 import { requireWorkspace } from '@/lib/workspace'
-import { changePlan, openBillingPortal, startCheckout } from './actions'
-import { PlanPicker } from './plan-picker'
+import { changePlan, changeSeats, openBillingPortal, startCheckout } from './actions'
+import { PlanPicker, TeamSizeForm } from './plan-picker'
 
 export const metadata: Metadata = { title: 'Subscription' }
 
@@ -32,9 +32,10 @@ const errors: Record<string, string> = {
   'no-subscription': 'There’s no subscription to change. Choose a plan below.',
   'solo-team': 'Solo is for one person, and your team has more. Choose Team, or remove members first.',
   unavailable: 'Billing isn’t set up on this deployment.',
+  seats: 'Choose how many people to pay for: a whole number, at least the people already on your team.',
 }
 
-export default async function SubscriptionPage({ searchParams }: { searchParams: Promise<{ error?: string; checkout?: string; changed?: string; portal?: string }> }) {
+export default async function SubscriptionPage({ searchParams }: { searchParams: Promise<{ error?: string; checkout?: string; changed?: string; portal?: string; seats?: string }> }) {
   const [{ business, membership }, params] = await Promise.all([requireWorkspace(), searchParams])
   if (!canManageTeam(membership.role)) notFound()
   // Coming back from Stripe: read the subscription now rather than waiting for the webhook.
@@ -58,6 +59,7 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
         ? <Alert variant="success"><AlertDescription>Thanks! {business.name} is now on {PAID_PLANS[plan.plan].name}.</AlertDescription></Alert>
         : <Alert variant="info"><AlertDescription>Payment received. Your plan will update in a moment; refresh this page if it hasn’t.</AlertDescription></Alert>)}
       {params.changed && <Alert variant="success"><AlertDescription>Plan updated.</AlertDescription></Alert>}
+      {params.seats && /^\d+$/.test(params.seats) && <Alert variant="success"><AlertDescription>Team size updated to {params.seats} {params.seats === '1' ? 'person' : 'people'}.</AlertDescription></Alert>}
 
       <Card>
         <CardHeader>
@@ -81,8 +83,8 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
             </div>
           ) : (
             <div className="grid gap-1 text-sm">
-              {plan.interval && plan.source === 'stripe' && <p>{formatPlanPrice(plan.plan, plan.interval)}{plan.plan === 'team' && ` · ${plan.seats} ${plan.seats === 1 ? 'person' : 'people'}`}</p>}
-              {plan.plan === 'team' && <p className="text-muted-foreground">Billed for everyone on your team. Adding someone is charged right away, prorated; removing someone leaves a credit.</p>}
+              {plan.interval && plan.source === 'stripe' && <p>{formatPlanPrice(plan.plan, plan.interval)}{plan.plan === 'team' && ` · paying for ${plan.seats} ${plan.seats === 1 ? 'person' : 'people'}, ${people} on your team`}</p>}
+              {plan.plan === 'team' && plan.source === 'stripe' && <p className="text-muted-foreground">Invite up to {plan.seats} {plan.seats === 1 ? 'person' : 'people'} at no extra cost. If your team grows past that, a seat is added automatically and charged, prorated.</p>}
               {plan.currentPeriodEnd && <p className="text-muted-foreground">{plan.cancelAtPeriodEnd ? `Cancelled: stays active until ${date.format(plan.currentPeriodEnd)}, then returns to Free.` : `Renews ${date.format(plan.currentPeriodEnd)}.`}</p>}
             </div>
           )}
@@ -95,6 +97,18 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
         </CardContent>
       </Card>
 
+      {plan.plan === 'team' && plan.source === 'stripe' && plan.interval && isStripeConfigured && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Team size</CardTitle>
+            <CardDescription>How many people {business.name} pays for. You can’t go below the {people} {people === 1 ? 'person' : 'people'} on your team now; remove someone on the Team page first.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TeamSizeForm seats={plan.seats} people={people} interval={plan.interval} save={changeSeats.bind(null, business.id)} />
+          </CardContent>
+        </Card>
+      )}
+
       {plan.source !== 'complimentary' && isStripeConfigured && (
         <Card>
           <CardHeader>
@@ -102,7 +116,7 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
             <CardDescription>No fee on what families pay you. Cancel any time; you keep the plan until the end of the period you paid for.</CardDescription>
           </CardHeader>
           <CardContent>
-            <PlanPicker current={plan.plan} currentInterval={plan.interval} people={people}
+            <PlanPicker current={plan.plan} currentInterval={plan.interval} people={people} teamSeatsNow={plan.plan === 'team' ? plan.seats : undefined}
               checkout={startCheckout.bind(null, business.id)} change={changePlan.bind(null, business.id)} />
           </CardContent>
         </Card>

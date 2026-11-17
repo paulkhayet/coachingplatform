@@ -296,6 +296,78 @@ export function TeamPreview() {
   )
 }
 
+// ── Team dashboard (D-074) ───────────────────────────────────────────────────────────────────────────
+
+const pipeline = [
+  { stage: 'New', hint: 'Just arrived. Review and reply.', cards: [{ student: 'Maya Rivers', contact: 'Dana Rivers', subjects: ['Algebra', 'SAT Math'], owner: 'Alex Morgan', coach: null, days: 'Today' }] },
+  { stage: 'Matching', hint: 'Choose a coach for this family.', cards: [{ student: 'Leo Park', contact: 'Hana Park', subjects: ['Reading'], owner: 'Alex Morgan', coach: 'Jordan Lee', days: '1 day' }] },
+  { stage: 'First call', hint: 'The coach meets the family.', cards: [{ student: 'Ava Carter', contact: 'Noah Carter', subjects: ['Chemistry'], owner: 'Priya Shah', coach: 'Sam Rivera', days: '2 days' }] },
+  { stage: 'Offer', hint: 'Pricing and package discussed.', cards: [{ student: 'Ethan Brooks', contact: 'Mia Brooks', subjects: ['Essay writing'], owner: 'Priya Shah', coach: 'Jordan Lee', days: '3 days', next: 'Send pricing · due Nov 14' }] },
+] as const
+
+/** The Intake board: families move from first contact to enrolled, with a coach suggested for each. */
+export function IntakePreview() {
+  return (
+    <ScaledPreview width={1080} url="schedulefa.st/app/dashboard/intake" label="The schedulefa.st team dashboard: an intake board with families at each stage, from new inquiry to offer.">
+      <div className="bg-background text-foreground grid gap-5 p-6 text-left">
+        <div>
+          <div className="text-2xl font-semibold tracking-tight">Dashboard</div>
+          <p className="text-muted-foreground mt-1 text-sm">Intake, coaches and finances for {BUSINESS}.</p>
+        </div>
+        <div className="flex gap-5 border-b text-sm">
+          {['Overview', 'Intake', 'Assignments', 'Finances'].map((t) => (
+            <span key={t} className={cn('text-muted-foreground -mb-px border-b-2 border-transparent px-0.5 py-2.5', t === 'Intake' && 'border-primary text-foreground font-medium')}>{t}</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          {pipeline.map((col) => (
+            <section key={col.stage} className="bg-muted/40 grid content-start gap-2 rounded-xl border p-2.5">
+              <header className="px-1 pt-0.5">
+                <p className="flex items-center gap-2 text-sm font-semibold">{col.stage} <Badge variant="secondary">{col.cards.length}</Badge></p>
+                <p className="text-muted-foreground text-xs">{col.hint}</p>
+              </header>
+              {col.cards.map((c) => (
+                <article key={c.student} className="bg-card grid gap-2 rounded-lg border p-3 shadow-xs">
+                  <div>
+                    <p className="font-medium">{c.student}</p>
+                    <p className="text-muted-foreground text-xs">{c.contact}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1">{c.subjects.map((x) => <Badge key={x} variant="accent">{x}</Badge>)}</div>
+                  <div className="text-muted-foreground grid gap-0.5 text-xs">
+                    <p>Handled by: <span className="text-foreground">{c.owner}</span></p>
+                    <p>Coach: {c.coach ? <span className="text-foreground">{c.coach}</span> : <span className="text-warning font-medium">Not chosen</span>}</p>
+                    <p>In this stage: <span className="text-foreground">{c.days}</span></p>
+                  </div>
+                  {'next' in c && <p className="text-muted-foreground text-xs">Next: {c.next}</p>}
+                  <div className="border-input flex h-8 items-center justify-between rounded-md border px-3 text-xs">{col.stage}<ChevronDown className="size-3.5 opacity-50" /></div>
+                </article>
+              ))}
+            </section>
+          ))}
+        </div>
+        <Card className="gap-3 py-4">
+          <CardHeader><CardTitle>Suggested coaches for Maya Rivers</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-3 gap-2">
+            {[
+              ['Jordan Lee', ['Teaches Algebra, SAT Math', '18 free times in the next 2 weeks', 'Room for 3 more (5 of 8)']],
+              ['Sam Rivera', ['Teaches Algebra', '9 free times in the next 2 weeks', '6 of 8 clients']],
+              ['Priya Shah', ['No matching subjects', '24 free times in the next 2 weeks', '2 clients']],
+            ].map(([name, reasons], i) => (
+              <div key={name as string} className="flex items-start justify-between gap-2 rounded-md border p-2.5">
+                <div>
+                  <p className="text-sm font-medium">{name as string}</p>
+                  <ul className="mt-1 grid gap-0.5 text-xs">{(reasons as string[]).map((r, j) => <li key={r} className={i < 2 && j < 2 ? 'text-success' : 'text-muted-foreground'}>{r}</li>)}</ul>
+                </div>
+                <UiButton variant="outline" size="sm">Propose</UiButton>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </ScaledPreview>
+  )
+}
+
 // ── Payments ─────────────────────────────────────────────────────────────────────────────────────────
 
 export function PaymentsPreview() {

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { UpgradeNotice } from '@/components/upgrade-notice'
 import { workspacePlan } from '@/lib/billing/server'
 import { formatPlanPrice } from '@/lib/billing/plans'
+import { SUBSCRIPTION_PATH } from '@/lib/settings-paths'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
@@ -85,7 +86,12 @@ export default async function TeamPage() {
         <Card>
           <CardHeader>
             <CardTitle>Invite someone</CardTitle>
-            <CardDescription>They get an email with a link to join {business.name}. Their hours, calendar and other businesses stay theirs; you’ll see when they’re free for you.</CardDescription>
+            <CardDescription>
+              They get an email with a link to join {business.name}. Their hours, calendar and other businesses stay theirs; you’ll see when they’re free for you.
+              {plan.plan === 'team' && plan.source === 'stripe' && (
+                <span className="mt-1 block">You pay for {plan.seats} {plan.seats === 1 ? 'person' : 'people'} and have {(members ?? []).filter((m) => m.status === 'active').length}. Joining past that adds a seat, charged prorated; change your team size in <a href={SUBSCRIPTION_PATH} className="text-primary hover:underline">Subscription</a>.</span>
+              )}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
             {plan.plan === 'team' ? <InviteForm businessName={business.name} /> : (
